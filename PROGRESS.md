@@ -14,6 +14,14 @@
 - Wrote `tests/test_graph_pipeline.py` (6 tests, fixture reruns pipeline) + `data/README.md` (ODbL, June-2014 caveat).
 - VERIFY: `.venv/bin/pytest tests/` → 6 passed, exit 0. D1-D5 ticked.
 
+### 2026-09-13 22:10 — cycle 2 (U1, U2)
+- U1: `docs/unity_setup_notes.md` (Newtonsoft add-by-name, StreamingAssets sync, scene wiring) + `scripts/sync_streaming_assets.sh`. No Assets/StreamingAssets created.
+- U2: `Assets/Scripts/Data/GraphData.cs` — NodeData{id,label:string; x,y,z:float; value:int}, EdgeData{source,target:string; weight:int}.
+  - (a) delimiters: 2 classes, braces balanced, every field `;`-terminated.
+  - (b) schema cross-check vs real output: nodes.json keys exactly {id,label,x,y,z,value}, types {str,str,float,float,float,int} on all 200 rows; edges.json keys exactly {source,target,weight}, types {str,str,int} on all 4516 rows. Match field-by-field.
+  - Status: semantically reviewed — NOT compiled or run.
+- Also gitignored stray `.claude/`.
+
 ## Blocked
 (none)
 

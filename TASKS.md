@@ -10,8 +10,8 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] D5: tests/test_graph_pipeline.py (files exist, valid JSON, node budget, edge refs, no duplicate pairs) + data/README.md (ODbL attribution, historical caveat) — done, pytest passing
 
 ## Part B — Unity import layer (C#, NO compiler here; semantic review only)
-- [ ] U1: docs/unity_setup_notes.md — Newtonsoft package add + StreamingAssets sync note/script
-- [ ] U2: Assets/Scripts/Data/GraphData.cs — NodeData / EdgeData (schema cross-checked vs D4 output)
+- [x] U1: docs/unity_setup_notes.md — Newtonsoft package add + StreamingAssets sync note/script — done (docs only)
+- [x] U2: Assets/Scripts/Data/GraphData.cs — NodeData / EdgeData (schema cross-checked vs D4 output) — implemented — semantically reviewed, not compiled
 - [ ] U3: Assets/Scripts/GraphLoader.cs — UnityWebRequest load of both files, result check, JsonConvert deserialize
 - [ ] U4: GraphLoader — node instantiation (prefab or sphere fallback), scale applied, id->Transform dictionary
 - [ ] U5: GraphLoader — edges via TryGetValue, LineRenderer per edge, width/color by weight, SetEdgeWeightThreshold
