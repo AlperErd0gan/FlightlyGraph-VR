@@ -3,11 +3,11 @@
 Legend: [ ] todo · [x] done · status notes inline.
 
 ## Part A — Data pipeline (Python, verified by `pytest tests/`)
-- [ ] D1: Download airports.dat + routes.dat into data/raw/ (scripts/build_graph.py `download` step, idempotent)
-- [ ] D2: Parse CSVs; drop airports with invalid lat/lon; compute route-count degree
-- [ ] D3: Filter to top 150-300 airports by degree; keep routes with both endpoints; collapse duplicate pairs into weight
-- [ ] D4: Equirectangular projection (lat, lon, alt) -> (x, y, z) normalized ~[-10, 10]; export nodes.json / edges.json with exact schema; validate + log counts
-- [ ] D5: tests/test_graph_pipeline.py (files exist, valid JSON, node budget, edge refs, no duplicate pairs) + data/README.md (ODbL attribution, historical caveat)
+- [x] D1: Download airports.dat + routes.dat into data/raw/ (scripts/build_graph.py `download` step, idempotent) — done, pytest passing
+- [x] D2: Parse CSVs; drop airports with invalid lat/lon; compute route-count degree — done, pytest passing
+- [x] D3: Filter to top 150-300 airports by degree; keep routes with both endpoints; collapse duplicate pairs into weight — done, pytest passing
+- [x] D4: Equirectangular projection (lat, lon, alt) -> (x, y, z) normalized ~[-10, 10]; export nodes.json / edges.json with exact schema; validate + log counts — done, pytest passing
+- [x] D5: tests/test_graph_pipeline.py (files exist, valid JSON, node budget, edge refs, no duplicate pairs) + data/README.md (ODbL attribution, historical caveat) — done, pytest passing
 
 ## Part B — Unity import layer (C#, NO compiler here; semantic review only)
 - [ ] U1: docs/unity_setup_notes.md — Newtonsoft package add + StreamingAssets sync note/script

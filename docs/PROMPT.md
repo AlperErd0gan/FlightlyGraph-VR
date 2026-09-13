@@ -1,4 +1,4 @@
-Autonomous overnight loop, target cadence ~15 minutes. No one is
+Autonomous overnight loop, target cadence ~30 minutes. No one is
 watching — do not ask questions or wait for confirmation. Make the most
 reasonable choice, write it down, and keep going. Work only on branch
 overnight-auto (create if missing); never touch main; never push
@@ -149,5 +149,5 @@ Stop (don't schedule another wake-up) when EITHER:
   written and semantically reviewed but NOT compiled or run; needs a
   real Unity compile + Play-mode check before trusting it, then ready
   for Section 7 (VR interaction)"; or
-- it's past 08:00 local time — write "Stopping for the night — human
+- it's past 05:00 local time — write "Stopping for the night — human
   review needed" and stop.
