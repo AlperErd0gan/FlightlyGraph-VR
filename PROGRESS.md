@@ -22,8 +22,36 @@
   - Status: semantically reviewed — NOT compiled or run.
 - Also gitignored stray `.claude/`.
 
+### 2026-09-13 22:45 — cycle 3 (U3, U4, U5 — GraphLoader.cs)
+Wrote `Assets/Scripts/GraphLoader.cs` (one file covers U3-U5). Status: **semantically reviewed — NOT compiled or run.**
+- (a) Delimiters: counted `{`=39/`}`=39, `(`=83/`)`=83, `[`=7/`]`=7. Read whole file: every statement `;`-terminated; class, 6 methods, nested class, all closed. No `yield` inside a `try` that has a `catch` (C# forbids it) — the JSON try/catch contains no yield; the `using` block (try/finally) does contain a yield, which C# allows.
+- (b) Schema: loader only touches `node.id/label/x/y/z/value` and `edge.source/target/weight` — exactly the fields in GraphData.cs, which were checked against real JSON in cycle 2.
+- (c) API usage, line by line:
+  - `UnityWebRequest.Get(uri)` → `yield return request.SendWebRequest()` → `if (request.result != UnityWebRequest.Result.Success) { LogError; yield break; }` → only then `request.downloadHandler.text`. ✔ result checked before parse. Same helper used for both files (no platform branch, no File.ReadAllText).
+  - `JsonConvert.DeserializeObject<List<NodeData>>` / `<List<EdgeData>>` inside try/catch(JsonException); null result also guarded. ✔
+  - Edge endpoints: `nodeInstances.TryGetValue(edge.source, out a)` and `TryGetValue(edge.target, out b)`; miss → LogWarning + `continue`. No indexer anywhere on the dictionary (only `ContainsKey`/`Add` in BuildNodes, `TryGetValue` in BuildEdges). ✔
+  - Scale: `localPosition = new Vector3(node.x, node.y, node.z) * positionScale` — multiplies all three components. ✔
+  - LineRenderer: `positionCount = 2`, `SetPosition(0/1, a.position/b.position)`, `startWidth/endWidth` = base + weight·perWeight, `startColor/endColor` = Lerp(low, high, normalized weight), material assigned if set. ✔ width and color driven by weight.
+  - `SetEdgeWeightThreshold(float t)`: iterates `edgeInstances`, `edge.gameObject.SetActive(edge.weight >= t)` — mutates the edge GameObjects' active state. ✔ Unwired (no callers).
+- (d) Execution trace (hand):
+  1. Unity calls `Start()` → `StartCoroutine(LoadGraph())`.
+  2. `LoadGraph`: `yield return ReadStreamingAsset("nodes.json", cb)`. Inside: `path = Path.Combine(streamingAssetsPath, "nodes.json")`; if path has no `://` prefix `file://`; `UnityWebRequest.Get`; `yield return SendWebRequest()`; result==Success → `cb(text)` sets `nodesJson`. Coroutine returns; `nodesJson != null` so continue.
+  3. Same for `edges.json` → `edgesJson`.
+  4. Deserialize both lists (200 NodeData, 4516 EdgeData for current output).
+  5. `BuildNodes`: create "Nodes" empty child; for each node: skip empty/duplicate id; `Instantiate(nodePrefab, nodesRoot)` or `CreatePrimitive(Sphere)` + SetParent; name=label; localPosition=(x,y,z)*positionScale; localScale=base+value·perValue; `nodeInstances.Add(id, transform)`. Since nodesRoot is at identity under the loader, world position == local position when loader is at origin.
+  6. `BuildEdges`: create "Edges" child; first loop finds maxWeight (2 for current data); second loop per edge: TryGetValue both → new GameObject → AddComponent<LineRenderer> → useWorldSpace=true, 2 positions from node `.position` (world), width, color (weight 1 → low, weight 2 → high), material → add to `edgeInstances`. Last edge in list gets its LineRenderer here; loop ends.
+  7. `Debug.Log("GraphLoader: loaded 200 nodes, 4516 edges (...)")`.
+- Note: 4516 LineRenderers = 4516 GameObjects/draw calls. Acceptable for Phase 1 on desktop; may need batching/mesh lines for Quest later (out of scope).
+
 ## Blocked
 (none)
 
 ## Needs Real Verification (no Unity available)
-(filled in during Part B)
+- `UnityWebRequest.Result` enum requires Unity 2020.2+; on older versions use `isNetworkError || isHttpError`.
+- `file://` + `Application.streamingAssetsPath` URI form: correct on macOS/Linux (path starts with `/` → `file:///...`); on Windows (`file://C:/...`) UnityWebRequest is believed to accept it but not verified here. On Android the path is already `jar:file://...` so no prefix is added; `Path.Combine` on that string should join with `/` — believed correct, unverified.
+- `Newtonsoft.Json.JsonException` as catch type — exists in Newtonsoft; assumed the Unity package (`com.unity.nuget.newtonsoft-json`) exposes the same namespace.
+- `Instantiate(GameObject, Transform parent)` overload — exists in Unity ≥5.4; assumed.
+- `IReadOnlyDictionary<string, Transform>` property — requires .NET 4.x / .NET Standard 2.0 API level (default in modern Unity).
+- LineRenderer `startColor/endColor` only show if `edgeMaterial` uses vertex colors (e.g. `Sprites/Default`); with `edgeMaterial` unset lines render magenta (missing material) — behavior not observed here.
+- Coroutine-with-callback pattern (`System.Action<string>` lambda assigning an outer local inside an iterator) — legal C#, but untested here.
+- Whole file has never been compiled; typos/overload mismatches possible.
