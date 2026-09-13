@@ -43,6 +43,17 @@ Wrote `Assets/Scripts/GraphLoader.cs` (one file covers U3-U5). Status: **semanti
   7. `Debug.Log("GraphLoader: loaded 200 nodes, 4516 edges (...)")`.
 - Note: 4516 LineRenderers = 4516 GameObjects/draw calls. Acceptable for Phase 1 on desktop; may need batching/mesh lines for Quest later (out of scope).
 
+### 2026-09-13 23:15 — cycle 4 (U6 — full fresh-read review pass)
+Re-read `GraphData.cs` and `GraphLoader.cs` top to bottom against checklist a-e.
+- **Finding & fix:** `yield break` was inside a `catch` block (LoadGraph). C# disallows yield statements in catch/finally blocks (CS1631-family). Restructured: catch stores `ex.Message` in `parseError`; the `yield break` now sits after the try/catch. Both files re-counted: `{}`=40/40, `()`=84/84, `[]`=7/7; GraphData.cs 4/4 braces.
+- (b) schema re-confirmed against committed data/processed/*.json (unchanged since cycle 2).
+- (c) re-checked: result check precedes `downloadHandler.text` (l.117-123); only `TryGetValue` on edge lookups (l.183-184); scale applied to full Vector3 (l.157); `SetEdgeWeightThreshold` calls `SetActive` per edge (l.224).
+- Definite-assignment note: `!TryGetValue(src, out a) || !TryGetValue(dst, out b)` — when the whole condition is false both calls ran, so `a`,`b` are definitely assigned after the `if` per C# spec rules for `||`; believed to compile.
+- Trace from cycle 3 still valid (only change is error-path control flow).
+- Status of all .cs: **semantically reviewed — NOT compiled or run.**
+
+**Phase 1 complete — Part A tested, Part B written and semantically reviewed but NOT compiled or run; needs a real Unity compile + Play-mode check before trusting it, then ready for Section 7 (VR interaction).**
+
 ## Blocked
 (none)
 
@@ -54,4 +65,6 @@ Wrote `Assets/Scripts/GraphLoader.cs` (one file covers U3-U5). Status: **semanti
 - `IReadOnlyDictionary<string, Transform>` property — requires .NET 4.x / .NET Standard 2.0 API level (default in modern Unity).
 - LineRenderer `startColor/endColor` only show if `edgeMaterial` uses vertex colors (e.g. `Sprites/Default`); with `edgeMaterial` unset lines render magenta (missing material) — behavior not observed here.
 - Coroutine-with-callback pattern (`System.Action<string>` lambda assigning an outer local inside an iterator) — legal C#, but untested here.
+- Definite assignment of `out b` after short-circuit `||` (GraphLoader.cs l.183-184) — per spec fine; if compiler complains, split into two `if`s.
+- LineRenderer uses world space; if the GraphLoader root is moved after load, lines will not follow nodes (Phase 1 acceptable).
 - Whole file has never been compiled; typos/overload mismatches possible.

@@ -296,19 +296,19 @@
   "value": 265
  },
  {
-  "id": "3858",
-  "label": "Minneapolis-St Paul International/Wold-Chamberlain Airport (MSP)",
-  "x": -5.179,
-  "y": 0.2012,
-  "z": 4.9869,
-  "value": 260
- },
- {
   "id": "3930",
   "label": "Incheon International Airport (ICN)",
   "x": 7.0251,
   "y": 0.0055,
   "z": 4.1632,
+  "value": 260
+ },
+ {
+  "id": "3858",
+  "label": "Minneapolis-St Paul International/Wold-Chamberlain Airport (MSP)",
+  "x": -5.179,
+  "y": 0.2012,
+  "z": 4.9869,
   "value": 260
  },
  {
@@ -448,19 +448,19 @@
   "value": 206
  },
  {
-  "id": "644",
-  "label": "Oslo Lufthavn (OSL)",
-  "x": 0.6139,
-  "y": 0.1629,
-  "z": 6.6801,
-  "value": 206
- },
- {
   "id": "2279",
   "label": "Narita International Airport (NRT)",
   "x": 7.7992,
   "y": 0.0337,
   "z": 3.9739,
+  "value": 206
+ },
+ {
+  "id": "644",
+  "label": "Oslo Lufthavn (OSL)",
+  "x": 0.6139,
+  "y": 0.1629,
+  "z": 6.6801,
   "value": 206
  },
  {
@@ -528,14 +528,6 @@
   "value": 194
  },
  {
-  "id": "3093",
-  "label": "Indira Gandhi International Airport (DEL)",
-  "x": 4.2835,
-  "y": 0.1859,
-  "z": 3.1741,
-  "value": 192
- },
- {
   "id": "1212",
   "label": "Alicante International Airport (ALC)",
   "x": -0.031,
@@ -544,12 +536,12 @@
   "value": 192
  },
  {
-  "id": "1587",
-  "label": "Václav Havel Airport Prague (PRG)",
-  "x": 0.7922,
-  "y": 0.2983,
-  "z": 5.5668,
-  "value": 188
+  "id": "3093",
+  "label": "Indira Gandhi International Airport (DEL)",
+  "x": 4.2835,
+  "y": 0.1859,
+  "z": 3.1741,
+  "value": 192
  },
  {
   "id": "3382",
@@ -557,6 +549,14 @@
   "x": 5.7183,
   "y": 1.6512,
   "z": 2.7891,
+  "value": 188
+ },
+ {
+  "id": "1587",
+  "label": "Václav Havel Airport Prague (PRG)",
+  "x": 0.7922,
+  "y": 0.2983,
+  "z": 5.5668,
   "value": 188
  },
  {
@@ -656,19 +656,19 @@
   "value": 176
  },
  {
-  "id": "2179",
-  "label": "Abu Dhabi International Airport (AUH)",
-  "x": 3.0362,
-  "y": 0.0211,
-  "z": 2.7148,
-  "value": 174
- },
- {
   "id": "342",
   "label": "Hamburg Airport (HAM)",
   "x": 0.5549,
   "y": 0.0127,
   "z": 5.9589,
+  "value": 174
+ },
+ {
+  "id": "2179",
+  "label": "Abu Dhabi International Airport (AUH)",
+  "x": 3.0362,
+  "y": 0.0211,
+  "z": 2.7148,
   "value": 174
  },
  {
@@ -720,19 +720,19 @@
   "value": 167
  },
  {
-  "id": "1056",
-  "label": "Tenerife South Airport (TFS)",
-  "x": -0.9207,
-  "y": 0.05,
-  "z": 3.1161,
-  "value": 166
- },
- {
   "id": "304",
   "label": "Brussels South Charleroi Airport (CRL)",
   "x": 0.2474,
   "y": 0.1469,
   "z": 5.6066,
+  "value": 166
+ },
+ {
+  "id": "1056",
+  "label": "Tenerife South Airport (TFS)",
+  "x": -0.9207,
+  "y": 0.05,
+  "z": 3.1161,
   "value": 166
  },
  {
@@ -760,14 +760,6 @@
   "value": 161
  },
  {
-  "id": "1054",
-  "label": "Gran Canaria Airport (LPA)",
-  "x": -0.8548,
-  "y": 0.0187,
-  "z": 3.1035,
-  "value": 161
- },
- {
   "id": "813",
   "label": "OR Tambo International Airport (JNB)",
   "x": 1.5692,
@@ -776,12 +768,12 @@
   "value": 161
  },
  {
-  "id": "350",
-  "label": "Stuttgart Airport (STR)",
-  "x": 0.5123,
-  "y": 0.3052,
-  "z": 5.41,
-  "value": 160
+  "id": "1054",
+  "label": "Gran Canaria Airport (LPA)",
+  "x": -0.8548,
+  "y": 0.0187,
+  "z": 3.1035,
+  "value": 161
  },
  {
   "id": "1525",
@@ -789,6 +781,14 @@
   "x": 0.5391,
   "y": 0.1871,
   "z": 5.0749,
+  "value": 160
+ },
+ {
+  "id": "350",
+  "label": "Stuttgart Airport (STR)",
+  "x": 0.5123,
+  "y": 0.3052,
+  "z": 5.41,
   "value": 160
  },
  {
@@ -808,6 +808,14 @@
   "value": 157
  },
  {
+  "id": "2397",
+  "label": "Ninoy Aquino International Airport (MNL)",
+  "x": 6.7233,
+  "y": 0.0179,
+  "z": 1.6121,
+  "value": 156
+ },
+ {
   "id": "679",
   "label": "Warsaw Chopin Airport (WAW)",
   "x": 1.1648,
@@ -824,12 +832,12 @@
   "value": 156
  },
  {
-  "id": "2397",
-  "label": "Ninoy Aquino International Airport (MNL)",
-  "x": 6.7233,
-  "y": 0.0179,
-  "z": 1.6121,
-  "value": 156
+  "id": "2191",
+  "label": "Sharjah International Airport (SHJ)",
+  "x": 3.0843,
+  "y": 0.0266,
+  "z": 2.8143,
+  "value": 154
  },
  {
   "id": "1489",
@@ -837,14 +845,6 @@
   "x": 1.0701,
   "y": 0.1184,
   "z": 5.27,
-  "value": 154
- },
- {
-  "id": "2191",
-  "label": "Sharjah International Airport (SHJ)",
-  "x": 3.0843,
-  "y": 0.0266,
-  "z": 2.8143,
   "value": 154
  },
  {
@@ -904,14 +904,6 @@
   "value": 146
  },
  {
-  "id": "490",
-  "label": "Bristol Airport (BRS)",
-  "x": -0.1511,
-  "y": 0.1488,
-  "z": 5.7092,
-  "value": 145
- },
- {
   "id": "2988",
   "label": "Vnukovo International Airport (VKO)",
   "x": 2.0701,
@@ -920,12 +912,12 @@
   "value": 145
  },
  {
-  "id": "1871",
-  "label": "Tocumen International Airport (PTY)",
-  "x": -4.4102,
-  "y": 0.0323,
-  "z": 1.0079,
-  "value": 144
+  "id": "490",
+  "label": "Bristol Airport (BRS)",
+  "x": -0.1511,
+  "y": 0.1488,
+  "z": 5.7092,
+  "value": 145
  },
  {
   "id": "3849",
@@ -933,6 +925,14 @@
   "x": -4.2593,
   "y": 0.0349,
   "z": 4.3528,
+  "value": 144
+ },
+ {
+  "id": "1871",
+  "label": "Tocumen International Airport (PTY)",
+  "x": -4.4102,
+  "y": 0.0323,
+  "z": 1.0079,
   "value": 144
  },
  {
@@ -1024,6 +1024,14 @@
   "value": 131
  },
  {
+  "id": "3376",
+  "label": "Wuhan Tianhe International Airport (WUH)",
+  "x": 6.3449,
+  "y": 0.027,
+  "z": 3.4204,
+  "value": 130
+ },
+ {
   "id": "1562",
   "label": "Pisa International Airport (PSA)",
   "x": 0.5774,
@@ -1037,14 +1045,6 @@
   "x": 3.3779,
   "y": 0.1828,
   "z": 6.3048,
-  "value": 130
- },
- {
-  "id": "3376",
-  "label": "Wuhan Tianhe International Airport (WUH)",
-  "x": 6.3449,
-  "y": 0.027,
-  "z": 3.4204,
   "value": 130
  },
  {
@@ -1088,14 +1088,6 @@
   "value": 125
  },
  {
-  "id": "210",
-  "label": "Houari Boumediene Airport (ALG)",
-  "x": 0.1786,
-  "y": 0.0196,
-  "z": 4.0768,
-  "value": 124
- },
- {
   "id": "1626",
   "label": "Faro Airport (FAO)",
   "x": -0.4426,
@@ -1104,12 +1096,12 @@
   "value": 124
  },
  {
-  "id": "585",
-  "label": "Eindhoven Airport (EIN)",
-  "x": 0.2986,
-  "y": 0.0177,
-  "z": 5.7167,
-  "value": 123
+  "id": "210",
+  "label": "Houari Boumediene Airport (ALG)",
+  "x": 0.1786,
+  "y": 0.0196,
+  "z": 4.0768,
+  "value": 124
  },
  {
   "id": "2939",
@@ -1120,12 +1112,12 @@
   "value": 123
  },
  {
-  "id": "1636",
-  "label": "Francisco de Sá Carneiro Airport (OPO)",
-  "x": -0.4823,
-  "y": 0.0545,
-  "z": 4.5831,
-  "value": 122
+  "id": "585",
+  "label": "Eindhoven Airport (EIN)",
+  "x": 0.2986,
+  "y": 0.0177,
+  "z": 5.7167,
+  "value": 123
  },
  {
   "id": "4144",
@@ -1133,6 +1125,14 @@
   "x": 6.8602,
   "y": 0.0474,
   "z": 4.6266,
+  "value": 122
+ },
+ {
+  "id": "1636",
+  "label": "Francisco de Sá Carneiro Airport (OPO)",
+  "x": -0.4823,
+  "y": 0.0545,
+  "z": 4.5831,
   "value": 122
  },
  {
@@ -1192,35 +1192,11 @@
   "value": 115
  },
  {
-  "id": "3320",
-  "label": "Brisbane International Airport (BNE)",
-  "x": 8.5065,
-  "y": 0.0031,
-  "z": -3.0427,
-  "value": 114
- },
- {
-  "id": "3720",
-  "label": "Portland International Airport (PDX)",
-  "x": -6.811,
-  "y": 0.0074,
-  "z": 5.0654,
-  "value": 114
- },
- {
   "id": "3992",
   "label": "Kansai International Airport (KIX)",
   "x": 7.5136,
   "y": 0.0062,
   "z": 3.8253,
-  "value": 114
- },
- {
-  "id": "1246",
-  "label": "Valencia Airport (VLC)",
-  "x": -0.0268,
-  "y": 0.0574,
-  "z": 4.3877,
   "value": 114
  },
  {
@@ -1232,11 +1208,35 @@
   "value": 114
  },
  {
+  "id": "3720",
+  "label": "Portland International Airport (PDX)",
+  "x": -6.811,
+  "y": 0.0074,
+  "z": 5.0654,
+  "value": 114
+ },
+ {
+  "id": "3320",
+  "label": "Brisbane International Airport (BNE)",
+  "x": 8.5065,
+  "y": 0.0031,
+  "z": -3.0427,
+  "value": 114
+ },
+ {
   "id": "523",
   "label": "East Midlands Airport (EMA)",
   "x": -0.0738,
   "y": 0.0732,
   "z": 5.8701,
+  "value": 114
+ },
+ {
+  "id": "1246",
+  "label": "Valencia Airport (VLC)",
+  "x": -0.0268,
+  "y": 0.0574,
+  "z": 4.3877,
   "value": 114
  },
  {
@@ -1256,19 +1256,19 @@
   "value": 112
  },
  {
-  "id": "2789",
-  "label": "Jorge Chávez International Airport (LIM)",
-  "x": -4.2841,
-  "y": 0.027,
-  "z": -1.3358,
-  "value": 112
- },
- {
   "id": "2176",
   "label": "Kuwait International Airport (KWI)",
   "x": 2.6649,
   "y": 0.0493,
   "z": 3.2474,
+  "value": 112
+ },
+ {
+  "id": "2789",
+  "label": "Jorge Chávez International Airport (LIM)",
+  "x": -4.2841,
+  "y": 0.027,
+  "z": -1.3358,
   "value": 112
  },
  {
@@ -1280,11 +1280,11 @@
   "value": 111
  },
  {
-  "id": "3731",
-  "label": "San Diego International Airport (SAN)",
-  "x": -6.5106,
-  "y": 0.0041,
-  "z": 3.6371,
+  "id": "2170",
+  "label": "Queen Alia International Airport (AMM)",
+  "x": 1.9996,
+  "y": 0.5729,
+  "z": 3.5247,
   "value": 111
  },
  {
@@ -1296,11 +1296,11 @@
   "value": 111
  },
  {
-  "id": "2170",
-  "label": "Queen Alia International Airport (AMM)",
-  "x": 1.9996,
-  "y": 0.5729,
-  "z": 3.5247,
+  "id": "3731",
+  "label": "San Diego International Airport (SAN)",
+  "x": -6.5106,
+  "y": 0.0041,
+  "z": 3.6371,
   "value": 111
  },
  {
@@ -1336,11 +1336,11 @@
   "value": 109
  },
  {
-  "id": "629",
-  "label": "Luxembourg-Findel International Airport (LUX)",
-  "x": 0.3447,
-  "y": 0.2952,
-  "z": 5.5137,
+  "id": "1197",
+  "label": "Larnaca International Airport (LCA)",
+  "x": 1.8681,
+  "y": 0.0019,
+  "z": 3.875,
   "value": 108
  },
  {
@@ -1352,19 +1352,19 @@
   "value": 108
  },
  {
+  "id": "629",
+  "label": "Luxembourg-Findel International Airport (LUX)",
+  "x": 0.3447,
+  "y": 0.2952,
+  "z": 5.5137,
+  "value": 108
+ },
+ {
   "id": "3390",
   "label": "Liuting Airport (TAO)",
   "x": 6.6874,
   "y": 0.0079,
   "z": 4.0296,
-  "value": 108
- },
- {
-  "id": "1197",
-  "label": "Larnaca International Airport (LCA)",
-  "x": 1.8681,
-  "y": 0.0019,
-  "z": 3.875,
   "value": 108
  },
  {
@@ -1408,35 +1408,11 @@
   "value": 103
  },
  {
-  "id": "3368",
-  "label": "Tianjin Binhai International Airport (TSN)",
-  "x": 6.5192,
-  "y": 0.0024,
-  "z": 4.3472,
-  "value": 102
- },
- {
   "id": "1739",
   "label": "Belgrade Nikola Tesla Airport (BEG)",
   "x": 1.1283,
   "y": 0.0801,
   "z": 4.9798,
-  "value": 102
- },
- {
-  "id": "1561",
-  "label": "Naples International Airport (NAP)",
-  "x": 0.7939,
-  "y": 0.0703,
-  "z": 4.5429,
-  "value": 102
- },
- {
-  "id": "517",
-  "label": "Leeds Bradford Airport (LBA)",
-  "x": -0.0923,
-  "y": 0.1629,
-  "z": 5.9851,
   "value": 102
  },
  {
@@ -1448,6 +1424,30 @@
   "value": 102
  },
  {
+  "id": "3368",
+  "label": "Tianjin Binhai International Airport (TSN)",
+  "x": 6.5192,
+  "y": 0.0024,
+  "z": 4.3472,
+  "value": 102
+ },
+ {
+  "id": "517",
+  "label": "Leeds Bradford Airport (LBA)",
+  "x": -0.0923,
+  "y": 0.1629,
+  "z": 5.9851,
+  "value": 102
+ },
+ {
+  "id": "1561",
+  "label": "Naples International Airport (NAP)",
+  "x": 0.7939,
+  "y": 0.0703,
+  "z": 4.5429,
+  "value": 102
+ },
+ {
   "id": "3728",
   "label": "Daniel K Inouye International Airport (HNL)",
   "x": -8.7736,
@@ -1456,19 +1456,19 @@
   "value": 101
  },
  {
-  "id": "1553",
-  "label": "Ciampino–G. B. Pastine International Airport (CIA)",
-  "x": 0.6997,
-  "y": 0.1021,
-  "z": 4.6444,
-  "value": 100
- },
- {
   "id": "352",
   "label": "Hannover Airport (HAJ)",
   "x": 0.5381,
   "y": 0.0438,
   "z": 5.829,
+  "value": 100
+ },
+ {
+  "id": "1553",
+  "label": "Ciampino–G. B. Pastine International Airport (CIA)",
+  "x": 0.6997,
+  "y": 0.1021,
+  "z": 4.6444,
   "value": 100
  },
  {
@@ -1480,14 +1480,6 @@
   "value": 99
  },
  {
-  "id": "1222",
-  "label": "Girona Airport (GRO)",
-  "x": 0.1534,
-  "y": 0.1119,
-  "z": 4.6557,
-  "value": 98
- },
- {
   "id": "1264",
   "label": "Bordeaux-Mérignac Airport (BOD)",
   "x": -0.0398,
@@ -1496,19 +1488,19 @@
   "value": 98
  },
  {
-  "id": "4167",
-  "label": "Orlando Sanford International Airport (SFB)",
-  "x": -4.5132,
-  "y": 0.0132,
-  "z": 3.1975,
-  "value": 97
+  "id": "1222",
+  "label": "Girona Airport (GRO)",
+  "x": 0.1534,
+  "y": 0.1119,
+  "z": 4.6557,
+  "value": 98
  },
  {
-  "id": "521",
-  "label": "Newcastle Airport (NCL)",
-  "x": -0.094,
-  "y": 0.0636,
-  "z": 6.1153,
+  "id": "2890",
+  "label": "Luis Munoz Marin International Airport (SJU)",
+  "x": -3.6668,
+  "y": 0.0022,
+  "z": 2.0488,
   "value": 97
  },
  {
@@ -1520,11 +1512,19 @@
   "value": 97
  },
  {
-  "id": "2890",
-  "label": "Luis Munoz Marin International Airport (SJU)",
-  "x": -3.6668,
-  "y": 0.0022,
-  "z": 2.0488,
+  "id": "521",
+  "label": "Newcastle Airport (NCL)",
+  "x": -0.094,
+  "y": 0.0636,
+  "z": 6.1153,
+  "value": 97
+ },
+ {
+  "id": "4167",
+  "label": "Orlando Sanford International Airport (SFB)",
+  "x": -4.5132,
+  "y": 0.0132,
+  "z": 3.1975,
   "value": 97
  },
  {
@@ -1544,6 +1544,22 @@
   "value": 97
  },
  {
+  "id": "491",
+  "label": "Liverpool John Lennon Airport (LPL)",
+  "x": -0.1583,
+  "y": 0.0191,
+  "z": 5.926,
+  "value": 96
+ },
+ {
+  "id": "3566",
+  "label": "William P Hobby Airport (HOU)",
+  "x": -5.2933,
+  "y": 0.011,
+  "z": 3.2939,
+  "value": 96
+ },
+ {
   "id": "636",
   "label": "Bergen Airport Flesland (BGO)",
   "x": 0.2899,
@@ -1560,27 +1576,11 @@
   "value": 96
  },
  {
-  "id": "3566",
-  "label": "William P Hobby Airport (HOU)",
-  "x": -5.2933,
-  "y": 0.011,
-  "z": 3.2939,
-  "value": 96
- },
- {
   "id": "3157",
   "label": "Don Mueang International Airport (DMK)",
   "x": 5.5893,
   "y": 0.0022,
   "z": 1.5458,
-  "value": 96
- },
- {
-  "id": "491",
-  "label": "Liverpool John Lennon Airport (LPL)",
-  "x": -0.1583,
-  "y": 0.0191,
-  "z": 5.926,
   "value": 96
  },
  {
@@ -1592,11 +1592,11 @@
   "value": 95
  },
  {
-  "id": "3385",
-  "label": "Fuzhou Changle International Airport (FOC)",
-  "x": 6.6479,
-  "y": 0.011,
-  "z": 2.8817,
+  "id": "355",
+  "label": "Frankfurt-Hahn Airport (HHN)",
+  "x": 0.4035,
+  "y": 0.3945,
+  "z": 5.5499,
   "value": 94
  }
 ]

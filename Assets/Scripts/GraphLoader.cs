@@ -73,8 +73,10 @@ public class GraphLoader : MonoBehaviour
             yield break;
         }
 
-        List<NodeData> nodes;
-        List<EdgeData> edges;
+        // No yield inside try/catch: C# does not allow yield statements in catch blocks.
+        List<NodeData> nodes = null;
+        List<EdgeData> edges = null;
+        string parseError = null;
         try
         {
             nodes = JsonConvert.DeserializeObject<List<NodeData>>(nodesJson);
@@ -82,10 +84,14 @@ public class GraphLoader : MonoBehaviour
         }
         catch (JsonException ex)
         {
-            Debug.LogError($"GraphLoader: JSON parse failed: {ex.Message}");
-            yield break;
+            parseError = ex.Message;
         }
 
+        if (parseError != null)
+        {
+            Debug.LogError($"GraphLoader: JSON parse failed: {parseError}");
+            yield break;
+        }
         if (nodes == null || edges == null)
         {
             Debug.LogError("GraphLoader: deserialized null (empty or malformed file).");
