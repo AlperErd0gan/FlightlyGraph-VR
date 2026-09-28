@@ -4,3 +4,8 @@ __pycache__/
 .DS_Store
 data/raw/
 .claude/
+new_data/
+# EUROCONTROL-derived data (research licence, do not commit)
+data/processed/*_ectrl.json
+Assets/StreamingAssets/*_ectrl.json
+Assets/StreamingAssets/*_ectrl.json.meta

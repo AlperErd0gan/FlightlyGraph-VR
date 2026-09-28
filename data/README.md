@@ -35,3 +35,42 @@ edges.json: [{ "source", "target", "weight" }, ...]
 - Only the top `--top` (default 200) airports by degree are kept; `weight` is
   the number of distinct directed routes between the pair, collapsed into one
   undirected edge.
+
+## Source: EUROCONTROL R&D Archive (Feb 2021)
+
+`new_data/Flights_20210201_20210228.csv.gz` (gitignored) comes from the
+EUROCONTROL Aviation Data Repository for Research. It covers flights
+departing, arriving or overflying the EUROCONTROL area in February 2021
+(COVID period, reduced traffic). Use is governed by the EUROCONTROL R&D data
+licence (research only) — check it before redistributing the raw files or the
+derived `*_ectrl.json`.
+
+`scripts/build_graph_ectrl.py` builds `nodes_ectrl.json`, `edges_ectrl.json`
+and `meta_ectrl.json`. Airport names/city/country/elevation are joined from
+OpenFlights `airports.dat` on ICAO code. Flights with `ZZZZ` (unknown airport),
+missing coordinates or ADEP == ADES are dropped. All times are UTC.
+
+```
+nodes_ectrl.json: [{ id (ICAO), label, x, y, z, value, lat, lon, city, country,
+                     departures, arrivals, avgDepDelayMin, avgArrDelayMin,
+                     scheduledShare, cargoShare, segments, topOperator, topAcType,
+                     daily, hourly }, ...]
+edges_ectrl.json: [{ source, target, weight, forward, backward,
+                     avgDistanceNm, avgDurationMin, avgDelayMin,
+                     scheduledShare, cargoShare, segments, topOperator, topAcType,
+                     daily, hourly }, ...]
+meta_ectrl.json:  { source, dateFrom, dateTo, days, timezone, totalFlights, nodeCount, edgeCount }
+```
+
+- `value` — flights touching the airport (departures + arrivals), all airports counted.
+- `weight` — flights between the pair, both directions; `forward` = source→target
+  (source < target alphabetically), `backward` = the other way.
+- `avgDepDelayMin` / `avgArrDelayMin` / `avgDelayMin` — actual minus filed
+  off-block / arrival time; negative = early. Gaps > 24 h are discarded.
+- `avgDurationMin` — actual off-block to actual arrival (includes taxi).
+- `segments` — STATFOR market segment → flight count.
+- `topOperator` — most frequent ICAO operator code, excluding anonymised `ZZZ`
+  (null if all flights are anonymised).
+- `daily[i]` — flights on day `meta.dateFrom + i` (departure time for edges and
+  departing flights, arrival time for arriving flights; actual, else filed).
+- `hourly[h]` — flights in UTC hour `h` over the whole month.
