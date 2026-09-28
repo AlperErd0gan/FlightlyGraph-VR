@@ -7,7 +7,9 @@ using UnityEngine.Networking;
 
 /// <summary>
 /// Loads nodes.json / edges.json from StreamingAssets and renders the graph:
-/// one GameObject per node, one LineRenderer per edge.
+/// one sphere per node (sized by sqrt(value), coloured by value) and one arced
+/// LineRenderer per undirected airport pair. Edges lift above the map so they do
+/// not overlap the nodes when viewed from above.
 /// Both files are always read through UnityWebRequest so the same code path
 /// works in the Editor, on desktop and on Android/Quest (where StreamingAssets
 /// lives inside the APK and plain File I/O fails).
@@ -21,35 +23,44 @@ public class GraphLoader : MonoBehaviour
     [Header("Nodes")]
     [Tooltip("Optional. If unset, a sphere primitive is created per node.")]
     public GameObject nodePrefab;
-    [Tooltip("Multiplier applied to the (x, y, z) read from nodes.json.")]
-    public float positionScale = 1f;
-    public float nodeBaseSize = 0.15f;
-    [Tooltip("Extra radius per unit of node value (route degree).")]
-    public float nodeSizePerValue = 0.0005f;
+    [Tooltip("Multiplier applied to the (x, y, z) read from nodes.json. Node sizes are NOT scaled, so a larger value spreads dense regions (Europe) apart.")]
+    public float positionScale = 4f;
+    [Tooltip("Multiplier for the altitude-derived y. 0 = flat on the map (recommended with MapPlane).")]
+    public float altitudeScale = 0f;
+    [Tooltip("Sphere diameter = nodeBaseSize + nodeSizePerSqrtValue * sqrt(value).")]
+    public float nodeBaseSize = 0.04f;
+    public float nodeSizePerSqrtValue = 0.006f;
+    public Color nodeLowColor = new Color(0.35f, 0.65f, 1f);
+    public Color nodeHighColor = new Color(1f, 0.55f, 0.15f);
 
     [Header("Edges")]
+    [Tooltip("Optional. If unset, Sprites/Default is used (supports vertex colours + alpha).")]
     public Material edgeMaterial;
-    public float edgeBaseWidth = 0.01f;
-    [Tooltip("Extra line width per unit of edge weight.")]
-    public float edgeWidthPerWeight = 0.01f;
-    public Color edgeLowColor = new Color(0.3f, 0.5f, 1f, 0.35f);
-    public Color edgeHighColor = new Color(1f, 0.4f, 0.2f, 0.9f);
+    public float edgeWidth = 0.012f;
+    [Tooltip("Arc peak height as a fraction of the chord length.")]
+    public float edgeArcHeight = 0.18f;
+    [Range(2, 32)]
+    public int edgeSegments = 12;
+    public Color edgeLowColor = new Color(0.5f, 0.7f, 1f, 0.25f);
+    public Color edgeHighColor = new Color(1f, 0.45f, 0.2f, 0.6f);
 
     // Runtime state
-    private readonly Dictionary<string, Transform> nodeInstances = new Dictionary<string, Transform>();
-    private readonly List<EdgeInstance> edgeInstances = new List<EdgeInstance>();
+    private readonly Dictionary<string, GraphNode> nodeInstances = new Dictionary<string, GraphNode>();
+    private readonly List<GraphEdge> edgeInstances = new List<GraphEdge>();
+    private readonly Dictionary<string, List<GraphEdge>> edgesByNode = new Dictionary<string, List<GraphEdge>>();
     private Transform nodesRoot;
     private Transform edgesRoot;
 
-    private class EdgeInstance
-    {
-        public GameObject gameObject;
-        public int weight;
-    }
-
-    public IReadOnlyDictionary<string, Transform> NodeInstances => nodeInstances;
+    public IReadOnlyDictionary<string, GraphNode> Nodes => nodeInstances;
+    public IReadOnlyList<GraphEdge> Edges => edgeInstances;
     public int LoadedNodeCount => nodeInstances.Count;
     public int LoadedEdgeCount => edgeInstances.Count;
+    public bool IsLoaded { get; private set; }
+
+    public IReadOnlyList<GraphEdge> EdgesOf(string nodeId)
+    {
+        return edgesByNode.TryGetValue(nodeId, out List<GraphEdge> list) ? list : System.Array.Empty<GraphEdge>();
+    }
 
     private void Start()
     {
@@ -100,6 +111,7 @@ public class GraphLoader : MonoBehaviour
 
         BuildNodes(nodes);
         BuildEdges(edges);
+        IsLoaded = true;
 
         Debug.Log($"GraphLoader: loaded {nodeInstances.Count} nodes, {edgeInstances.Count} edges " +
                   $"({nodes.Count} nodes / {edges.Count} edges in files).");
@@ -135,6 +147,15 @@ public class GraphLoader : MonoBehaviour
         nodesRoot = new GameObject("Nodes").transform;
         nodesRoot.SetParent(transform, false);
 
+        int maxValue = 1;
+        foreach (NodeData node in nodes)
+        {
+            if (node.value > maxValue)
+            {
+                maxValue = node.value;
+            }
+        }
+
         foreach (NodeData node in nodes)
         {
             if (string.IsNullOrEmpty(node.id))
@@ -160,11 +181,25 @@ public class GraphLoader : MonoBehaviour
             }
 
             go.name = string.IsNullOrEmpty(node.label) ? node.id : node.label;
-            go.transform.localPosition = new Vector3(node.x, node.y, node.z) * positionScale;
-            float size = nodeBaseSize + node.value * nodeSizePerValue;
+            go.transform.localPosition = new Vector3(node.x, node.y * altitudeScale, node.z) * positionScale;
+            float size = nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(node.value);
             go.transform.localScale = Vector3.one * size;
 
-            nodeInstances.Add(node.id, go.transform);
+            Renderer renderer = go.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.material.color = Color.Lerp(nodeLowColor, nodeHighColor, (float)node.value / maxValue);
+            }
+
+            GraphNode gn = go.AddComponent<GraphNode>();
+            gn.id = node.id;
+            gn.label = node.label;
+            gn.value = node.value;
+            gn.lat = node.lat;
+            gn.lon = node.lon;
+
+            nodeInstances.Add(node.id, gn);
+            edgesByNode[node.id] = new List<GraphEdge>();
         }
     }
 
@@ -172,6 +207,8 @@ public class GraphLoader : MonoBehaviour
     {
         edgesRoot = new GameObject("Edges").transform;
         edgesRoot.SetParent(transform, false);
+
+        Material material = edgeMaterial != null ? edgeMaterial : new Material(Shader.Find("Sprites/Default"));
 
         int maxWeight = 1;
         foreach (EdgeData edge in edges)
@@ -182,14 +219,25 @@ public class GraphLoader : MonoBehaviour
             }
         }
 
+        // Guard against duplicate pairs in either direction: one edge per airport pair.
+        var seenPairs = new HashSet<(string, string)>();
+        var points = new Vector3[edgeSegments + 1];
+
         foreach (EdgeData edge in edges)
         {
-            Transform a;
-            Transform b;
+            GraphNode a;
+            GraphNode b;
             if (!nodeInstances.TryGetValue(edge.source, out a) ||
                 !nodeInstances.TryGetValue(edge.target, out b))
             {
                 Debug.LogWarning($"GraphLoader: edge {edge.source} -> {edge.target} references unknown node; skipped.");
+                continue;
+            }
+            var pair = string.CompareOrdinal(edge.source, edge.target) < 0
+                ? (edge.source, edge.target)
+                : (edge.target, edge.source);
+            if (!seenPairs.Add(pair))
+            {
                 continue;
             }
 
@@ -198,34 +246,53 @@ public class GraphLoader : MonoBehaviour
 
             LineRenderer line = go.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
-            line.positionCount = 2;
-            line.SetPosition(0, a.position);
-            line.SetPosition(1, b.position);
+            line.sharedMaterial = material;
+            line.startWidth = edgeWidth;
+            line.endWidth = edgeWidth;
+            line.numCapVertices = 2;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
 
-            float width = edgeBaseWidth + edge.weight * edgeWidthPerWeight;
-            line.startWidth = width;
-            line.endWidth = width;
+            FillArc(a.transform.position, b.transform.position, points);
+            line.positionCount = points.Length;
+            line.SetPositions(points);
 
             float t = maxWeight > 1 ? (edge.weight - 1f) / (maxWeight - 1f) : 0f;
             Color color = Color.Lerp(edgeLowColor, edgeHighColor, t);
             line.startColor = color;
             line.endColor = color;
 
-            if (edgeMaterial != null)
-            {
-                line.material = edgeMaterial;
-            }
+            GraphEdge ge = go.AddComponent<GraphEdge>();
+            ge.sourceId = edge.source;
+            ge.targetId = edge.target;
+            ge.weight = edge.weight;
+            ge.line = line;
+            ge.baseColor = color;
 
-            edgeInstances.Add(new EdgeInstance { gameObject = go, weight = edge.weight });
+            edgeInstances.Add(ge);
+            edgesByNode[edge.source].Add(ge);
+            edgesByNode[edge.target].Add(ge);
         }
     }
 
-    /// <summary>
-    /// Shows only edges whose weight is >= threshold. Not wired to any UI yet.
-    /// </summary>
+    /// <summary>Quadratic Bézier from a to b whose midpoint is lifted along +Y.</summary>
+    private void FillArc(Vector3 a, Vector3 b, Vector3[] points)
+    {
+        float chord = Vector3.Distance(a, b);
+        Vector3 control = (a + b) * 0.5f + Vector3.up * (chord * edgeArcHeight * 2f);
+        int n = points.Length - 1;
+        for (int i = 0; i <= n; i++)
+        {
+            float t = (float)i / n;
+            float u = 1f - t;
+            points[i] = u * u * a + 2f * u * t * control + t * t * b;
+        }
+    }
+
+    /// <summary>Shows only edges whose weight is >= threshold.</summary>
     public void SetEdgeWeightThreshold(float threshold)
     {
-        foreach (EdgeInstance edge in edgeInstances)
+        foreach (GraphEdge edge in edgeInstances)
         {
             edge.gameObject.SetActive(edge.weight >= threshold);
         }

@@ -80,11 +80,12 @@ def load_routes(airports):
 
 
 def project(airports):
-    """Equirectangular: x <- lon, z <- lat, y <- altitude. Scaled to ~[-10, 10]."""
+    """Equirectangular, 2:1 aspect: x <- lon in [-10, 10], z <- lat in [-5, 5], y <- altitude.
+    Matches a 20 x 10 map quad centred at the origin (see MapPlane.cs)."""
     max_alt = max((a["alt"] for a in airports.values()), default=1.0) or 1.0
     for a in airports.values():
         a["x"] = round(a["lon"] / 18.0, 4)          # [-180,180] -> [-10,10]
-        a["z"] = round(a["lat"] / 9.0, 4)           # [-90,90]   -> [-10,10]
+        a["z"] = round(a["lat"] / 18.0, 4)          # [-90,90]   -> [-5,5]
         a["y"] = round(a["alt"] / max_alt * 2.0, 4)  # altitude as small vertical offset [0,2]
 
 
@@ -111,7 +112,8 @@ def build(top_n):
 
     kept = {aid: airports[aid] for aid in keep}
     project(kept)
-    nodes = [dict(id=a["id"], label=a["label"], x=a["x"], y=a["y"], z=a["z"], value=value[a["id"]])
+    nodes = [dict(id=a["id"], label=a["label"], x=a["x"], y=a["y"], z=a["z"], value=value[a["id"]],
+                  lat=a["lat"], lon=a["lon"])
              for a in sorted(kept.values(), key=lambda a: -value[a["id"]])]
     edges = [dict(source=s, target=d, weight=w)
              for (s, d), w in sorted(weights.items(), key=lambda kv: -kv[1])]

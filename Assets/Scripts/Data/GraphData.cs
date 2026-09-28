@@ -12,6 +12,8 @@ public class NodeData
     public float y;
     public float z;
     public int value;
+    public float lat;
+    public float lon;
 }
 
 [Serializable]

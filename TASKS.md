@@ -16,3 +16,12 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] U4: GraphLoader — node instantiation (prefab or sphere fallback), scale applied, id->Transform dictionary — implemented — semantically reviewed, not compiled
 - [x] U5: GraphLoader — edges via TryGetValue, LineRenderer per edge, width/color by weight, SetEdgeWeightThreshold — implemented — semantically reviewed, not compiled
 - [x] U6: Full semantic review pass (checklist a-e) of all .cs files; execution trace + "Needs Real Verification" in PROGRESS.md — implemented — semantically reviewed, not compiled
+
+## Part C — Exploration UX (Unity 6, compiled + tested in "My project")
+- [x] X1: FlyCamera.cs — WASD/QE move, arrow/right-drag look, scroll zoom, Ctrl+scroll speed, R reset (new Input System)
+- [x] X2: MapPlane.cs + NASA Blue Marble texture; build_graph.py projection fixed to 2:1 (z = lat/18), lat/lon exported
+- [x] X3: GraphLoader — sqrt node sizing, value colour gradient, arced edges, GraphNode/GraphEdge metadata
+- [x] X4: GraphSelector.cs — click node (raycast) / edge (screen-space pick); highlight incident edges, dim rest; Esc clears
+- [ ] X5: Same-city clustering — collapse airports sharing a city (e.g. LHR/LGW/STN -> "London") into one cluster node; click expands to member airports, click again collapses. Needs `city` in nodes.json (build_graph.py A_CITY column), cluster edge aggregation (sum weights), and GraphSelector expand/collapse state.
+- [ ] X6: Edge weight threshold slider UI (SetEdgeWeightThreshold exists, unwired)
+- [ ] X7: World-space label panel next to selected node (name, degree, lat/lon)

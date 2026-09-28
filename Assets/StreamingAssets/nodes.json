@@ -190,16 +190,6 @@
   "lon": -3.56264
  },
  {
-  "id": "548",
-  "label": "London Stansted Airport (STN)",
-  "x": 0.0131,
-  "y": 0.0832,
-  "z": 2.8825,
-  "value": 305,
-  "lat": 51.8849983215,
-  "lon": 0.234999999404
- },
- {
   "id": "3494",
   "label": "Newark Liberty International Airport (EWR)",
   "x": -4.1205,
@@ -208,6 +198,16 @@
   "value": 305,
   "lat": 40.692501068115234,
   "lon": -74.168701171875
+ },
+ {
+  "id": "548",
+  "label": "London Stansted Airport (STN)",
+  "x": 0.0131,
+  "y": 0.0832,
+  "z": 2.8825,
+  "value": 305,
+  "lat": 51.8849983215,
+  "lon": 0.234999999404
  },
  {
   "id": "3406",
@@ -280,16 +280,6 @@
   "lon": -2.2749500274658203
  },
  {
-  "id": "599",
-  "label": "Dublin Airport (DUB)",
-  "x": -0.3483,
-  "y": 0.0579,
-  "z": 2.9678,
-  "value": 288,
-  "lat": 53.421299,
-  "lon": -6.27007
- },
- {
   "id": "2985",
   "label": "Sheremetyevo International Airport (SVO)",
   "x": 2.0786,
@@ -298,6 +288,16 @@
   "value": 288,
   "lat": 55.972599,
   "lon": 37.4146
+ },
+ {
+  "id": "599",
+  "label": "Dublin Airport (DUB)",
+  "x": -0.3483,
+  "y": 0.0579,
+  "z": 2.9678,
+  "value": 288,
+  "lat": 53.421299,
+  "lon": -6.27007
  },
  {
   "id": "3876",
@@ -490,16 +490,6 @@
   "lon": -4.499110221862793
  },
  {
-  "id": "3304",
-  "label": "Kuala Lumpur International Airport (KUL)",
-  "x": 5.6506,
-  "y": 0.0165,
-  "z": 0.1525,
-  "value": 221,
-  "lat": 2.745579957962,
-  "lon": 101.70999908447
- },
- {
   "id": "2948",
   "label": "Pulkovo Airport (LED)",
   "x": 1.6813,
@@ -508,6 +498,16 @@
   "value": 221,
   "lat": 59.80030059814453,
   "lon": 30.262500762939453
+ },
+ {
+  "id": "3304",
+  "label": "Kuala Lumpur International Airport (KUL)",
+  "x": 5.6506,
+  "y": 0.0165,
+  "z": 0.1525,
+  "value": 221,
+  "lat": 2.745579957962,
+  "lon": 101.70999908447
  },
  {
   "id": "351",
@@ -590,16 +590,6 @@
   "lon": -71.00520325
  },
  {
-  "id": "1638",
-  "label": "Humberto Delgado Airport (Lisbon Portela Airport) (LIS)",
-  "x": -0.5076,
-  "y": 0.0895,
-  "z": 2.1545,
-  "value": 204,
-  "lat": 38.7813,
-  "lon": -9.13592
- },
- {
   "id": "3878",
   "label": "Orlando International Airport (MCO)",
   "x": -4.5172,
@@ -608,6 +598,16 @@
   "value": 204,
   "lat": 28.429399490356445,
   "lon": -81.30899810791016
+ },
+ {
+  "id": "1638",
+  "label": "Humberto Delgado Airport (Lisbon Portela Airport) (LIS)",
+  "x": -0.5076,
+  "y": 0.0895,
+  "z": 2.1545,
+  "value": 204,
+  "lat": 38.7813,
+  "lon": -9.13592
  },
  {
   "id": "2072",
@@ -660,16 +660,6 @@
   "lon": -80.152702
  },
  {
-  "id": "1212",
-  "label": "Alicante International Airport (ALC)",
-  "x": -0.031,
-  "y": 0.034,
-  "z": 2.1268,
-  "value": 192,
-  "lat": 38.28219985961914,
-  "lon": -0.5581560134887695
- },
- {
   "id": "3093",
   "label": "Indira Gandhi International Airport (DEL)",
   "x": 4.2835,
@@ -678,6 +668,16 @@
   "value": 192,
   "lat": 28.5665,
   "lon": 77.103104
+ },
+ {
+  "id": "1212",
+  "label": "Alicante International Airport (ALC)",
+  "x": -0.031,
+  "y": 0.034,
+  "z": 2.1268,
+  "value": 192,
+  "lat": 38.28219985961914,
+  "lon": -0.5581560134887695
  },
  {
   "id": "3382",
@@ -760,16 +760,6 @@
   "lon": -111.97799682617188
  },
  {
-  "id": "3520",
-  "label": "Ronald Reagan Washington National Airport (DCA)",
-  "x": -4.2799,
-  "y": 0.0036,
-  "z": 2.1585,
-  "value": 180,
-  "lat": 38.8521,
-  "lon": -77.037697
- },
- {
   "id": "3462",
   "label": "Phoenix Sky Harbor International Airport (PHX)",
   "x": -6.2229,
@@ -778,6 +768,16 @@
   "value": 180,
   "lat": 33.43429946899414,
   "lon": -112.01200103759766
+ },
+ {
+  "id": "3520",
+  "label": "Ronald Reagan Washington National Airport (DCA)",
+  "x": -4.2799,
+  "y": 0.0036,
+  "z": 2.1585,
+  "value": 180,
+  "lat": 38.8521,
+  "lon": -77.037697
  },
  {
   "id": "1354",
@@ -800,16 +800,6 @@
   "lon": -3.372499942779541
  },
  {
-  "id": "3393",
-  "label": "Chongqing Jiangbei International Airport (CKG)",
-  "x": 5.9246,
-  "y": 0.3265,
-  "z": 1.6511,
-  "value": 176,
-  "lat": 29.719200134277344,
-  "lon": 106.64199829101562
- },
- {
   "id": "421",
   "label": "Helsinki Vantaa Airport (HEL)",
   "x": 1.3869,
@@ -820,14 +810,14 @@
   "lon": 24.963300704956
  },
  {
-  "id": "342",
-  "label": "Hamburg Airport (HAM)",
-  "x": 0.5549,
-  "y": 0.0127,
-  "z": 2.9795,
-  "value": 174,
-  "lat": 53.630401611328,
-  "lon": 9.9882297515869
+  "id": "3393",
+  "label": "Chongqing Jiangbei International Airport (CKG)",
+  "x": 5.9246,
+  "y": 0.3265,
+  "z": 1.6511,
+  "value": 176,
+  "lat": 29.719200134277344,
+  "lon": 106.64199829101562
  },
  {
   "id": "2179",
@@ -840,6 +830,16 @@
   "lon": 54.651100158691406
  },
  {
+  "id": "342",
+  "label": "Hamburg Airport (HAM)",
+  "x": 0.5549,
+  "y": 0.0127,
+  "z": 2.9795,
+  "value": 174,
+  "lat": 53.630401611328,
+  "lon": 9.9882297515869
+ },
+ {
   "id": "1074",
   "label": "Mohammed V International Airport (CMN)",
   "x": -0.4217,
@@ -848,16 +848,6 @@
   "value": 173,
   "lat": 33.36750030517578,
   "lon": -7.589970111846924
- },
- {
-  "id": "492",
-  "label": "London Luton Airport (LTN)",
-  "x": -0.0205,
-  "y": 0.1258,
-  "z": 2.8819,
-  "value": 170,
-  "lat": 51.874698638916016,
-  "lon": -0.36833301186561584
  },
  {
   "id": "3379",
@@ -870,14 +860,14 @@
   "lon": 108.751999
  },
  {
-  "id": "3361",
-  "label": "Sydney Kingsford Smith International Airport (SYD)",
-  "x": 8.3987,
-  "y": 0.005,
-  "z": -1.8859,
-  "value": 168,
-  "lat": -33.94609832763672,
-  "lon": 151.177001953125
+  "id": "492",
+  "label": "London Luton Airport (LTN)",
+  "x": -0.0205,
+  "y": 0.1258,
+  "z": 2.8819,
+  "value": 170,
+  "lat": 51.874698638916016,
+  "lon": -0.36833301186561584
  },
  {
   "id": "3374",
@@ -890,6 +880,16 @@
   "lon": 113.81099700927734
  },
  {
+  "id": "3361",
+  "label": "Sydney Kingsford Smith International Airport (SYD)",
+  "x": 8.3987,
+  "y": 0.005,
+  "z": -1.8859,
+  "value": 168,
+  "lat": -33.94609832763672,
+  "lon": 151.177001953125
+ },
+ {
   "id": "1353",
   "label": "Marseille Provence Airport (MRS)",
   "x": 0.2901,
@@ -900,16 +900,6 @@
   "lon": 5.22142410278
  },
  {
-  "id": "1056",
-  "label": "Tenerife South Airport (TFS)",
-  "x": -0.9207,
-  "y": 0.05,
-  "z": 1.558,
-  "value": 166,
-  "lat": 28.044500351,
-  "lon": -16.5725002289
- },
- {
   "id": "304",
   "label": "Brussels South Charleroi Airport (CRL)",
   "x": 0.2474,
@@ -918,6 +908,16 @@
   "value": 166,
   "lat": 50.459202,
   "lon": 4.45382
+ },
+ {
+  "id": "1056",
+  "label": "Tenerife South Airport (TFS)",
+  "x": -0.9207,
+  "y": 0.05,
+  "z": 1.558,
+  "value": 166,
+  "lat": 28.044500351,
+  "lon": -16.5725002289
  },
  {
   "id": "2997",
@@ -940,16 +940,6 @@
   "lon": -1.74802994728
  },
  {
-  "id": "1054",
-  "label": "Gran Canaria Airport (LPA)",
-  "x": -0.8548,
-  "y": 0.0187,
-  "z": 1.5518,
-  "value": 161,
-  "lat": 27.931900024414062,
-  "lon": -15.38659954071045
- },
- {
   "id": "1128",
   "label": "Cairo International Airport (CAI)",
   "x": 1.7448,
@@ -958,6 +948,16 @@
   "value": 161,
   "lat": 30.12190055847168,
   "lon": 31.40559959411621
+ },
+ {
+  "id": "1054",
+  "label": "Gran Canaria Airport (LPA)",
+  "x": -0.8548,
+  "y": 0.0187,
+  "z": 1.5518,
+  "value": 161,
+  "lat": 27.931900024414062,
+  "lon": -15.38659954071045
  },
  {
   "id": "813",
@@ -990,16 +990,6 @@
   "lon": 9.22196006775
  },
  {
-  "id": "1590",
-  "label": "Ben Gurion International Airport (TLV)",
-  "x": 1.9381,
-  "y": 0.0323,
-  "z": 1.7784,
-  "value": 157,
-  "lat": 32.01139831542969,
-  "lon": 34.88669967651367
- },
- {
   "id": "2082",
   "label": "King Khaled International Airport (RUH)",
   "x": 2.5944,
@@ -1008,6 +998,16 @@
   "value": 157,
   "lat": 24.957599639892578,
   "lon": 46.69879913330078
+ },
+ {
+  "id": "1590",
+  "label": "Ben Gurion International Airport (TLV)",
+  "x": 1.9381,
+  "y": 0.0323,
+  "z": 1.7784,
+  "value": 157,
+  "lat": 32.01139831542969,
+  "lon": 34.88669967651367
  },
  {
   "id": "1852",
@@ -1040,16 +1040,6 @@
   "lon": 20.967100143399996
  },
  {
-  "id": "2191",
-  "label": "Sharjah International Airport (SHJ)",
-  "x": 3.0843,
-  "y": 0.0266,
-  "z": 1.4071,
-  "value": 154,
-  "lat": 25.32859992980957,
-  "lon": 55.5172004699707
- },
- {
   "id": "1489",
   "label": "Budapest Liszt Ferenc International Airport (BUD)",
   "x": 1.0701,
@@ -1058,6 +1048,16 @@
   "value": 154,
   "lat": 47.42976,
   "lon": 19.261093
+ },
+ {
+  "id": "2191",
+  "label": "Sharjah International Airport (SHJ)",
+  "x": 3.0843,
+  "y": 0.0266,
+  "z": 1.4071,
+  "value": 154,
+  "lat": 25.32859992980957,
+  "lon": 55.5172004699707
  },
  {
   "id": "1335",
@@ -1130,16 +1130,6 @@
   "lon": 12.3519
  },
  {
-  "id": "490",
-  "label": "Bristol Airport (BRS)",
-  "x": -0.1511,
-  "y": 0.1488,
-  "z": 2.8546,
-  "value": 145,
-  "lat": 51.382702,
-  "lon": -2.71909
- },
- {
   "id": "2988",
   "label": "Vnukovo International Airport (VKO)",
   "x": 2.0701,
@@ -1148,6 +1138,16 @@
   "value": 145,
   "lat": 55.5914993286,
   "lon": 37.2615013123
+ },
+ {
+  "id": "490",
+  "label": "Bristol Airport (BRS)",
+  "x": -0.1511,
+  "y": 0.1488,
+  "z": 2.8546,
+  "value": 145,
+  "lat": 51.382702,
+  "lon": -2.71909
  },
  {
   "id": "3386",
@@ -1160,16 +1160,6 @@
   "lon": 120.43399810791016
  },
  {
-  "id": "1871",
-  "label": "Tocumen International Airport (PTY)",
-  "x": -4.4102,
-  "y": 0.0323,
-  "z": 0.504,
-  "value": 144,
-  "lat": 9.0713596344,
-  "lon": -79.3834991455
- },
- {
   "id": "3849",
   "label": "Baltimore/Washington International Thurgood Marshall Airport (BWI)",
   "x": -4.2593,
@@ -1180,14 +1170,14 @@
   "lon": -76.668297
  },
  {
-  "id": "3383",
-  "label": "Xiamen Gaoqi International Airport (XMN)",
-  "x": 6.5627,
-  "y": 0.0141,
-  "z": 1.3636,
-  "value": 140,
-  "lat": 24.54400062561035,
-  "lon": 118.12799835205078
+  "id": "1871",
+  "label": "Tocumen International Airport (PTY)",
+  "x": -4.4102,
+  "y": 0.0323,
+  "z": 0.504,
+  "value": 144,
+  "lat": 9.0713596344,
+  "lon": -79.3834991455
  },
  {
   "id": "3371",
@@ -1198,6 +1188,16 @@
   "value": 140,
   "lat": 28.189199447599997,
   "lon": 113.220001221
+ },
+ {
+  "id": "3383",
+  "label": "Xiamen Gaoqi International Airport (XMN)",
+  "x": 6.5627,
+  "y": 0.0141,
+  "z": 1.3636,
+  "value": 140,
+  "lat": 24.54400062561035,
+  "lon": 118.12799835205078
  },
  {
   "id": "3697",
@@ -1290,16 +1290,6 @@
   "lon": 10.3927
  },
  {
-  "id": "3376",
-  "label": "Wuhan Tianhe International Airport (WUH)",
-  "x": 6.3449,
-  "y": 0.027,
-  "z": 1.7102,
-  "value": 130,
-  "lat": 30.7838,
-  "lon": 114.208
- },
- {
   "id": "2975",
   "label": "Koltsovo Airport (SVX)",
   "x": 3.3779,
@@ -1308,6 +1298,16 @@
   "value": 130,
   "lat": 56.743099212646,
   "lon": 60.802700042725
+ },
+ {
+  "id": "3376",
+  "label": "Wuhan Tianhe International Airport (WUH)",
+  "x": 6.3449,
+  "y": 0.027,
+  "z": 1.7102,
+  "value": 130,
+  "lat": 30.7838,
+  "lon": 114.208
  },
  {
   "id": "1538",
@@ -1440,16 +1440,6 @@
   "lon": -114.019996643
  },
  {
-  "id": "1367",
-  "label": "Paris Beauvais Tillé Airport (BVA)",
-  "x": 0.1174,
-  "y": 0.0859,
-  "z": 2.7475,
-  "value": 118,
-  "lat": 49.45439910888672,
-  "lon": 2.1127800941467285
- },
- {
   "id": "287",
   "label": "Tunis Carthage International Airport (TUN)",
   "x": 0.5682,
@@ -1458,6 +1448,16 @@
   "value": 118,
   "lat": 36.85100173950195,
   "lon": 10.22719955444336
+ },
+ {
+  "id": "1367",
+  "label": "Paris Beauvais Tillé Airport (BVA)",
+  "x": 0.1174,
+  "y": 0.0859,
+  "z": 2.7475,
+  "value": 118,
+  "lat": 49.45439910888672,
+  "lon": 2.1127800941467285
  },
  {
   "id": "1452",
@@ -1490,26 +1490,6 @@
   "lon": 126.25
  },
  {
-  "id": "523",
-  "label": "East Midlands Airport (EMA)",
-  "x": -0.0738,
-  "y": 0.0732,
-  "z": 2.9351,
-  "value": 114,
-  "lat": 52.8311004639,
-  "lon": -1.32806003094
- },
- {
-  "id": "3992",
-  "label": "Kansai International Airport (KIX)",
-  "x": 7.5136,
-  "y": 0.0062,
-  "z": 1.9126,
-  "value": 114,
-  "lat": 34.42729949951172,
-  "lon": 135.24400329589844
- },
- {
   "id": "3320",
   "label": "Brisbane International Airport (BNE)",
   "x": 8.5065,
@@ -1540,6 +1520,16 @@
   "lon": -122.5979996
  },
  {
+  "id": "523",
+  "label": "East Midlands Airport (EMA)",
+  "x": -0.0738,
+  "y": 0.0732,
+  "z": 2.9351,
+  "value": 114,
+  "lat": 52.8311004639,
+  "lon": -1.32806003094
+ },
+ {
   "id": "3404",
   "label": "Zhoushuizi Airport (DLC)",
   "x": 6.7522,
@@ -1550,6 +1540,16 @@
   "lon": 121.53900146484375
  },
  {
+  "id": "3992",
+  "label": "Kansai International Airport (KIX)",
+  "x": 7.5136,
+  "y": 0.0062,
+  "z": 1.9126,
+  "value": 114,
+  "lat": 34.42729949951172,
+  "lon": 135.24400329589844
+ },
+ {
   "id": "2983",
   "label": "Tashkent International Airport (TAS)",
   "x": 3.849,
@@ -1558,6 +1558,16 @@
   "value": 113,
   "lat": 41.257900238,
   "lon": 69.2811965942
+ },
+ {
+  "id": "2176",
+  "label": "Kuwait International Airport (KWI)",
+  "x": 2.6649,
+  "y": 0.0493,
+  "z": 1.6237,
+  "value": 112,
+  "lat": 29.226600646972656,
+  "lon": 47.96889877319336
  },
  {
   "id": "2789",
@@ -1580,16 +1590,6 @@
   "lon": -81.8498001099
  },
  {
-  "id": "2176",
-  "label": "Kuwait International Airport (KWI)",
-  "x": 2.6649,
-  "y": 0.0493,
-  "z": 1.6237,
-  "value": 112,
-  "lat": 29.226600646972656,
-  "lon": 47.96889877319336
- },
- {
   "id": "2170",
   "label": "Queen Alia International Airport (AMM)",
   "x": 1.9996,
@@ -1600,16 +1600,6 @@
   "lon": 35.9931983948
  },
  {
-  "id": "3731",
-  "label": "San Diego International Airport (SAN)",
-  "x": -6.5106,
-  "y": 0.0041,
-  "z": 1.8185,
-  "value": 111,
-  "lat": 32.7336006165,
-  "lon": -117.190002441
- },
- {
   "id": "1055",
   "label": "Lanzarote Airport (ACE)",
   "x": -0.7558,
@@ -1618,6 +1608,16 @@
   "value": 111,
   "lat": 28.945499,
   "lon": -13.6052
+ },
+ {
+  "id": "3731",
+  "label": "San Diego International Airport (SAN)",
+  "x": -6.5106,
+  "y": 0.0041,
+  "z": 1.8185,
+  "value": 111,
+  "lat": 32.7336006165,
+  "lon": -117.190002441
  },
  {
   "id": "1418",
@@ -1670,16 +1670,6 @@
   "lon": 144.843002
  },
  {
-  "id": "3390",
-  "label": "Liuting Airport (TAO)",
-  "x": 6.6874,
-  "y": 0.0079,
-  "z": 2.0148,
-  "value": 108,
-  "lat": 36.2661018372,
-  "lon": 120.374000549
- },
- {
   "id": "3388",
   "label": "Nanjing Lukou Airport (NKG)",
   "x": 6.6034,
@@ -1708,6 +1698,16 @@
   "value": 108,
   "lat": 49.6233333,
   "lon": 6.2044444
+ },
+ {
+  "id": "3390",
+  "label": "Liuting Airport (TAO)",
+  "x": 6.6874,
+  "y": 0.0079,
+  "z": 2.0148,
+  "value": 108,
+  "lat": 36.2661018372,
+  "lon": 120.374000549
  },
  {
   "id": "3205",
@@ -1760,16 +1760,6 @@
   "lon": 82.650703430176
  },
  {
-  "id": "1739",
-  "label": "Belgrade Nikola Tesla Airport (BEG)",
-  "x": 1.1283,
-  "y": 0.0801,
-  "z": 2.4899,
-  "value": 102,
-  "lat": 44.8184013367,
-  "lon": 20.3090991974
- },
- {
   "id": "2578",
   "label": "Viracopos International Airport (VCP)",
   "x": -2.6186,
@@ -1790,6 +1780,16 @@
   "lon": 117.346000671
  },
  {
+  "id": "517",
+  "label": "Leeds Bradford Airport (LBA)",
+  "x": -0.0923,
+  "y": 0.1629,
+  "z": 2.9925,
+  "value": 102,
+  "lat": 53.86589813232422,
+  "lon": -1.6605700254440308
+ },
+ {
   "id": "1561",
   "label": "Naples International Airport (NAP)",
   "x": 0.7939,
@@ -1800,14 +1800,14 @@
   "lon": 14.2908
  },
  {
-  "id": "517",
-  "label": "Leeds Bradford Airport (LBA)",
-  "x": -0.0923,
-  "y": 0.1629,
-  "z": 2.9925,
+  "id": "1739",
+  "label": "Belgrade Nikola Tesla Airport (BEG)",
+  "x": 1.1283,
+  "y": 0.0801,
+  "z": 2.4899,
   "value": 102,
-  "lat": 53.86589813232422,
-  "lon": -1.6605700254440308
+  "lat": 44.8184013367,
+  "lon": 20.3090991974
  },
  {
   "id": "3728",
@@ -1870,26 +1870,6 @@
   "lon": 2.7605500221
  },
  {
-  "id": "4167",
-  "label": "Orlando Sanford International Airport (SFB)",
-  "x": -4.5132,
-  "y": 0.0132,
-  "z": 1.5988,
-  "value": 97,
-  "lat": 28.777599334716797,
-  "lon": -81.23750305175781
- },
- {
-  "id": "521",
-  "label": "Newcastle Airport (NCL)",
-  "x": -0.094,
-  "y": 0.0636,
-  "z": 3.0576,
-  "value": 97,
-  "lat": 55.037498474121094,
-  "lon": -1.6916699409484863
- },
- {
   "id": "2890",
   "label": "Luis Munoz Marin International Airport (SJU)",
   "x": -3.6668,
@@ -1898,6 +1878,26 @@
   "value": 97,
   "lat": 18.4393997192,
   "lon": -66.0018005371
+ },
+ {
+  "id": "1075",
+  "label": "Menara Airport (RAK)",
+  "x": -0.4465,
+  "y": 0.3696,
+  "z": 1.7559,
+  "value": 97,
+  "lat": 31.606899261499997,
+  "lon": -8.03629970551
+ },
+ {
+  "id": "4167",
+  "label": "Orlando Sanford International Airport (SFB)",
+  "x": -4.5132,
+  "y": 0.0132,
+  "z": 1.5988,
+  "value": 97,
+  "lat": 28.777599334716797,
+  "lon": -81.23750305175781
  },
  {
   "id": "1472",
@@ -1920,24 +1920,14 @@
   "lon": 15.0664
  },
  {
-  "id": "1075",
-  "label": "Menara Airport (RAK)",
-  "x": -0.4465,
-  "y": 0.3696,
-  "z": 1.7559,
+  "id": "521",
+  "label": "Newcastle Airport (NCL)",
+  "x": -0.094,
+  "y": 0.0636,
+  "z": 3.0576,
   "value": 97,
-  "lat": 31.606899261499997,
-  "lon": -8.03629970551
- },
- {
-  "id": "636",
-  "label": "Bergen Airport Flesland (BGO)",
-  "x": 0.2899,
-  "y": 0.0407,
-  "z": 3.3496,
-  "value": 96,
-  "lat": 60.29339981,
-  "lon": 5.218140125
+  "lat": 55.037498474121094,
+  "lon": -1.6916699409484863
  },
  {
   "id": "491",
@@ -1950,6 +1940,16 @@
   "lon": -2.849720001220703
  },
  {
+  "id": "636",
+  "label": "Bergen Airport Flesland (BGO)",
+  "x": 0.2899,
+  "y": 0.0407,
+  "z": 3.3496,
+  "value": 96,
+  "lat": 60.29339981,
+  "lon": 5.218140125
+ },
+ {
   "id": "3566",
   "label": "William P Hobby Airport (HOU)",
   "x": -5.2933,
@@ -1958,16 +1958,6 @@
   "value": 96,
   "lat": 29.64539909,
   "lon": -95.27890015
- },
- {
-  "id": "3394",
-  "label": "Longdongbao Airport (KWE)",
-  "x": 5.9334,
-  "y": 0.8937,
-  "z": 1.4744,
-  "value": 96,
-  "lat": 26.53849983215332,
-  "lon": 106.8010025024414
  },
  {
   "id": "3157",
@@ -1980,6 +1970,16 @@
   "lon": 100.607002258
  },
  {
+  "id": "3394",
+  "label": "Longdongbao Airport (KWE)",
+  "x": 5.9334,
+  "y": 0.8937,
+  "z": 1.4744,
+  "value": 96,
+  "lat": 26.53849983215332,
+  "lon": 106.8010025024414
+ },
+ {
   "id": "2006",
   "label": "Auckland International Airport (AKL)",
   "x": 9.7107,
@@ -1990,13 +1990,13 @@
   "lon": 174.792007446
  },
  {
-  "id": "3488",
-  "label": "Cincinnati Northern Kentucky International Airport (CVG)",
-  "x": -4.7038,
-  "y": 0.2143,
-  "z": 2.1694,
+  "id": "3385",
+  "label": "Fuzhou Changle International Airport (FOC)",
+  "x": 6.6479,
+  "y": 0.011,
+  "z": 1.4408,
   "value": 94,
-  "lat": 39.0488014221,
-  "lon": -84.6678009033
+  "lat": 25.935100555419922,
+  "lon": 119.66300201416016
  }
 ]
