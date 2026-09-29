@@ -14,6 +14,8 @@ public class NodeData
     public int value;
     public float lat;
     public float lon;
+    // Only in nodes_3d*.json (layout_3d.py); 0 when absent.
+    public int community;
 }
 
 [Serializable]

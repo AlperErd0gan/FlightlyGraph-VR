@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,11 +8,14 @@ using UnityEngine.InputSystem;
 /// edge (closest arc segment in screen space, no colliders needed). Selecting a
 /// node highlights it and its incident edges and dims everything else; selecting
 /// an edge highlights it and both endpoints. Esc or clicking empty space clears.
+/// XR input (XRGraphInput) calls SelectNode / SelectEdge / PickEdgeAlongRay directly.
 /// </summary>
 public class GraphSelector : MonoBehaviour
 {
     public GraphLoader graph;
     public Camera targetCamera;
+    [Tooltip("Desktop mouse/keyboard picking. XRGraphInput turns this off so the mouse-driven XR simulator does not also click here.")]
+    public bool mouseInput = true;
 
     [Header("Highlight")]
     public Color nodeHighlightColor = Color.yellow;
@@ -25,9 +29,16 @@ public class GraphSelector : MonoBehaviour
     [Tooltip("Max distance in pixels from the cursor to an edge for it to count as clicked.")]
     public float edgePickPixels = 8f;
 
-    private readonly Dictionary<GraphNode, Color> nodeBaseColors = new Dictionary<GraphNode, Color>();
+    public event Action<GraphNode> NodeSelected;
+    public event Action<GraphEdge> EdgeSelected;
+    public event Action SelectionCleared;
+
+    public GraphNode SelectedNode => selectedNode;
+    public GraphEdge SelectedEdge => selectedEdge;
+
     private GraphNode selectedNode;
     private GraphEdge selectedEdge;
+    private Vector3[] pickBuffer = new Vector3[0];
 
     private void Awake()
     {
@@ -39,7 +50,7 @@ public class GraphSelector : MonoBehaviour
     {
         Keyboard kb = Keyboard.current;
         Mouse mouse = Mouse.current;
-        if (mouse == null || targetCamera == null || graph == null || !graph.IsLoaded)
+        if (!mouseInput || mouse == null || targetCamera == null || graph == null || !graph.IsLoaded)
         {
             return;
         }
@@ -111,6 +122,63 @@ public class GraphSelector : MonoBehaviour
         return best;
     }
 
+    /// <summary>
+    /// 3D pick for XR rays: returns the visible edge whose arc passes closest to the
+    /// ray, measured as the angle seen from the ray origin, or null if none is within
+    /// maxAngleDegrees. Angle (not metres) keeps picking equally easy near and far.
+    /// </summary>
+    public GraphEdge PickEdgeAlongRay(Ray ray, float maxAngleDegrees)
+    {
+        GraphEdge best = null;
+        float bestAngle = maxAngleDegrees;
+
+        foreach (GraphEdge edge in graph.Edges)
+        {
+            if (!edge.gameObject.activeSelf) continue;
+
+            int n = edge.line.positionCount;
+            if (pickBuffer.Length < n) pickBuffer = new Vector3[n];
+            edge.line.GetPositions(pickBuffer);
+
+            for (int i = 1; i < n; i++)
+            {
+                float angle = AngleRayToSegment(ray, pickBuffer[i - 1], pickBuffer[i], maxRayDistance);
+                if (angle < bestAngle)
+                {
+                    bestAngle = angle;
+                    best = edge;
+                }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Angle in degrees, seen from the ray origin, between the ray and the closest
+    /// point of segment ab. Returns +infinity if that point is behind the origin or
+    /// farther than maxDistance.
+    /// </summary>
+    private static float AngleRayToSegment(Ray ray, Vector3 a, Vector3 b, float maxDistance)
+    {
+        Vector3 d1 = ray.direction; // normalised by Ray
+        Vector3 d2 = b - a;
+        Vector3 r = ray.origin - a;
+        float b12 = Vector3.Dot(d1, d2);
+        float c22 = Vector3.Dot(d2, d2);
+        float d = Vector3.Dot(d1, r);
+        float e = Vector3.Dot(d2, r);
+
+        // Minimise |r + t*d1 - s*d2| over t >= 0, s in [0, 1].
+        float denom = c22 - b12 * b12;
+        float s = denom > 1e-8f ? Mathf.Clamp01((e - d * b12) / denom) : 0f;
+        float t = s * b12 - d;
+        if (t <= 1e-4f || t > maxDistance) return float.PositiveInfinity;
+
+        Vector3 onRay = ray.origin + d1 * t;
+        Vector3 onSegment = a + d2 * s;
+        return Mathf.Atan2(Vector3.Distance(onRay, onSegment), t) * Mathf.Rad2Deg;
+    }
+
     private static float DistancePointToSegment(Vector2 p, Vector2 a, Vector2 b)
     {
         Vector2 ab = b - a;
@@ -119,12 +187,14 @@ public class GraphSelector : MonoBehaviour
         return Vector2.Distance(p, a + ab * t);
     }
 
-    private void SelectNode(GraphNode node)
+    public void SelectNode(GraphNode node)
     {
         ResetVisuals();
         selectedNode = node;
 
         var incident = new HashSet<GraphEdge>(graph.EdgesOf(node.id));
+        // Show the node's edges even if the edge filter hides them at rest.
+        graph.RevealEdges(incident);
         var neighbours = new HashSet<GraphNode> { node };
         foreach (GraphEdge e in incident)
         {
@@ -143,15 +213,17 @@ public class GraphSelector : MonoBehaviour
 
         Debug.Log($"Selected node '{node.label}' — {incident.Count} connections, degree {node.value}, " +
                   $"lat {node.lat:F3}, lon {node.lon:F3}");
+        NodeSelected?.Invoke(node);
     }
 
-    private void SelectEdge(GraphEdge edge)
+    public void SelectEdge(GraphEdge edge)
     {
         ResetVisuals();
         selectedEdge = edge;
 
         GraphNode a = graph.Nodes[edge.sourceId];
         GraphNode b = graph.Nodes[edge.targetId];
+        graph.RevealEdges(new[] { edge });
 
         foreach (GraphEdge e in graph.Edges)
         {
@@ -164,13 +236,16 @@ public class GraphSelector : MonoBehaviour
         }
 
         Debug.Log($"Selected edge '{a.label}' <-> '{b.label}' — weight {edge.weight}");
+        EdgeSelected?.Invoke(edge);
     }
 
     public void ClearSelection()
     {
         ResetVisuals();
+        graph.ResetEdgeVisibility();
         selectedNode = null;
         selectedEdge = null;
+        SelectionCleared?.Invoke();
     }
 
     private void SetEdgeVisual(GraphEdge e, bool highlighted)
@@ -188,11 +263,9 @@ public class GraphSelector : MonoBehaviour
     {
         Renderer r = n.GetComponent<Renderer>();
         if (r == null) return;
-        if (!nodeBaseColors.ContainsKey(n)) nodeBaseColors[n] = r.material.color;
-        Color baseColor = nodeBaseColors[n];
-        r.material.color = selected ? nodeHighlightColor
-            : related ? baseColor
-            : baseColor * dimmedNodeBrightness;
+        graph.SetNodeColor(r, selected ? nodeHighlightColor
+            : related ? n.baseColor
+            : n.baseColor * dimmedNodeBrightness);
     }
 
     private void ResetVisuals()
@@ -204,10 +277,10 @@ public class GraphSelector : MonoBehaviour
             e.line.startWidth = graph.edgeWidth;
             e.line.endWidth = graph.edgeWidth;
         }
-        foreach (var kv in nodeBaseColors)
+        foreach (GraphNode n in graph.Nodes.Values)
         {
-            Renderer r = kv.Key.GetComponent<Renderer>();
-            if (r != null) r.material.color = kv.Value;
+            Renderer r = n.GetComponent<Renderer>();
+            if (r != null) graph.SetNodeColor(r, n.baseColor);
         }
     }
 }

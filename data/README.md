@@ -24,13 +24,14 @@ joined on OpenFlights airport id.
 `edges.json` (schemas read verbatim by the Unity loader):
 
 ```
-nodes.json: [{ "id", "label", "x", "y", "z", "value" }, ...]
+nodes.json: [{ "id", "label", "x", "y", "z", "value", "lat", "lon" }, ...]
 edges.json: [{ "source", "target", "weight" }, ...]
 ```
 
 - `id` — OpenFlights airport id (string); `label` — name + IATA code.
-- `x`/`z` — equirectangular projection of longitude/latitude into [-10, 10];
+- `x`/`z` — equirectangular projection (2:1) of longitude into [-10, 10] and latitude into [-5, 5];
   `y` — field altitude scaled to [0, 2].
+- `lat`/`lon` — raw airport coordinates in degrees (for labels / globe layouts).
 - `value` — route-count degree of the airport in the full (unfiltered) network.
 - Only the top `--top` (default 200) airports by degree are kept; `weight` is
   the number of distinct directed routes between the pair, collapsed into one
@@ -74,3 +75,21 @@ meta_ectrl.json:  { source, dateFrom, dateTo, days, timezone, totalFlights, node
 - `daily[i]` — flights on day `meta.dateFrom + i` (departure time for edges and
   departing flights, arrival time for arriving flights; actual, else filed).
 - `hourly[h]` — flights in UTC hour `h` over the whole month.
+
+## Immersive 3D layout
+
+`scripts/layout_3d.py [--dataset openflights|ectrl]` writes `nodes_3d.json`
+(or `nodes_3d_ectrl.json`) for the "graph around you" scene. Same schema as the
+input nodes file, plus `community`; the edges file is reused unchanged.
+
+- Positions come from a 3D force-directed layout (networkx `spring_layout`,
+  weights `log1p(weight)`, fixed seed), not geography.
+- Each node's direction from the layout centre becomes its direction around the
+  viewer; its centre-to-periphery rank becomes its distance, spread evenly in
+  `--inner`..`--outer` metres (default 2-4 m, central hubs closest).
+- Elevation is squeezed into `--min-elev`..`--max-elev` (default -15..55 deg) so
+  nodes stay above the floor and out of the zenith; the biggest hub is rotated
+  to straight ahead (+Z).
+- `community` — Louvain community id (0 = largest), for colouring clusters.
+- `x`, `y`, `z` are metres relative to the GraphLoader object, which should sit
+  at head height with scale 1, `positionScale = 1`, `altitudeScale = 1`.

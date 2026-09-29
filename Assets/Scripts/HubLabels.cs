@@ -1,0 +1,91 @@
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using TMPro;
+using UnityEngine;
+
+/// <summary>
+/// Floating short labels (airport code, e.g. "FRA") above the biggest nodes,
+/// always facing the viewer, so the main hubs can be recognised without
+/// selecting them. Built once the graph is loaded; labels have no colliders,
+/// so they never block XR rays. Not parented to the graph: size is in metres.
+/// </summary>
+public class HubLabels : MonoBehaviour
+{
+    public GraphLoader graph;
+    [Tooltip("Camera the labels face. Defaults to Camera.main (the XR head camera).")]
+    public Transform viewer;
+    [Tooltip("How many of the biggest nodes (by value) get a label.")]
+    public int count = 20;
+    [Tooltip("TextMeshPro 3D font size; 10 = 1 m line height.")]
+    public float fontSize = 1f;
+    [Tooltip("Gap between the top of the node and the label (m).")]
+    public float gap = 0.03f;
+    public Color color = new Color(1f, 1f, 1f, 0.85f);
+
+    // Trailing "(FRA)" / "(EDDF)" in labels built by build_graph*.py.
+    private static readonly Regex CodePattern = new Regex(@"\(([A-Z0-9]{3,4})\)\s*$");
+
+    private readonly List<Transform> labels = new List<Transform>();
+    private readonly List<Transform> anchors = new List<Transform>();
+    private bool built;
+
+    private void Awake()
+    {
+        if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
+    }
+
+    private void LateUpdate()
+    {
+        if (!built)
+        {
+            if (graph == null || !graph.IsLoaded) return;
+            Build();
+        }
+        if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
+        if (viewer == null) return;
+
+        for (int i = 0; i < labels.Count; i++)
+        {
+            Transform node = anchors[i];
+            Transform label = labels[i];
+            label.position = node.position + Vector3.up * (node.lossyScale.y * 0.5f + gap);
+            // TMP text reads correctly when its +Z points away from the viewer.
+            Vector3 away = label.position - viewer.position;
+            if (away.sqrMagnitude > 1e-6f) label.rotation = Quaternion.LookRotation(away, Vector3.up);
+        }
+    }
+
+    private void Build()
+    {
+        var nodes = new List<GraphNode>(graph.Nodes.Values);
+        nodes.Sort((a, b) => a.value != b.value ? b.value.CompareTo(a.value) : string.CompareOrdinal(a.id, b.id));
+
+        Transform root = new GameObject("HubLabels").transform;
+        int n = Mathf.Min(count, nodes.Count);
+        for (int i = 0; i < n; i++)
+        {
+            GameObject go = new GameObject($"Label {nodes[i].id}");
+            go.transform.SetParent(root, false);
+            TextMeshPro text = go.AddComponent<TextMeshPro>();
+            text.text = ShortName(nodes[i]);
+            text.fontSize = fontSize;
+            text.color = color;
+            text.alignment = TextAlignmentOptions.Bottom;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Overflow;
+            // Pivot at bottom centre: the label sits on top of the node.
+            text.rectTransform.pivot = new Vector2(0.5f, 0f);
+            text.rectTransform.sizeDelta = new Vector2(1f, 0f);
+
+            labels.Add(go.transform);
+            anchors.Add(nodes[i].transform);
+        }
+        built = true;
+    }
+
+    private static string ShortName(GraphNode node)
+    {
+        Match m = CodePattern.Match(node.label ?? string.Empty);
+        return m.Success ? m.Groups[1].Value : node.id;
+    }
+}
