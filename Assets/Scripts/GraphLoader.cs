@@ -4,12 +4,15 @@ using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// Loads nodes.json / edges.json from StreamingAssets and renders the graph:
-/// one sphere per node (sized by sqrt(value), coloured by value) and one arced
-/// LineRenderer per undirected airport pair. Edges lift above the map so they do
-/// not overlap the nodes when viewed from above.
+/// one sphere per node (sized by sqrt(value), coloured by value or community)
+/// and one arc per undirected airport pair. All arcs live in a single mesh drawn
+/// with the FlightlyVR/EdgeRibbon shader (camera-facing ribbons), so thousands of
+/// edges cost one draw call and one GameObject. Nodes share one material per
+/// colour instead of one material copy each.
 /// Both files are always read through UnityWebRequest so the same code path
 /// works in the Editor, on desktop and on Android/Quest (where StreamingAssets
 /// lives inside the APK and plain File I/O fails).
@@ -45,7 +48,7 @@ public class GraphLoader : MonoBehaviour
     };
 
     [Header("Edges")]
-    [Tooltip("Optional. If unset, Sprites/Default is used (supports vertex colours + alpha).")]
+    [Tooltip("Material using the FlightlyVR/EdgeRibbon shader. Assign it so the shader is included in builds; if unset, the shader is looked up by name (Editor only works reliably).")]
     public Material edgeMaterial;
     [Tooltip("Edge colour multiplier. >1 gives HDR edges that glow with Bloom. Applied to a runtime copy of the edge material.")]
     public float edgeIntensity = 1f;
@@ -69,6 +72,10 @@ public class GraphLoader : MonoBehaviour
     [Tooltip("With colorByCommunity: colour of edges between two different communities.")]
     public Color interCommunityEdgeColor = new Color(0.7f, 0.7f, 0.7f, 0.08f);
 
+    private const string EdgeShaderName = "FlightlyVR/EdgeRibbon";
+    // Gradient colours are rounded to this many steps so nodes can share materials.
+    private const int GradientSteps = 16;
+
     // Runtime state
     private readonly Dictionary<string, GraphNode> nodeInstances = new Dictionary<string, GraphNode>();
     private readonly List<GraphEdge> edgeInstances = new List<GraphEdge>();
@@ -77,7 +84,19 @@ public class GraphLoader : MonoBehaviour
     private float edgeWeightThreshold = float.MinValue;
     private readonly Dictionary<string, List<GraphEdge>> edgesByNode = new Dictionary<string, List<GraphEdge>>();
     private Transform nodesRoot;
-    private Transform edgesRoot;
+
+    // Shared node materials, one per displayed (HDR) colour.
+    private readonly Dictionary<Color, Material> nodeMaterialCache = new Dictionary<Color, Material>();
+    private Material nodeMaterialTemplate;
+
+    // Edge mesh: per edge (builtSegments + 1) points, 2 vertices each.
+    private GameObject edgesObject;
+    private Mesh edgeMesh;
+    private Material runtimeEdgeMaterial;
+    private Vector2[] edgeUVs;
+    private Color32[] edgeColors;
+    private int builtSegments;
+    private bool edgesDirty;
 
     public IReadOnlyDictionary<string, GraphNode> Nodes => nodeInstances;
     public IReadOnlyList<GraphEdge> Edges => edgeInstances;
@@ -93,6 +112,27 @@ public class GraphLoader : MonoBehaviour
     private void Start()
     {
         StartCoroutine(LoadGraph());
+    }
+
+    private void LateUpdate()
+    {
+        if (edgesDirty && edgeMesh != null)
+        {
+            UploadEdgeDisplay();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        // Runtime-created assets are not scene objects: without this they pile up in the Editor every Play.
+        foreach (Material m in nodeMaterialCache.Values)
+        {
+            Destroy(m);
+        }
+        nodeMaterialCache.Clear();
+        if (runtimeEdgeMaterial != null) Destroy(runtimeEdgeMaterial);
+        if (edgeMesh != null) Destroy(edgeMesh);
+        if (edgesObject != null) Destroy(edgesObject);
     }
 
     private IEnumerator LoadGraph()
@@ -214,9 +254,10 @@ public class GraphLoader : MonoBehaviour
             float size = nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(node.value);
             go.transform.localScale = Vector3.one * size;
 
+            float gradient = Mathf.Round((float)node.value / maxValue * (GradientSteps - 1)) / (GradientSteps - 1);
             Color nodeColor = colorByCommunity && communityColors.Length > 0
                 ? communityColors[Mathf.Abs(node.community) % communityColors.Length]
-                : Color.Lerp(nodeLowColor, nodeHighColor, (float)node.value / maxValue);
+                : Color.Lerp(nodeLowColor, nodeHighColor, gradient);
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -226,6 +267,7 @@ public class GraphLoader : MonoBehaviour
 
             GraphNode gn = go.AddComponent<GraphNode>();
             gn.baseColor = nodeColor;
+            gn.data = node;
             gn.id = node.id;
             gn.label = node.label;
             gn.value = node.value;
@@ -240,23 +282,6 @@ public class GraphLoader : MonoBehaviour
 
     private void BuildEdges(List<EdgeData> edges)
     {
-        edgesRoot = new GameObject("Edges").transform;
-        edgesRoot.SetParent(transform, false);
-
-        Material material = edgeMaterial != null ? edgeMaterial : new Material(Shader.Find("Sprites/Default"));
-        if (!Mathf.Approximately(edgeIntensity, 1f))
-        {
-            // Vertex colours are clamped to [0, 1], so the HDR boost goes on the material tint.
-            // Runtime copy: never modify the shared material asset.
-            material = new Material(material);
-            string tint = material.HasProperty("_BaseColor") ? "_BaseColor" : "_Color";
-            if (material.HasProperty(tint))
-            {
-                Color c = material.GetColor(tint);
-                material.SetColor(tint, new Color(c.r * edgeIntensity, c.g * edgeIntensity, c.b * edgeIntensity, c.a));
-            }
-        }
-
         int maxWeight = 1;
         foreach (EdgeData edge in edges)
         {
@@ -266,9 +291,9 @@ public class GraphLoader : MonoBehaviour
             }
         }
 
+        builtSegments = edgeSegments;
         // Guard against duplicate pairs in either direction: one edge per airport pair.
         var seenPairs = new HashSet<(string, string)>();
-        var points = new Vector3[edgeSegments + 1];
 
         foreach (EdgeData edge in edges)
         {
@@ -288,31 +313,13 @@ public class GraphLoader : MonoBehaviour
                 continue;
             }
 
-            GameObject go = new GameObject($"Edge {edge.source}-{edge.target}");
-            go.transform.SetParent(edgesRoot, false);
-
-            LineRenderer line = go.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
-            line.sharedMaterial = material;
-            line.startWidth = edgeWidth;
-            line.endWidth = edgeWidth;
-            line.numCapVertices = 2;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-
-            FillArc(a.transform.position, b.transform.position, points);
-            line.positionCount = points.Length;
-            line.SetPositions(points);
-
             float t = maxWeight > 1 ? (edge.weight - 1f) / (maxWeight - 1f) : 0f;
             Color color = Color.Lerp(edgeLowColor, edgeHighColor, t);
             if (colorByCommunity && communityColors.Length > 0)
             {
-                GraphNode na = nodeInstances[edge.source];
-                GraphNode nb = nodeInstances[edge.target];
-                if (na.community == nb.community)
+                if (a.community == b.community)
                 {
-                    color = communityColors[Mathf.Abs(na.community) % communityColors.Length];
+                    color = communityColors[Mathf.Abs(a.community) % communityColors.Length];
                     color.a = communityEdgeAlpha;
                 }
                 else
@@ -320,20 +327,161 @@ public class GraphLoader : MonoBehaviour
                     color = interCommunityEdgeColor;
                 }
             }
-            line.startColor = color;
-            line.endColor = color;
 
-            GraphEdge ge = go.AddComponent<GraphEdge>();
-            ge.sourceId = edge.source;
-            ge.targetId = edge.target;
-            ge.weight = edge.weight;
-            ge.line = line;
-            ge.baseColor = color;
+            var ge = new GraphEdge
+            {
+                sourceId = edge.source,
+                targetId = edge.target,
+                weight = edge.weight,
+                baseColor = color,
+                data = edge,
+                points = new Vector3[builtSegments + 1],
+                index = edgeInstances.Count,
+                displayColor = color,
+                displayWidth = edgeWidth,
+            };
+            FillArc(a.transform.position, b.transform.position, ge.points);
 
             edgeInstances.Add(ge);
             edgesByNode[edge.source].Add(ge);
             edgesByNode[edge.target].Add(ge);
         }
+
+        BuildEdgeMesh();
+    }
+
+    /// <summary>
+    /// One ribbon per edge in a single mesh. Vertex positions and arc directions are
+    /// fixed; colours and widths (UV.y) are rewritten by UploadEdgeDisplay when the
+    /// display state changes. The mesh object has an identity transform because the
+    /// arc points are already in world space (like the former world-space LineRenderers).
+    /// </summary>
+    private void BuildEdgeMesh()
+    {
+        int pointsPerEdge = builtSegments + 1;
+        int verticesPerEdge = pointsPerEdge * 2;
+        int vertexCount = edgeInstances.Count * verticesPerEdge;
+
+        var vertices = new Vector3[vertexCount];
+        var directions = new Vector3[vertexCount];
+        var indices = new int[edgeInstances.Count * builtSegments * 6];
+        edgeUVs = new Vector2[vertexCount];
+        edgeColors = new Color32[vertexCount];
+
+        int vi = 0;
+        int ii = 0;
+        foreach (GraphEdge e in edgeInstances)
+        {
+            int first = vi;
+            for (int p = 0; p < pointsPerEdge; p++)
+            {
+                Vector3 direction = e.points[Mathf.Min(p + 1, pointsPerEdge - 1)] - e.points[Mathf.Max(p - 1, 0)];
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    vertices[vi] = e.points[p];
+                    directions[vi] = direction;
+                    edgeUVs[vi] = new Vector2(side, 0f);
+                    vi++;
+                }
+            }
+            for (int seg = 0; seg < builtSegments; seg++)
+            {
+                // Point seg -> vertices v, v+1; point seg+1 -> v+2, v+3.
+                int v = first + seg * 2;
+                indices[ii++] = v;
+                indices[ii++] = v + 2;
+                indices[ii++] = v + 1;
+                indices[ii++] = v + 1;
+                indices[ii++] = v + 2;
+                indices[ii++] = v + 3;
+            }
+        }
+
+        edgeMesh = new Mesh { name = "Graph Edges" };
+        edgeMesh.indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+        edgeMesh.MarkDynamic();
+        edgeMesh.vertices = vertices;
+        edgeMesh.normals = directions;
+        edgeMesh.SetUVs(0, edgeUVs);
+        edgeMesh.colors32 = edgeColors;
+        edgeMesh.SetIndices(indices, MeshTopology.Triangles, 0);
+        edgeMesh.RecalculateBounds();
+        // Ribbons are widened in the shader, beyond the centre-line bounds.
+        Bounds bounds = edgeMesh.bounds;
+        bounds.Expand(1f);
+        edgeMesh.bounds = bounds;
+
+        edgesObject = new GameObject("Edges (GraphLoader)");
+        edgesObject.AddComponent<MeshFilter>().sharedMesh = edgeMesh;
+        MeshRenderer meshRenderer = edgesObject.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = CreateEdgeMaterial();
+        meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        meshRenderer.lightProbeUsage = LightProbeUsage.Off;
+        meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+        edgesDirty = true;
+    }
+
+    /// <summary>Runtime copy of the ribbon material with edgeIntensity applied to _Tint.</summary>
+    private Material CreateEdgeMaterial()
+    {
+        Material source = edgeMaterial;
+        if (source != null && source.shader.name != EdgeShaderName)
+        {
+            Debug.LogWarning($"GraphLoader: edgeMaterial '{source.name}' does not use {EdgeShaderName}; " +
+                             "ignoring it. Create a material with that shader and assign it.");
+            source = null;
+        }
+
+        if (source != null)
+        {
+            runtimeEdgeMaterial = new Material(source);
+        }
+        else
+        {
+            Shader shader = Shader.Find(EdgeShaderName);
+            if (shader == null)
+            {
+                Debug.LogError($"GraphLoader: shader {EdgeShaderName} not found. Assign a material using it to edgeMaterial.");
+                return null;
+            }
+            runtimeEdgeMaterial = new Material(shader);
+        }
+
+        runtimeEdgeMaterial.name = "Graph Edges (runtime)";
+        Color tint = runtimeEdgeMaterial.GetColor("_Tint");
+        runtimeEdgeMaterial.SetColor("_Tint", new Color(tint.r * edgeIntensity, tint.g * edgeIntensity, tint.b * edgeIntensity, tint.a));
+        return runtimeEdgeMaterial;
+    }
+
+    /// <summary>Writes every edge's colour / width (0 when hidden) into the mesh.</summary>
+    private void UploadEdgeDisplay()
+    {
+        int verticesPerEdge = (builtSegments + 1) * 2;
+        var hidden = new Color32(0, 0, 0, 0);
+        foreach (GraphEdge e in edgeInstances)
+        {
+            Color32 color = e.visible ? (Color32)e.displayColor : hidden;
+            float width = e.visible ? e.displayWidth : 0f;
+            int start = e.index * verticesPerEdge;
+            for (int v = start; v < start + verticesPerEdge; v++)
+            {
+                edgeColors[v] = color;
+                edgeUVs[v].y = width;
+            }
+        }
+        edgeMesh.colors32 = edgeColors;
+        edgeMesh.SetUVs(0, edgeUVs);
+        edgesDirty = false;
+    }
+
+    /// <summary>Sets how an edge is drawn (colour may be dimmed / highlighted); uploaded at the end of the frame.</summary>
+    public void SetEdgeDisplay(GraphEdge edge, Color color, float width)
+    {
+        edge.displayColor = color;
+        edge.displayWidth = width;
+        edgesDirty = true;
     }
 
     /// <summary>Quadratic Bézier from a to b whose midpoint is lifted along +Y.</summary>
@@ -390,7 +538,15 @@ public class GraphLoader : MonoBehaviour
     {
         Color hdr = color * nodeIntensity;
         hdr.a = color.a;
-        renderer.material.color = hdr;
+        if (!nodeMaterialCache.TryGetValue(hdr, out Material material))
+        {
+            // Template: nodeMaterial, else the primitive's default material (captured before we replace it).
+            if (nodeMaterialTemplate == null) nodeMaterialTemplate = nodeMaterial != null ? nodeMaterial : renderer.sharedMaterial;
+            material = new Material(nodeMaterialTemplate) { name = "Graph Node " + ColorUtility.ToHtmlStringRGBA(color) };
+            material.color = hdr;
+            nodeMaterialCache.Add(hdr, material);
+        }
+        renderer.sharedMaterial = material;
     }
 
     /// <summary>Shows only edges whose weight is >= threshold.</summary>
@@ -405,8 +561,9 @@ public class GraphLoader : MonoBehaviour
     {
         foreach (GraphEdge edge in edgeInstances)
         {
-            edge.gameObject.SetActive(restVisibleEdges.Contains(edge));
+            edge.visible = restVisibleEdges.Contains(edge);
         }
+        edgesDirty = true;
     }
 
     /// <summary>Resting edge set plus `extra` (e.g. a selected node's edges, even if filtered out).</summary>
@@ -415,7 +572,7 @@ public class GraphLoader : MonoBehaviour
         ResetEdgeVisibility();
         foreach (GraphEdge edge in extra)
         {
-            edge.gameObject.SetActive(true);
+            edge.visible = true;
         }
     }
 
@@ -434,14 +591,14 @@ public class GraphLoader : MonoBehaviour
         ResetEdgeVisibility();
     }
 
-    /// <summary>Heavier first; ties: the edge whose weaker endpoint is bigger (hub-to-hub first); then by name for stability.</summary>
+    /// <summary>Heavier first; ties: the edge whose weaker endpoint is bigger (hub-to-hub first); then file order for stability.</summary>
     private int CompareImportance(GraphEdge x, GraphEdge y)
     {
         int c = y.weight.CompareTo(x.weight);
         if (c != 0) return c;
         c = WeakerEndpointValue(y).CompareTo(WeakerEndpointValue(x));
         if (c != 0) return c;
-        return string.CompareOrdinal(x.name, y.name);
+        return x.index.CompareTo(y.index);
     }
 
     private int WeakerEndpointValue(GraphEdge e)

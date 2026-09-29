@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 
@@ -21,9 +20,6 @@ public class HubLabels : MonoBehaviour
     [Tooltip("Gap between the top of the node and the label (m).")]
     public float gap = 0.03f;
     public Color color = new Color(1f, 1f, 1f, 0.85f);
-
-    // Trailing "(FRA)" / "(EDDF)" in labels built by build_graph*.py.
-    private static readonly Regex CodePattern = new Regex(@"\(([A-Z0-9]{3,4})\)\s*$");
 
     private readonly List<Transform> labels = new List<Transform>();
     private readonly List<Transform> anchors = new List<Transform>();
@@ -67,7 +63,7 @@ public class HubLabels : MonoBehaviour
             GameObject go = new GameObject($"Label {nodes[i].id}");
             go.transform.SetParent(root, false);
             TextMeshPro text = go.AddComponent<TextMeshPro>();
-            text.text = ShortName(nodes[i]);
+            text.text = nodes[i].ShortCode;
             text.fontSize = fontSize;
             text.color = color;
             text.alignment = TextAlignmentOptions.Bottom;
@@ -81,11 +77,5 @@ public class HubLabels : MonoBehaviour
             anchors.Add(nodes[i].transform);
         }
         built = true;
-    }
-
-    private static string ShortName(GraphNode node)
-    {
-        Match m = CodePattern.Match(node.label ?? string.Empty);
-        return m.Success ? m.Groups[1].Value : node.id;
     }
 }

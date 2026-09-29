@@ -32,13 +32,16 @@ public class GraphSelector : MonoBehaviour
     public event Action<GraphNode> NodeSelected;
     public event Action<GraphEdge> EdgeSelected;
     public event Action SelectionCleared;
+    /// <summary>Route from the first to the last node (a direct edge is a 1-edge route).</summary>
+    public event Action<IReadOnlyList<GraphNode>, IReadOnlyList<GraphEdge>> PathSelected;
+    /// <summary>Desktop: Shift+click on a second node asks for the connection (handled by ConnectionFinder).</summary>
+    public event Action<GraphNode, GraphNode> ConnectionRequested;
 
     public GraphNode SelectedNode => selectedNode;
     public GraphEdge SelectedEdge => selectedEdge;
 
     private GraphNode selectedNode;
     private GraphEdge selectedEdge;
-    private Vector3[] pickBuffer = new Vector3[0];
 
     private void Awake()
     {
@@ -74,6 +77,12 @@ public class GraphSelector : MonoBehaviour
             GraphNode node = hit.collider.GetComponent<GraphNode>();
             if (node != null)
             {
+                bool shift = kb != null && kb.shiftKey.isPressed;
+                if (shift && selectedNode != null && node != selectedNode && ConnectionRequested != null)
+                {
+                    ConnectionRequested(selectedNode, node);
+                    return;
+                }
                 SelectNode(node);
                 return;
             }
@@ -97,16 +106,13 @@ public class GraphSelector : MonoBehaviour
 
         foreach (GraphEdge edge in graph.Edges)
         {
-            if (!edge.gameObject.activeSelf) continue;
+            if (!edge.visible) continue;
 
-            int n = edge.line.positionCount;
-            Vector3[] arr = new Vector3[n];
-            edge.line.GetPositions(arr);
-
-            Vector3 prev = targetCamera.WorldToScreenPoint(arr[0]);
-            for (int i = 1; i < n; i++)
+            Vector3[] points = edge.points;
+            Vector3 prev = targetCamera.WorldToScreenPoint(points[0]);
+            for (int i = 1; i < points.Length; i++)
             {
-                Vector3 cur = targetCamera.WorldToScreenPoint(arr[i]);
+                Vector3 cur = targetCamera.WorldToScreenPoint(points[i]);
                 if (prev.z > 0f && cur.z > 0f)
                 {
                     float d = DistancePointToSegment(screenPos, prev, cur);
@@ -134,15 +140,12 @@ public class GraphSelector : MonoBehaviour
 
         foreach (GraphEdge edge in graph.Edges)
         {
-            if (!edge.gameObject.activeSelf) continue;
+            if (!edge.visible) continue;
 
-            int n = edge.line.positionCount;
-            if (pickBuffer.Length < n) pickBuffer = new Vector3[n];
-            edge.line.GetPositions(pickBuffer);
-
-            for (int i = 1; i < n; i++)
+            Vector3[] points = edge.points;
+            for (int i = 1; i < points.Length; i++)
             {
-                float angle = AngleRayToSegment(ray, pickBuffer[i - 1], pickBuffer[i], maxRayDistance);
+                float angle = AngleRayToSegment(ray, points[i - 1], points[i], maxRayDistance);
                 if (angle < bestAngle)
                 {
                     bestAngle = angle;
@@ -239,6 +242,36 @@ public class GraphSelector : MonoBehaviour
         EdgeSelected?.Invoke(edge);
     }
 
+    /// <summary>
+    /// Highlights a route: its edges and nodes lit, both ends in the highlight colour,
+    /// everything else dimmed. The first node stays the selected node, so another
+    /// target can be compared against it straight away.
+    /// </summary>
+    public void SelectPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
+    {
+        if (nodes == null || nodes.Count < 2) return;
+        ResetVisuals();
+        GraphNode from = nodes[0];
+        GraphNode to = nodes[nodes.Count - 1];
+        selectedNode = from;
+        selectedEdge = null;
+
+        graph.RevealEdges(edges);
+        var onPath = new HashSet<GraphEdge>(edges);
+        var pathNodes = new HashSet<GraphNode>(nodes);
+        foreach (GraphEdge e in graph.Edges)
+        {
+            SetEdgeVisual(e, onPath.Contains(e));
+        }
+        foreach (GraphNode n in graph.Nodes.Values)
+        {
+            SetNodeVisual(n, n == from || n == to, pathNodes.Contains(n));
+        }
+
+        Debug.Log($"Connection '{from.label}' -> '{to.label}': {edges.Count} leg(s)");
+        PathSelected?.Invoke(nodes, edges);
+    }
+
     public void ClearSelection()
     {
         ResetVisuals();
@@ -252,11 +285,8 @@ public class GraphSelector : MonoBehaviour
     {
         Color c = highlighted ? edgeHighlightColor : e.baseColor;
         if (!highlighted) c.a = dimmedEdgeAlpha;
-        e.line.startColor = c;
-        e.line.endColor = c;
         float w = highlighted ? graph.edgeWidth * highlightedEdgeWidthMultiplier : graph.edgeWidth;
-        e.line.startWidth = w;
-        e.line.endWidth = w;
+        graph.SetEdgeDisplay(e, c, w);
     }
 
     private void SetNodeVisual(GraphNode n, bool selected, bool related)
@@ -272,10 +302,7 @@ public class GraphSelector : MonoBehaviour
     {
         foreach (GraphEdge e in graph.Edges)
         {
-            e.line.startColor = e.baseColor;
-            e.line.endColor = e.baseColor;
-            e.line.startWidth = graph.edgeWidth;
-            e.line.endWidth = graph.edgeWidth;
+            graph.SetEdgeDisplay(e, e.baseColor, graph.edgeWidth);
         }
         foreach (GraphNode n in graph.Nodes.Values)
         {

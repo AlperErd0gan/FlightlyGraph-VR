@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -68,11 +69,15 @@ public class GraphInfoPanel : MonoBehaviour
     public Color backgroundColor = new Color(0.08f, 0.09f, 0.12f, 1f);
     [Tooltip("Optional. If unset, a URP Unlit material is created (make sure the shader is included in builds).")]
     public Material backgroundMaterial;
+    [Tooltip("Optional material for the leader line (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
+    public Material leaderLineMaterial;
 
     private Transform panel;
     private TextMeshPro text;
     private Transform background;
     private LineRenderer leaderLine;
+    // Created here at runtime, so destroyed here too.
+    private readonly List<Object> ownedAssets = new List<Object>();
     private Vector3 anchor;
     private bool following;
 
@@ -88,7 +93,18 @@ public class GraphInfoPanel : MonoBehaviour
         if (selector == null) return;
         selector.NodeSelected += ShowNode;
         selector.EdgeSelected += ShowEdge;
+        selector.PathSelected += ShowPath;
         selector.SelectionCleared += Hide;
+    }
+
+    private void OnDestroy()
+    {
+        foreach (Object asset in ownedAssets)
+        {
+            if (asset != null) Destroy(asset);
+        }
+        ownedAssets.Clear();
+        if (panel != null) Destroy(panel.gameObject);
     }
 
     private void OnDisable()
@@ -96,6 +112,7 @@ public class GraphInfoPanel : MonoBehaviour
         if (selector == null) return;
         selector.NodeSelected -= ShowNode;
         selector.EdgeSelected -= ShowEdge;
+        selector.PathSelected -= ShowPath;
         selector.SelectionCleared -= Hide;
     }
 
@@ -209,6 +226,7 @@ public class GraphInfoPanel : MonoBehaviour
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             mat = new Material(shader) { color = backgroundColor };
+            ownedAssets.Add(mat);
         }
         Renderer bgRenderer = bg.GetComponent<Renderer>();
         bgRenderer.sharedMaterial = mat;
@@ -223,9 +241,14 @@ public class GraphInfoPanel : MonoBehaviour
         leaderLine.endWidth = leaderLineWidth;
         leaderLine.startColor = leaderLineColor;
         leaderLine.endColor = leaderLineColor;
-        leaderLine.sharedMaterial = graph != null && graph.edgeMaterial != null
-            ? graph.edgeMaterial
-            : new Material(Shader.Find("Sprites/Default"));
+        // Not the edge material: edges use a ribbon shader that needs the edge mesh's vertex layout.
+        Material lineMat = leaderLineMaterial;
+        if (lineMat == null)
+        {
+            lineMat = new Material(Shader.Find("Sprites/Default"));
+            ownedAssets.Add(lineMat);
+        }
+        leaderLine.sharedMaterial = lineMat;
         leaderLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         leaderLine.receiveShadows = false;
 
@@ -237,16 +260,37 @@ public class GraphInfoPanel : MonoBehaviour
         IReadOnlyList<GraphEdge> edges = graph.EdgesOf(node.id);
         var neighbours = new List<GraphEdge>(edges);
         neighbours.Sort((x, y) => y.weight.CompareTo(x.weight));
+        NodeData d = node.data;
+        bool rich = d != null && (d.departures > 0 || d.arrivals > 0);
 
         var sb = new StringBuilder();
         sb.Append("<b>").Append(node.label).Append("</b>\n");
-        sb.Append("<size=80%>ID ").Append(node.id)
-          .Append("   ").Append(node.lat.ToString("F2")).Append(", ").Append(node.lon.ToString("F2")).Append("</size>\n");
-        sb.Append(valueLabel).Append(": <b>").Append(node.value).Append("</b>\n");
-        sb.Append("Connections shown: <b>").Append(edges.Count).Append("</b>");
+        sb.Append("<size=80%>");
+        if (d != null && !string.IsNullOrEmpty(d.city))
+        {
+            sb.Append(d.city);
+            if (!string.IsNullOrEmpty(d.country)) sb.Append(", ").Append(d.country);
+            sb.Append(" · ");
+        }
+        sb.Append(node.id).Append(" · ").Append(node.lat.ToString("F2", Inv)).Append(", ").Append(node.lon.ToString("F2", Inv))
+          .Append("</size>\n");
+
+        sb.Append(valueLabel).Append(": <b>").Append(Num(node.value)).Append("</b>");
+        if (rich)
+        {
+            sb.Append("  <size=80%>(").Append(Num(d.departures)).Append(" dep / ")
+              .Append(Num(d.arrivals)).Append(" arr)</size>");
+            sb.Append("\nAvg delay: dep <b>").Append(Delay(d.avgDepDelayMin))
+              .Append("</b> · arr <b>").Append(Delay(d.avgArrDelayMin)).Append("</b>");
+            sb.Append("\nCargo <b>").Append(Pct(d.cargoShare)).Append("</b> · Scheduled <b>")
+              .Append(Pct(d.scheduledShare)).Append("</b>");
+            AppendTop(sb, d.topOperator, d.topAcType);
+            AppendSegments(sb, d.segments, node.value);
+        }
+        sb.Append("\nConnections shown: <b>").Append(edges.Count).Append("</b>");
         if (graph.colorByCommunity)
         {
-            sb.Append("\nCluster: <b>").Append(node.community + 1).Append("</b>");
+            sb.Append(" · Cluster <b>").Append(node.community + 1).Append("</b>");
         }
 
         int count = Mathf.Min(topNeighbours, neighbours.Count);
@@ -257,7 +301,7 @@ public class GraphInfoPanel : MonoBehaviour
             {
                 GraphEdge e = neighbours[i];
                 GraphNode other = graph.Nodes[e.sourceId == node.id ? e.targetId : e.sourceId];
-                sb.Append("\n  ").Append(other.label).Append(" (").Append(e.weight).Append(')');
+                sb.Append("\n  ").Append(other.label).Append(" (").Append(Num(e.weight)).Append(')');
             }
             sb.Append("</size>");
         }
@@ -270,17 +314,132 @@ public class GraphInfoPanel : MonoBehaviour
         GraphNode a = graph.Nodes[edge.sourceId];
         GraphNode b = graph.Nodes[edge.targetId];
         float km = GreatCircleKm(a.lat, a.lon, b.lat, b.lon);
+        EdgeData d = edge.data;
+        bool rich = d != null && d.forward + d.backward > 0;
 
         var sb = new StringBuilder();
         sb.Append("<b>").Append(a.label).Append("</b>\n");
         sb.Append("<size=80%><-></size>\n");
         sb.Append("<b>").Append(b.label).Append("</b>\n");
-        sb.Append(weightLabel).Append(": <b>").Append(edge.weight).Append("</b>\n");
-        sb.Append("Distance: <b>").Append(km.ToString("N0")).Append(" km</b>");
+        sb.Append(weightLabel).Append(": <b>").Append(Num(edge.weight)).Append("</b>");
+        if (rich)
+        {
+            // forward = source -> target as stored in the file.
+            sb.Append("  <size=80%>(").Append(a.ShortCode).Append(">").Append(b.ShortCode).Append(' ').Append(Num(d.forward))
+              .Append(" · ").Append(b.ShortCode).Append(">").Append(a.ShortCode).Append(' ').Append(Num(d.backward))
+              .Append(")</size>");
+        }
+        sb.Append("\nDistance: <b>").Append(Num(km)).Append(" km</b>");
+        if (rich)
+        {
+            if (d.avgDistanceNm.HasValue)
+            {
+                sb.Append(" <size=80%>(flown ").Append(Num(d.avgDistanceNm.Value * 1.852f)).Append(" km)</size>");
+            }
+            sb.Append("\nAvg duration: <b>").Append(Duration(d.avgDurationMin)).Append("</b> · delay <b>")
+              .Append(Delay(d.avgDelayMin)).Append("</b>");
+            sb.Append("\nCargo <b>").Append(Pct(d.cargoShare)).Append("</b> · Scheduled <b>")
+              .Append(Pct(d.scheduledShare)).Append("</b>");
+            AppendTop(sb, d.topOperator, d.topAcType);
+            AppendSegments(sb, d.segments, edge.weight);
+        }
 
         // Anchor on the top of the arc (middle point of the line).
-        Vector3 mid = edge.line.GetPosition(edge.line.positionCount / 2);
-        Show(sb.ToString(), mid);
+        Show(sb.ToString(), edge.Midpoint);
+    }
+
+    private void ShowPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
+    {
+        GraphNode from = nodes[0];
+        GraphNode to = nodes[nodes.Count - 1];
+
+        var sb = new StringBuilder();
+        sb.Append("<b>").Append(from.ShortCode).Append(" > ").Append(to.ShortCode).Append("</b>\n");
+        sb.Append("<size=80%>").Append(from.label).Append("\n").Append(to.label).Append("</size>\n");
+
+        if (edges.Count == 1)
+        {
+            sb.Append("<b>Direct connection</b> · ").Append(weightLabel).Append(": <b>")
+              .Append(Num(edges[0].weight)).Append("</b>");
+        }
+        else
+        {
+            int stops = edges.Count - 1;
+            sb.Append("No direct connection · <b>").Append(stops).Append(stops == 1 ? " stop" : " stops").Append("</b> via ");
+            for (int i = 1; i < nodes.Count - 1; i++)
+            {
+                if (i > 1) sb.Append(", ");
+                sb.Append(nodes[i].ShortCode);
+            }
+            sb.Append("\n<size=80%>");
+            for (int i = 0; i < edges.Count; i++)
+            {
+                if (i > 0) sb.Append('\n');
+                sb.Append("  ").Append(nodes[i].ShortCode).Append(" > ").Append(nodes[i + 1].ShortCode)
+                  .Append(": ").Append(Num(edges[i].weight)).Append(' ').Append(weightLabel.ToLowerInvariant());
+            }
+            sb.Append("</size>");
+        }
+
+        float km = 0f;
+        for (int i = 0; i < nodes.Count - 1; i++)
+        {
+            km += GreatCircleKm(nodes[i].lat, nodes[i].lon, nodes[i + 1].lat, nodes[i + 1].lon);
+        }
+        sb.Append("\nDistance: <b>").Append(Num(km)).Append(" km</b>");
+        if (edges.Count > 1)
+        {
+            sb.Append(" <size=80%>(direct ").Append(Num(GreatCircleKm(from.lat, from.lon, to.lat, to.lon))).Append(" km)</size>");
+        }
+
+        Show(sb.ToString(), to.transform.position + Vector3.up * to.transform.lossyScale.y * 0.5f);
+    }
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    private static string Num(float v) => v.ToString("N0", Inv);
+
+    private static string Pct(float share) => (share * 100f).ToString("F0", Inv) + "%";
+
+    /// <summary>Signed minutes as "3 min late" / "2 min early" / "on time"; "n/a" when unknown.</summary>
+    private static string Delay(float? minutes)
+    {
+        if (!minutes.HasValue) return "n/a";
+        float m = Mathf.Round(minutes.Value);
+        if (Mathf.Approximately(m, 0f)) return "on time";
+        return Mathf.Abs(m).ToString("F0", Inv) + (m > 0f ? " min late" : " min early");
+    }
+
+    private static string Duration(float? minutes)
+    {
+        if (!minutes.HasValue) return "n/a";
+        int total = Mathf.RoundToInt(minutes.Value);
+        return total >= 60 ? $"{total / 60} h {total % 60:D2} min" : $"{total} min";
+    }
+
+    private static void AppendTop(StringBuilder sb, string op, string acType)
+    {
+        if (string.IsNullOrEmpty(op) && string.IsNullOrEmpty(acType)) return;
+        sb.Append("\n<size=80%>");
+        if (!string.IsNullOrEmpty(op)) sb.Append("Top operator ").Append(op);
+        if (!string.IsNullOrEmpty(op) && !string.IsNullOrEmpty(acType)) sb.Append(" · ");
+        if (!string.IsNullOrEmpty(acType)) sb.Append("Top aircraft ").Append(acType);
+        sb.Append("</size>");
+    }
+
+    /// <summary>Two biggest market segments with their share, e.g. "Mainline 87% · All-Cargo 6%".</summary>
+    private static void AppendSegments(StringBuilder sb, Dictionary<string, int> segments, int total)
+    {
+        if (segments == null || segments.Count == 0 || total <= 0) return;
+        var sorted = new List<KeyValuePair<string, int>>(segments);
+        sorted.Sort((x, y) => y.Value.CompareTo(x.Value));
+        sb.Append("\n<size=80%>");
+        for (int i = 0; i < Mathf.Min(2, sorted.Count); i++)
+        {
+            if (i > 0) sb.Append(" · ");
+            sb.Append(sorted[i].Key).Append(' ').Append(Pct((float)sorted[i].Value / total));
+        }
+        sb.Append("</size>");
     }
 
     private void Hide()

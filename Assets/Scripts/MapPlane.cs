@@ -14,6 +14,14 @@ public class MapPlane : MonoBehaviour
     [Tooltip("Small drop so node spheres at altitude 0 sit on top of the map.")]
     public float yOffset = -0.05f;
 
+    private Material runtimeMaterial;
+
+    private void OnDestroy()
+    {
+        // Runtime-created material is not a scene object; destroy it or it leaks every Play.
+        if (runtimeMaterial != null) Destroy(runtimeMaterial);
+    }
+
     private void Start()
     {
         GraphLoader loader = GetComponent<GraphLoader>();
@@ -34,6 +42,7 @@ public class MapPlane : MonoBehaviour
 
         Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Texture");
         Material mat = new Material(shader);
+        runtimeMaterial = mat;
         if (mapTexture != null)
         {
             mat.mainTexture = mapTexture;
