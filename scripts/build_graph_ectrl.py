@@ -255,7 +255,7 @@ def build(flights_path, top_n):
 
     max_alt = max((info.get(i, {}).get("alt", 0.0) for i in keep), default=1.0) or 1.0
     nodes = []
-    for icao in sorted(keep, key=lambda i: -volume[i]):
+    for icao in sorted(keep, key=lambda i: (-volume[i], i)):
         lat, lon = coords[icao]
         meta = info.get(icao, {})
         code = meta.get("iata") or icao
@@ -277,7 +277,7 @@ def build(flights_path, top_n):
         nodes.append(node)
 
     edges = []
-    for pair, stats in sorted(edge_stats.items(), key=lambda kv: -kv[1].count):
+    for pair, stats in sorted(edge_stats.items(), key=lambda kv: (-kv[1].count, kv[0])):
         edge = dict(
             source=pair[0],
             target=pair[1],
