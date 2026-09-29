@@ -2,7 +2,7 @@
 """Build a VR-ready airport route graph from OpenFlights data.
 
 End-to-end, no manual steps:
-  1. download airports.dat / routes.dat into data/raw/ (skipped if present)
+  1. download airports.dat / routes.dat into data/raw/openflights/ (skipped if present)
   2. parse, drop airports with invalid lat/lon
   3. keep top-N airports by route-count degree
   4. keep routes whose endpoints both survived; collapse duplicates -> weight
@@ -21,7 +21,7 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RAW_DIR = ROOT / "data" / "raw"
+RAW_DIR = ROOT / "data" / "raw" / "openflights"
 OUT_DIR = ROOT / "data" / "processed"
 BASE_URL = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/"
 FILES = ("airports.dat", "routes.dat")

@@ -1,8 +1,23 @@
 # Data
 
+## Layout
+
+Everything under `data/raw/` is gitignored (downloaded or licence-restricted):
+
+```
+data/
+  raw/
+    eurocontrol/
+      flights/<YYYY>/Flights_<YYYYMMDD>_<YYYYMMDD>.csv.gz   input of build_graph_ectrl.py
+      other/202102/        FIR / AUA / point profile / route / AIRAC files of Feb 2021 (unused)
+    ourairports/           airports.csv, countries.csv (downloaded by build_graph_ectrl.py)
+    openflights/           airports.dat, routes.dat (downloaded by build_graph.py)
+  processed/               JSON for Unity (*_ectrl.json gitignored)
+```
+
 ## Source: OpenFlights
 
-`data/raw/airports.dat` and `data/raw/routes.dat` are downloaded verbatim from
+`data/raw/openflights/airports.dat` and `routes.dat` are downloaded verbatim from
 the [OpenFlights](https://openflights.org/data.html) project
 (https://github.com/jpatokal/openflights).
 
@@ -39,19 +54,19 @@ edges.json: [{ "source", "target", "weight" }, ...]
 
 ## Source: EUROCONTROL R&D Archive (monthly flight files)
 
-Monthly `Flights_<YYYYMMDD>_<YYYYMMDD>.csv[.gz]` files (gitignored) come from
-the EUROCONTROL Aviation Data Repository for Research. Each covers flights
-departing, arriving or overflying the EUROCONTROL area in one month; the repo
-currently has every month from January 2020 to August 2025 (`2020/` .. `2025/`;
-`new_data/` holds a second copy of February 2021, read once). Only the `Flights_*` files are used; the FIR / AUA / point
-profile / route files are not needed. Use is governed by the EUROCONTROL R&D
-data licence (research only) — check it before redistributing the raw files or
-the derived `*_ectrl.json`.
+Monthly `Flights_<YYYYMMDD>_<YYYYMMDD>.csv[.gz]` files come from the
+EUROCONTROL Aviation Data Repository for Research. Each covers flights
+departing, arriving or overflying the EUROCONTROL area in one month; the
+project uses every month from January 2020 to August 2025 in
+`data/raw/eurocontrol/flights/2020/` .. `2025/`. Only the `Flights_*` files are
+used; the FIR / AUA / point profile / route files are not needed. Use is
+governed by the EUROCONTROL R&D data licence (research only) — check it before
+redistributing the raw files or the derived `*_ectrl.json`.
 
-To add more months, drop the unchanged `Flights_*` files into a year folder
-(e.g. `2024/202403/Flights_20240301_20240331.csv.gz`) and re-run the script:
-every `Flights_*` file under `new_data/` and `20??/` becomes one period on the
-time axis. A month found twice is read once.
+To add more months, drop the unchanged `Flights_*` files into their year folder
+(e.g. `data/raw/eurocontrol/flights/2019/Flights_20190301_20190331.csv.gz`) and
+re-run the script: every `Flights_*` file under `data/raw/eurocontrol/flights/`
+becomes one period on the time axis. A month found twice is read once.
 
 ## Source: OurAirports
 

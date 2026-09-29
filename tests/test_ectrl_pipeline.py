@@ -10,8 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "build_graph_ectrl.py"
-REAL_INPUTS = [ROOT / "new_data"] + sorted(p for p in ROOT.glob("20[0-9][0-9]") if p.is_dir())
-HAS_REAL_DATA = any(any(p.rglob("Flights_*.csv*")) for p in REAL_INPUTS if p.is_dir())
+FLIGHTS_DIR = ROOT / "data" / "raw" / "eurocontrol" / "flights"
+HAS_REAL_DATA = FLIGHTS_DIR.is_dir() and any(FLIGHTS_DIR.rglob("Flights_*.csv*"))
 
 NODE_KEYS = {"id", "label", "x", "y", "z", "value", "lat", "lon", "city", "country",
              "departures", "arrivals", "avgDepDelayMin", "avgArrDelayMin",
@@ -88,7 +88,7 @@ def synthetic(tmp_path_factory):
     write_flights(base / "2025" / "202501" / "Flights_20250101_20250131.csv.gz", jan)
     write_flights(base / "2025" / "202502" / "Flights_20250201_20250228.csv", feb)
     # Same period again under another folder: must be skipped (it would double February).
-    write_flights(base / "new_data" / "Flights_20250201_20250228.csv.gz", feb)
+    write_flights(base / "copy" / "Flights_20250201_20250228.csv.gz", feb)
 
     airports_dir = base / "ourairports"
     airports_dir.mkdir()
@@ -100,7 +100,7 @@ def synthetic(tmp_path_factory):
     (airports_dir / "countries.csv").write_text('"code","name"\n"TR","Turkey"\n"FR","France"\n', encoding="utf-8")
 
     out = base / "out"
-    subprocess.run([sys.executable, str(SCRIPT), "--input", str(base / "2025"), str(base / "new_data"),
+    subprocess.run([sys.executable, str(SCRIPT), "--input", str(base / "2025"), str(base / "copy"),
                     "--top", "5", "--out-dir", str(out), "--airports-dir", str(airports_dir)], check=True)
     nodes = json.loads((out / "nodes_ectrl.json").read_text(encoding="utf-8"))
     edges = json.loads((out / "edges_ectrl.json").read_text(encoding="utf-8"))
@@ -192,7 +192,7 @@ def test_unclassified_segment_left_out(synthetic):
     assert a["cargoShare"] == round(31 / (a["value"] - 28), 3)
 
 
-@pytest.mark.skipif(not HAS_REAL_DATA, reason="EUROCONTROL data not present (new_data/ and 20??/ are gitignored)")
+@pytest.mark.skipif(not HAS_REAL_DATA, reason="EUROCONTROL data not present (data/raw/ is gitignored)")
 def test_real_data(tmp_path):
     """Full run on whatever Flights_* files are on disk; the script validates its own output."""
     subprocess.run([sys.executable, str(SCRIPT), "--out-dir", str(tmp_path)], check=True)

@@ -2,9 +2,9 @@
 """Build a time-aware VR airport graph from EUROCONTROL R&D flight data.
 
 Input: any number of monthly EUROCONTROL `Flights_<YYYYMMDD>_<YYYYMMDD>.csv[.gz]`
-files, found recursively under the --input paths (default: new_data/ and every
-year folder 20??/ in the repo). Each file is one period on the time axis; a
-period found twice is read once. Airport name / IATA / city / country /
+files, found recursively under the --input paths (default:
+data/raw/eurocontrol/flights/, one folder per year). Each file is one period on
+the time axis; a period found twice is read once. Airport name / IATA / city / country /
 elevation come from OurAirports (downloaded to data/raw/ourairports/ on first
 run), joined on ICAO code.
 
@@ -40,6 +40,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "data" / "processed"
+FLIGHTS_DIR = ROOT / "data" / "raw" / "eurocontrol" / "flights"
 AIRPORTS_DIR = ROOT / "data" / "raw" / "ourairports"
 OURAIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/"
 OURAIRPORTS_FILES = ("airports.csv", "countries.csv")
@@ -79,10 +80,6 @@ log = logging.getLogger("build_graph_ectrl")
 
 
 # ---------------------------------------------------------------- inputs
-
-def default_inputs():
-    return [ROOT / "new_data"] + sorted(p for p in ROOT.glob("20[0-9][0-9]") if p.is_dir())
-
 
 def find_flight_files(paths):
     """Return [(period, days, path)] sorted by period, one file per period."""
@@ -557,7 +554,8 @@ def validate(nodes_path, edges_path, meta_path):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--input", type=Path, nargs="+", default=None,
-                   help="Flights_*.csv[.gz] files or folders searched recursively (default: new_data/ and 20??/)")
+                   help="Flights_*.csv[.gz] files or folders searched recursively (default: %s)"
+                        % FLIGHTS_DIR.relative_to(ROOT))
     p.add_argument("--top", type=int, default=200, help="airports to keep (150-300)")
     p.add_argument("--min-daily", type=float, default=1.0,
                    help="keep an edge if it has at least this many flights per day in some period")
@@ -566,7 +564,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    periods = find_flight_files(args.input or default_inputs())
+    periods = find_flight_files(args.input or [FLIGHTS_DIR])
     if not periods:
         log.error("no Flights_YYYYMMDD_YYYYMMDD.csv[.gz] files found")
         return 1
