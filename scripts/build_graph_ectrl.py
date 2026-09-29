@@ -49,6 +49,9 @@ TIME_FMT = "%d-%m-%Y %H:%M:%S"
 UNKNOWN_AIRPORTS = ("ZZZZ", "AFIL")
 ANONYMOUS_OPERATOR = "ZZZ"
 CARGO_SEGMENT = "All-Cargo"
+# Some monthly files carry no market segment ("Not Classified" for every flight);
+# those flights are left out of segments and cargoShare.
+UNCLASSIFIED_SEGMENTS = ("Not Classified", "")
 # Delays / durations beyond this are data errors, not flights.
 MAX_ABS_MINUTES = 24 * 60
 # An OurAirports row this far from the EUROCONTROL position is another place that
@@ -116,12 +119,21 @@ def minutes(a, b):
     return m.where(m.abs() <= MAX_ABS_MINUTES)
 
 
-def read_flights(path):
-    """One cleaned row per flight, plus the per-reason drop counts."""
+def read_flights(path, positions):
+    """One cleaned row per flight, the per-reason drop counts and how many kept
+    flights got an airport position from `positions` (lat / lon by ICAO code)."""
     raw = pd.read_csv(path, usecols=list(COLUMNS), dtype=str, keep_default_na=False).rename(columns=COLUMNS)
     df = pd.DataFrame({"adep": raw["adep"], "ades": raw["ades"]})
     for c in ("adep_lat", "adep_lon", "ades_lat", "ades_lon", "distance"):
         df[c] = pd.to_numeric(raw[c], errors="coerce")
+    # Some files leave a known airport's coordinates empty (e.g. FAOR in 2020-2022).
+    filled = pd.Series(False, index=df.index)
+    for side in PAIR:
+        lat, lon = f"{side}_lat", f"{side}_lon"
+        fill = (df[lat].isna() | df[lon].isna()) & df[side].isin(positions.index)
+        df.loc[fill, lat] = df.loc[fill, side].map(positions["lat"])
+        df.loc[fill, lon] = df.loc[fill, side].map(positions["lon"])
+        filled |= fill
     t = {c: pd.to_datetime(raw[c], format=TIME_FMT, errors="coerce")
          for c in ("filed_off", "filed_arr", "actual_off", "actual_arr")}
     off = t["actual_off"].fillna(t["filed_off"])  # actual time if known, else filed
@@ -151,7 +163,7 @@ def read_flights(path):
         df[c] = raw[c]
     df = df[keep]
     df = df.astype({"off_hour": int, "arr_hour": int})
-    return df, len(raw), dropped
+    return df, len(raw), dropped, int((filled & keep).sum())
 
 
 def aggregate_pairs(df):
@@ -164,17 +176,22 @@ def aggregate_pairs(df):
     return pd.DataFrame(cols)
 
 
-def read_all(periods):
+def read_all(periods, positions):
     """Aggregate every file. Returns the per-period pair table, category counts,
-    latest coordinates per airport and kept flights per period."""
-    per_period, flights = [], []
+    latest coordinates per airport, kept flights per period and the share of
+    them with a known market segment."""
+    per_period, flights, coverage = [], [], []
     categories = dict.fromkeys(CATEGORIES)
     coords = {}
     for period, _, path in periods:
-        df, rows, dropped = read_flights(path)
-        log.info("%s: %d rows, %d kept, dropped %s (%s)", period, rows, len(df), dict(dropped), path.name)
+        df, rows, dropped, filled = read_flights(path, positions)
+        log.info("%s: %d rows, %d kept (%d with OurAirports coordinates), dropped %s (%s)",
+                 period, rows, len(df), filled, dict(dropped), path.name)
         per_period.append(aggregate_pairs(df))
         flights.append(len(df))
+        coverage.append(round(float((~df["segment"].isin(UNCLASSIFIED_SEGMENTS)).mean()), 3) if len(df) else 0.0)
+        if coverage[-1] < 0.5:
+            log.warning("%s: only %.0f%% of flights have a market segment", period, 100 * coverage[-1])
         for c in CATEGORIES:
             counts = df.groupby(PAIR + [c]).size()
             categories[c] = counts if categories[c] is None else categories[c].add(counts, fill_value=0)
@@ -184,7 +201,7 @@ def read_all(periods):
             coords.update((icao, (float(lat), float(lon)))
                           for icao, lat, lon in zip(last[side], last[f"{side}_lat"], last[f"{side}_lon"]))
     table = pd.concat(per_period, keys=[p for p, _, _ in periods], names=["period"])
-    return table, categories, coords, flights
+    return table, categories, coords, flights, coverage
 
 
 # ---------------------------------------------------------------- airport info
@@ -204,35 +221,42 @@ def download_airport_info(directory):
             log.warning("could not download %s (%s); labels fall back to ICAO codes", name, ex)
 
 
-def load_airport_info(directory, codes):
-    """Return {icao: dict(name, iata, city, country, alt, lat, lon)} from OurAirports for `codes`."""
+def load_ourairports(directory):
+    """OurAirports rows indexed by ICAO code (with float lat / lon) and {iso code: country name}.
+
+    An ICAO code can sit in icao_code, ident or gps_code. Prefer open airports,
+    then that column order. Both are empty if the files are missing."""
     path = directory / "airports.csv"
     if not path.exists():
         log.warning("%s missing; labels fall back to ICAO codes", path)
-        return {}
+        return pd.DataFrame(columns=["lat", "lon"]), {}
     ap = pd.read_csv(path, dtype=str, keep_default_na=False)
     countries = {}
     if (directory / "countries.csv").exists():
         c = pd.read_csv(directory / "countries.csv", dtype=str, keep_default_na=False)
         countries = dict(zip(c["code"], c["name"]))
-    # An ICAO code can sit in icao_code, ident or gps_code. Prefer open airports,
-    # then that column order.
     candidates = pd.concat(
         [pd.DataFrame({"code": ap[col], "row": ap.index, "open": ap["type"] != "closed", "prio": prio})
          for prio, col in enumerate(("gps_code", "ident", "icao_code"))])
-    candidates = candidates[candidates["code"].isin(codes)]
+    candidates = candidates[candidates["code"].str.len() == 4]
     best = candidates.sort_values(["code", "open", "prio"]).drop_duplicates("code", keep="last")
+    airports = ap.loc[best["row"].to_numpy()]
+    airports.index = best["code"].to_numpy()
+    airports = airports.assign(lat=pd.to_numeric(airports["latitude_deg"], errors="coerce"),
+                               lon=pd.to_numeric(airports["longitude_deg"], errors="coerce"))
+    airports = airports[airports["lat"].notna() & airports["lon"].notna()]
+    log.info("OurAirports: %d ICAO codes", len(airports))
+    return airports, countries
 
+
+def airport_info(airports, countries, codes):
+    """Return {icao: dict(name, iata, city, country, alt, lat, lon)} for the `codes` OurAirports knows."""
     def text(v):
         return v or None
 
     info = {}
-    for code, row in zip(best["code"], best["row"]):
-        r = ap.loc[row]
-        try:
-            lat, lon = float(r["latitude_deg"]), float(r["longitude_deg"])
-        except ValueError:
-            continue
+    for code in sorted(set(codes) & set(airports.index)):
+        r = airports.loc[code]
         try:
             alt = float(r["elevation_ft"])
         except ValueError:
@@ -240,9 +264,8 @@ def load_airport_info(directory, codes):
         info[code] = dict(
             name=r["name"], iata=text(r["iata_code"]), city=text(r["municipality"]),
             country=countries.get(r["iso_country"]) or text(r["iso_country"]),
-            alt=alt, lat=lat, lon=lon,
+            alt=alt, lat=float(r["lat"]), lon=float(r["lon"]),
         )
-    log.info("airport info: %d ICAO codes from OurAirports", len(info))
     return info
 
 
@@ -264,6 +287,16 @@ def top_key(counts, exclude=()):
         if key and key not in exclude:
             return key
     return None
+
+
+def segment_fields(counts):
+    """segments (known ones, largest first) and cargoShare among flights with a known segment."""
+    seg = {k: v for k, v in counts.items() if k not in UNCLASSIFIED_SEGMENTS}
+    known = sum(seg.values())
+    return dict(
+        cargoShare=round(seg.get(CARGO_SEGMENT, 0) / known, 3) if known else 0.0,
+        segments=dict(sorted(seg.items(), key=lambda kv: (-kv[1], kv[0]))),
+    )
 
 
 def undirected(df):
@@ -336,8 +369,9 @@ def project(lat, lon, alt, max_alt):
 # ---------------------------------------------------------------- build
 
 def build(periods, top_n, min_daily, airports_dir):
-    table, categories, coords, period_flights = read_all(periods)
-    info = load_airport_info(airports_dir, set(coords))
+    airports, countries = load_ourairports(airports_dir)
+    table, categories, coords, period_flights, segment_coverage = read_all(periods, airports[["lat", "lon"]])
+    info = airport_info(airports, countries, coords)
     names = [p for p, _, _ in periods]
     days = pd.Series([d for _, d, _ in periods], index=names)
 
@@ -375,7 +409,7 @@ def build(periods, top_n, min_daily, airports_dir):
     off_hours = node_counts(categories["off_hour"], keep, sides=("adep",))
     arr_hours = node_counts(categories["arr_hour"], keep, sides=("ades",))
 
-    def airport_info(icao):
+    def trusted_info(icao):
         meta = info.get(icao)
         if meta is None:
             return {}
@@ -387,7 +421,7 @@ def build(periods, top_n, min_daily, airports_dir):
             return {}
         return meta
 
-    airport = {icao: airport_info(icao) for icao in keep}
+    airport = {icao: trusted_info(icao) for icao in keep}
     max_alt = max((airport[i].get("alt", 0.0) for i in keep), default=1.0) or 1.0
     nodes = []
     for icao in keep:
@@ -395,7 +429,6 @@ def build(periods, top_n, min_daily, airports_dir):
         meta = airport[icao]
         x, y, z = project(lat, lon, meta.get("alt", 0.0), max_alt)
         dep, arr = int(departures.get(icao, 0)), int(arrivals.get(icao, 0))
-        seg = segments.get(icao, {})
         d = dep_sums.loc[icao] if icao in dep_sums.index else None
         a = arr_sums.loc[icao] if icao in arr_sums.index else None
         value = dep + arr
@@ -413,8 +446,7 @@ def build(periods, top_n, min_daily, airports_dir):
             avgArrDelayMin=mean(a["arr_delay_sum"], a["arr_delay_n"]) if a is not None else None,
             scheduledShare=round(float((d["scheduled_sum"] if d is not None else 0) +
                                        (a["scheduled_sum"] if a is not None else 0)) / value, 3),
-            cargoShare=round(seg.get(CARGO_SEGMENT, 0) / value, 3),
-            segments=dict(sorted(seg.items(), key=lambda kv: (-kv[1], kv[0]))),
+            **segment_fields(segments.get(icao, {})),
             topOperator=top_key(operators.get(icao, {}), exclude=(ANONYMOUS_OPERATOR,)),
             topAcType=top_key(ac_types.get(icao, {})),
             monthly=[int(v) for v in node_monthly[icao]],
@@ -444,7 +476,6 @@ def build(periods, top_n, min_daily, airports_dir):
         r = edge_sums.loc[key]
         weight = int(r["n"])
         fwd = int(forward.get(key, 0))
-        seg = e_segments.get(key, {})
         edges.append(dict(
             source=s,
             target=t,
@@ -455,8 +486,7 @@ def build(periods, top_n, min_daily, airports_dir):
             avgDurationMin=mean(r["duration_sum"], r["duration_n"]),
             avgDelayMin=mean(r["arr_delay_sum"], r["arr_delay_n"]),
             scheduledShare=round(float(r["scheduled_sum"]) / weight, 3),
-            cargoShare=round(seg.get(CARGO_SEGMENT, 0) / weight, 3),
-            segments=dict(sorted(seg.items(), key=lambda kv: (-kv[1], kv[0]))),
+            **segment_fields(e_segments.get(key, {})),
             topOperator=top_key(e_operators.get(key, {}), exclude=(ANONYMOUS_OPERATOR,)),
             topAcType=top_key(e_ac_types.get(key, {})),
             monthly=[int(v) for v in edge_monthly[key]],
@@ -475,6 +505,7 @@ def build(periods, top_n, min_daily, airports_dir):
         periods=names,
         periodDays=[int(d) for d in days],
         periodFlights=period_flights,
+        segmentCoverage=segment_coverage,
         days=int(days.sum()),
         timezone="UTC",
         totalFlights=sum(period_flights),
@@ -500,7 +531,7 @@ def validate(nodes_path, edges_path, meta_path):
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     n_periods = len(meta["periods"])
     assert meta["periods"] == sorted(set(meta["periods"])), "periods not unique and sorted"
-    assert len(meta["periodDays"]) == len(meta["periodFlights"]) == n_periods
+    assert len(meta["periodDays"]) == len(meta["periodFlights"]) == len(meta["segmentCoverage"]) == n_periods
     ids = {n["id"] for n in nodes}
     assert len(ids) == len(nodes), "duplicate node ids"
     for n in nodes:

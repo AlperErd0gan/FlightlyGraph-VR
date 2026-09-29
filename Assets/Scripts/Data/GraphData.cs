@@ -78,6 +78,8 @@ public class MetaData
     public string[] periods;
     public int[] periodDays;
     public int[] periodFlights;
+    // Share of flights in periods[i] with a known market segment (0 for months the source left unclassified).
+    public float[] segmentCoverage;
     public int days;
     public string timezone;
     public int totalFlights;

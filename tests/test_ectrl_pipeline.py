@@ -77,11 +77,14 @@ def synthetic(tmp_path_factory):
            + flights("BBBB", "DDDD", 3, 1)                     # never 1/day -> edge dropped
            + flights("AAAA", "EEEE", 31, 1, segment="All-Cargo", flight_type="N")
            + flights("FFFF", "AAAA", 1, 1)                     # FFFF is outside the top 5
+           + flights("CCCC", "EEEE", 1, 1, positions=dict(POS, CCCC=("", "")))  # position from OurAirports
+           + flights("GGGG", "AAAA", 1, 1, positions=dict(POS, GGGG=("", "")))  # no position anywhere -> dropped
            + flights("ZZZZ", "AAAA", 3, 1)                     # unknown airport -> dropped
            + flights("AAAA", "AAAA", 2, 1))                    # self-loop -> dropped
     moved = dict(POS, AAAA=(40.01, 20.0))
     feb = (flights("CCCC", "AAAA", 30, 2, dep_delay=-4, arr_delay=20, positions=moved)  # ... but 1.07/day in Feb
-           + flights("AAAA", "BBBB", 28, 2, positions=moved))  # AAAA position updated in Feb
+           + flights("AAAA", "BBBB", 28, 2, positions=moved,     # AAAA position updated in Feb;
+                     segment="Not Classified"))                 # source left the segment empty
     write_flights(base / "2025" / "202501" / "Flights_20250101_20250131.csv.gz", jan)
     write_flights(base / "2025" / "202502" / "Flights_20250201_20250228.csv", feb)
     # Same period again under another folder: must be skipped (it would double February).
@@ -109,7 +112,9 @@ def test_periods_from_file_names_and_duplicates_skipped(synthetic):
     _, _, meta = synthetic
     assert meta["periods"] == ["2025-01", "2025-02"]
     assert meta["periodDays"] == [31, 28]
-    assert meta["periodFlights"] == [121, 58]  # unknown airport and self-loops dropped; February read once
+    # Unknown airport, self-loops and GGGG (no position) dropped; February read once.
+    assert meta["periodFlights"] == [122, 58]
+    assert meta["segmentCoverage"] == [1.0, round(30 / 58, 3)]
     assert meta["dateFrom"] == "2025-01-01" and meta["dateTo"] == "2025-02-28"
 
 
@@ -149,7 +154,7 @@ def test_delays_and_hours(synthetic):
     assert ac["avgDelayMin"] == round((5 * 5 + 30 * 20) / 35, 1)
     assert ac["avgDurationMin"] == pytest.approx(round((5 * 115 + 30 * 144) / 35, 1))
     c = nodes["CCCC"]
-    assert c["monthlyDepDelayMin"] == [None, -4.0] and c["monthlyArrDelayMin"] == [5.0, None]
+    assert c["monthlyDepDelayMin"] == [10.0, -4.0] and c["monthlyArrDelayMin"] == [5.0, None]
     # Hours use actual times: CCCC departs 4 min early (07:56), arrivals land at 10:05.
     assert c["hourly"][7] == 30 and c["hourly"][10] == 5
     assert ac["hourly"][7] == 30 and ac["hourly"][8] == 5
@@ -161,6 +166,7 @@ def test_labels_and_positions(synthetic):
     assert a["label"] == "Alpha Intl (AAA)"  # open airport wins over the closed row with the same gps_code
     assert (a["city"], a["country"]) == ("Alphaville", "Turkey")
     assert nodes["CCCC"]["label"] == "Charlie (CCCC)" and nodes["CCCC"]["city"] is None
+    assert nodes["CCCC"]["departures"] == 30 + 1  # includes the flight with empty CCCC coordinates
     assert nodes["DDDD"]["label"] == "DDDD"  # OurAirports row is 500+ km away: not used
     assert nodes["EEEE"]["label"] == "EEEE"  # not in OurAirports
     assert a["lat"] == 40.01  # latest period's position
@@ -174,6 +180,16 @@ def test_shares_and_top_keys(synthetic):
     ae = edges[("AAAA", "EEEE")]
     assert ae["cargoShare"] == 1.0 and ae["scheduledShare"] == 0.0
     assert ae["segments"] == {"All-Cargo": 31}
+
+
+def test_unclassified_segment_left_out(synthetic):
+    nodes, edges, _ = synthetic
+    # February AAAA -> BBBB has no segment: not in segments, not in the cargoShare denominator.
+    assert edges[("AAAA", "BBBB")]["segments"] == {"Mainline": 50}
+    a = nodes["AAAA"]
+    assert "Not Classified" not in a["segments"]
+    assert sum(a["segments"].values()) == a["value"] - 28
+    assert a["cargoShare"] == round(31 / (a["value"] - 28), 3)
 
 
 @pytest.mark.skipif(not HAS_REAL_DATA, reason="EUROCONTROL data not present (new_data/ and 20??/ are gitignored)")
