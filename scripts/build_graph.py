@@ -97,7 +97,9 @@ def build(top_n):
     for s, d in routes:
         degree[s] += 1
         degree[d] += 1
-    keep = {aid for aid, _ in degree.most_common(top_n)}
+    # Tie-break on id: `routes` is a set, so most_common() order among equal degrees
+    # would change between runs (string hash randomisation) and pick different airports.
+    keep = set(sorted(degree, key=lambda aid: (-degree[aid], aid))[:top_n])
     log.info("kept top %d airports by degree; dropped %d", len(keep), len(airports) - len(keep))
 
     # undirected pair -> number of distinct routes (either direction)
@@ -114,9 +116,9 @@ def build(top_n):
     project(kept)
     nodes = [dict(id=a["id"], label=a["label"], x=a["x"], y=a["y"], z=a["z"], value=value[a["id"]],
                   lat=a["lat"], lon=a["lon"])
-             for a in sorted(kept.values(), key=lambda a: -value[a["id"]])]
+             for a in sorted(kept.values(), key=lambda a: (-value[a["id"]], a["id"]))]
     edges = [dict(source=s, target=d, weight=w)
-             for (s, d), w in sorted(weights.items(), key=lambda kv: -kv[1])]
+             for (s, d), w in sorted(weights.items(), key=lambda kv: (-kv[1], kv[0]))]
     return nodes, edges
 
 

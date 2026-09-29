@@ -38,11 +38,12 @@ def test_node_budget(nodes):
 
 def test_node_schema(nodes):
     for n in nodes:
-        assert set(n) == {"id", "label", "x", "y", "z", "value"}
+        assert set(n) == {"id", "label", "x", "y", "z", "value", "lat", "lon"}
         assert isinstance(n["id"], str) and isinstance(n["label"], str)
-        assert all(isinstance(n[k], (int, float)) for k in "xyz")
+        assert all(isinstance(n[k], (int, float)) for k in ("x", "y", "z", "lat", "lon"))
         assert isinstance(n["value"], int)
         assert all(-10.5 <= n[k] <= 10.5 for k in "xyz")
+        assert -90 <= n["lat"] <= 90 and -180 <= n["lon"] <= 180
 
 
 def test_unique_node_ids(nodes):
