@@ -5,8 +5,10 @@ using UnityEngine;
 /// <summary>
 /// Floating short labels (airport code, e.g. "FRA") above the biggest nodes,
 /// always facing the viewer, so the main hubs can be recognised without
-/// selecting them. Built once the graph is loaded; labels have no colliders,
-/// so they never block XR rays. Not parented to the graph: size is in metres.
+/// selecting them. Top-routes view: the `count` biggest airports, white.
+/// Regional view (SetRegional): the `perCommunity` biggest airports of each
+/// community, in its colour. Labels have no colliders, so they never block XR
+/// rays. Not parented to the graph: size is in metres.
 /// </summary>
 public class HubLabels : MonoBehaviour
 {
@@ -20,10 +22,14 @@ public class HubLabels : MonoBehaviour
     [Tooltip("Gap between the top of the node and the label (m).")]
     public float gap = 0.03f;
     public Color color = new Color(1f, 1f, 1f, 0.85f);
+    [Tooltip("Regional view: labelled airports per community.")]
+    public int perCommunity = 3;
 
     private readonly List<Transform> labels = new List<Transform>();
     private readonly List<Transform> anchors = new List<Transform>();
     private bool built;
+    private bool regional;
+    private Transform root;
 
     private void Awake()
     {
@@ -51,13 +57,42 @@ public class HubLabels : MonoBehaviour
         }
     }
 
+    /// <summary>Relabels for the regional (per community) or top-routes (biggest overall) view.</summary>
+    public void SetRegional(bool value)
+    {
+        regional = value;
+        if (built) Build();
+    }
+
+    private void OnDestroy()
+    {
+        if (root != null) Destroy(root.gameObject);
+    }
+
     private void Build()
     {
-        var nodes = new List<GraphNode>(graph.Nodes.Values);
-        nodes.Sort((a, b) => a.value != b.value ? b.value.CompareTo(a.value) : string.CompareOrdinal(a.id, b.id));
+        if (root != null) Destroy(root.gameObject);
+        labels.Clear();
+        anchors.Clear();
 
-        Transform root = new GameObject("HubLabels").transform;
-        int n = Mathf.Min(count, nodes.Count);
+        var nodes = new List<GraphNode>();
+        if (regional)
+        {
+            foreach (int community in graph.Communities)
+            {
+                IReadOnlyList<GraphNode> members = graph.CommunityMembers(community);
+                for (int i = 0; i < members.Count && i < perCommunity; i++) nodes.Add(members[i]);
+            }
+        }
+        else
+        {
+            nodes.AddRange(graph.Nodes.Values);
+            nodes.Sort((a, b) => a.value != b.value ? b.value.CompareTo(a.value) : string.CompareOrdinal(a.id, b.id));
+            if (nodes.Count > count) nodes.RemoveRange(count, nodes.Count - count);
+        }
+
+        root = new GameObject("HubLabels").transform;
+        int n = nodes.Count;
         for (int i = 0; i < n; i++)
         {
             GameObject go = new GameObject($"Label {nodes[i].id}");
@@ -65,7 +100,13 @@ public class HubLabels : MonoBehaviour
             TextMeshPro text = go.AddComponent<TextMeshPro>();
             text.text = nodes[i].ShortCode;
             text.fontSize = fontSize;
-            text.color = color;
+            Color labelColor = color;
+            if (regional)
+            {
+                labelColor = graph.CommunityColor(nodes[i].community);
+                labelColor.a = color.a;
+            }
+            text.color = labelColor;
             text.alignment = TextAlignmentOptions.Bottom;
             text.textWrappingMode = TextWrappingModes.NoWrap;
             text.overflowMode = TextOverflowModes.Overflow;

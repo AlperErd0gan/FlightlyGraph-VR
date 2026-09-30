@@ -41,6 +41,11 @@ public class GraphLoader : MonoBehaviour
     public Color nodeHighColor = new Color(1f, 0.55f, 0.15f);
     [Tooltip("Colour nodes by their `community` field (layout_3d.py) instead of the value gradient.")]
     public bool colorByCommunity = false;
+    [Tooltip("How traffic maps to the low -> high colour gradient (nodes and edges). Rank spreads colours evenly; " +
+             "Linear leaves almost everything at the low colour because a few hubs dwarf the rest.")]
+    public ColorScale colorScale = ColorScale.Rank;
+
+    public enum ColorScale { Linear, Sqrt, Rank }
     public Color[] communityColors =
     {
         new Color(0.30f, 0.69f, 0.96f), new Color(1.00f, 0.60f, 0.20f), new Color(0.45f, 0.85f, 0.45f),
@@ -79,6 +84,8 @@ public class GraphLoader : MonoBehaviour
     [Range(0f, 1f)] public float communityEdgeAlpha = 0.35f;
     [Tooltip("With colorByCommunity: colour of edges between two different communities.")]
     public Color interCommunityEdgeColor = new Color(0.7f, 0.7f, 0.7f, 0.08f);
+    [Tooltip("Regional view: how many of the most important edges between communities stay visible (faint), next to the maxVisibleEdges edges inside communities.")]
+    public int regionalInterEdges = 60;
 
     private const string EdgeShaderName = "FlightlyVR/EdgeRibbon";
     // Gradient colours are rounded to this many steps so nodes can share materials.
@@ -111,6 +118,16 @@ public class GraphLoader : MonoBehaviour
     public int LoadedNodeCount => nodeInstances.Count;
     public int LoadedEdgeCount => edgeInstances.Count;
     public bool IsLoaded { get; private set; }
+    /// <summary>Regional view (SetRegionalView): community colours, edges inside communities first.</summary>
+    public bool RegionalView { get; private set; }
+
+    private int maxNodeValue = 1;
+    private int maxEdgeWeight = 1;
+    // Sorted values, for the Rank colour scale.
+    private int[] sortedNodeValues = System.Array.Empty<int>();
+    private int[] sortedEdgeWeights = System.Array.Empty<int>();
+    // Community id -> airports, biggest first (for names and labels).
+    private readonly Dictionary<int, List<GraphNode>> communityMembers = new Dictionary<int, List<GraphNode>>();
 
     public IReadOnlyList<GraphEdge> EdgesOf(string nodeId)
     {
@@ -224,14 +241,17 @@ public class GraphLoader : MonoBehaviour
         nodesRoot = new GameObject("Nodes").transform;
         nodesRoot.SetParent(transform, false);
 
-        int maxValue = 1;
-        foreach (NodeData node in nodes)
+        maxNodeValue = 1;
+        sortedNodeValues = new int[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++)
         {
-            if (node.value > maxValue)
+            sortedNodeValues[i] = nodes[i].value;
+            if (nodes[i].value > maxNodeValue)
             {
-                maxValue = node.value;
+                maxNodeValue = nodes[i].value;
             }
         }
+        System.Array.Sort(sortedNodeValues);
 
         foreach (NodeData node in nodes)
         {
@@ -262,10 +282,7 @@ public class GraphLoader : MonoBehaviour
             float size = nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(node.value);
             go.transform.localScale = Vector3.one * size;
 
-            float gradient = Mathf.Round((float)node.value / maxValue * (GradientSteps - 1)) / (GradientSteps - 1);
-            Color nodeColor = colorByCommunity && communityColors.Length > 0
-                ? communityColors[Mathf.Abs(node.community) % communityColors.Length]
-                : Color.Lerp(nodeLowColor, nodeHighColor, gradient);
+            Color nodeColor = NodeColor(node.value, node.community);
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -290,14 +307,17 @@ public class GraphLoader : MonoBehaviour
 
     private void BuildEdges(List<EdgeData> edges)
     {
-        int maxWeight = 1;
-        foreach (EdgeData edge in edges)
+        maxEdgeWeight = 1;
+        sortedEdgeWeights = new int[edges.Count];
+        for (int i = 0; i < edges.Count; i++)
         {
-            if (edge.weight > maxWeight)
+            sortedEdgeWeights[i] = edges[i].weight;
+            if (edges[i].weight > maxEdgeWeight)
             {
-                maxWeight = edge.weight;
+                maxEdgeWeight = edges[i].weight;
             }
         }
+        System.Array.Sort(sortedEdgeWeights);
 
         builtSegments = edgeSegments;
         // Guard against duplicate pairs in either direction: one edge per airport pair.
@@ -321,20 +341,7 @@ public class GraphLoader : MonoBehaviour
                 continue;
             }
 
-            float t = maxWeight > 1 ? (edge.weight - 1f) / (maxWeight - 1f) : 0f;
-            Color color = Color.Lerp(edgeLowColor, edgeHighColor, t);
-            if (colorByCommunity && communityColors.Length > 0)
-            {
-                if (a.community == b.community)
-                {
-                    color = communityColors[Mathf.Abs(a.community) % communityColors.Length];
-                    color.a = communityEdgeAlpha;
-                }
-                else
-                {
-                    color = interCommunityEdgeColor;
-                }
-            }
+            Color color = EdgeColor(edge.weight, a.community, b.community);
 
             var ge = new GraphEdge
             {
@@ -656,12 +663,157 @@ public class GraphLoader : MonoBehaviour
         int limit = maxVisibleEdges < 0 ? ranked.Count : maxVisibleEdges;
 
         restVisibleEdges.Clear();
-        foreach (GraphEdge edge in ranked)
+        if (RegionalView)
         {
-            if (restVisibleEdges.Count >= limit) break;
-            if (edge.weight >= edgeWeightThreshold) restVisibleEdges.Add(edge);
+            // Up to `limit` edges inside communities plus a few faint ones between them.
+            int interLimit = maxVisibleEdges < 0 ? ranked.Count : regionalInterEdges;
+            int intra = 0;
+            int inter = 0;
+            foreach (GraphEdge edge in ranked)
+            {
+                if (edge.weight < edgeWeightThreshold) continue;
+                bool inside = nodeInstances[edge.sourceId].community == nodeInstances[edge.targetId].community;
+                if (inside && intra < limit)
+                {
+                    restVisibleEdges.Add(edge);
+                    intra++;
+                }
+                else if (!inside && inter < interLimit)
+                {
+                    restVisibleEdges.Add(edge);
+                    inter++;
+                }
+            }
+        }
+        else
+        {
+            foreach (GraphEdge edge in ranked)
+            {
+                if (restVisibleEdges.Count >= limit) break;
+                if (edge.weight >= edgeWeightThreshold) restVisibleEdges.Add(edge);
+            }
         }
         ResetEdgeVisibility();
+    }
+
+    /// <summary>
+    /// Switches between the top-routes view (value / weight colours, most important
+    /// edges) and the regional view (community colours, edges inside communities,
+    /// a few faint ones between them). Recolours and refilters in place; the caller
+    /// should clear the selection first so no highlight is left on old colours.
+    /// </summary>
+    public void SetRegionalView(bool regional)
+    {
+        RegionalView = regional;
+        colorByCommunity = regional;
+        foreach (GraphNode node in nodeInstances.Values)
+        {
+            node.baseColor = NodeColor(node.value, node.community);
+            Renderer renderer = node.GetComponent<Renderer>();
+            if (renderer != null) SetNodeColor(renderer, node.baseColor);
+        }
+        foreach (GraphEdge edge in edgeInstances)
+        {
+            edge.baseColor = EdgeColor(edge.weight, nodeInstances[edge.sourceId].community, nodeInstances[edge.targetId].community);
+            SetEdgeDisplay(edge, edge.baseColor, edgeWidth);
+        }
+        ApplyEdgeFilter();
+    }
+
+    /// <summary>Distinct community ids, largest community first.</summary>
+    public IReadOnlyList<int> Communities
+    {
+        get
+        {
+            BuildCommunityIndex();
+            var ids = new List<int>(communityMembers.Keys);
+            ids.Sort((x, y) => communityMembers[y].Count != communityMembers[x].Count
+                ? communityMembers[y].Count.CompareTo(communityMembers[x].Count)
+                : x.CompareTo(y));
+            return ids;
+        }
+    }
+
+    /// <summary>Airports of a community, biggest (by value) first.</summary>
+    public IReadOnlyList<GraphNode> CommunityMembers(int community)
+    {
+        BuildCommunityIndex();
+        return communityMembers.TryGetValue(community, out List<GraphNode> list) ? list : (IReadOnlyList<GraphNode>)System.Array.Empty<GraphNode>();
+    }
+
+    /// <summary>Automatic community name from its biggest airports, e.g. "IST · SAW · VIE".</summary>
+    public string CommunityName(int community, int airports = 3)
+    {
+        IReadOnlyList<GraphNode> members = CommunityMembers(community);
+        var codes = new List<string>();
+        for (int i = 0; i < members.Count && i < airports; i++) codes.Add(members[i].ShortCode);
+        return string.Join(" · ", codes);
+    }
+
+    public Color CommunityColor(int community)
+    {
+        return communityColors.Length > 0 ? communityColors[Mathf.Abs(community) % communityColors.Length] : Color.white;
+    }
+
+    private void BuildCommunityIndex()
+    {
+        if (communityMembers.Count > 0 || nodeInstances.Count == 0) return;
+        foreach (GraphNode node in nodeInstances.Values)
+        {
+            if (!communityMembers.TryGetValue(node.community, out List<GraphNode> list))
+            {
+                list = new List<GraphNode>();
+                communityMembers.Add(node.community, list);
+            }
+            list.Add(node);
+        }
+        foreach (List<GraphNode> list in communityMembers.Values)
+        {
+            list.Sort((x, y) => x.value != y.value ? y.value.CompareTo(x.value) : string.CompareOrdinal(x.id, y.id));
+        }
+    }
+
+    /// <summary>Community colour, or the value gradient (rounded so nodes can share materials).</summary>
+    private Color NodeColor(int value, int community)
+    {
+        if (colorByCommunity && communityColors.Length > 0) return CommunityColor(community);
+        float gradient = Mathf.Round(GradientPosition(value, maxNodeValue, sortedNodeValues) * (GradientSteps - 1)) / (GradientSteps - 1);
+        return Color.Lerp(nodeLowColor, nodeHighColor, gradient);
+    }
+
+    /// <summary>Community colour inside a community / faint between them, or the weight gradient.</summary>
+    private Color EdgeColor(int weight, int communityA, int communityB)
+    {
+        if (colorByCommunity && communityColors.Length > 0)
+        {
+            if (communityA != communityB) return interCommunityEdgeColor;
+            Color color = CommunityColor(communityA);
+            color.a = communityEdgeAlpha;
+            return color;
+        }
+        return Color.Lerp(edgeLowColor, edgeHighColor, GradientPosition(weight, maxEdgeWeight, sortedEdgeWeights));
+    }
+
+    /// <summary>
+    /// Position 0..1 of a value on the colour gradient. Rank: share of items smaller
+    /// than it (equal values get the same colour), so colours spread evenly however
+    /// skewed the traffic is. Sqrt / Linear: value relative to the maximum.
+    /// </summary>
+    private float GradientPosition(int value, int max, int[] sorted)
+    {
+        switch (colorScale)
+        {
+            case ColorScale.Linear:
+                return max > 0 ? Mathf.Clamp01((float)value / max) : 0f;
+            case ColorScale.Sqrt:
+                return max > 0 ? Mathf.Sqrt(Mathf.Clamp01((float)value / max)) : 0f;
+            default:
+                if (sorted.Length < 2) return 0f;
+                int index = System.Array.BinarySearch(sorted, value);
+                if (index < 0) index = ~index;
+                while (index > 0 && sorted[index - 1] == value) index--;
+                return (float)index / (sorted.Length - 1);
+        }
     }
 
     /// <summary>Heavier first; ties: the edge whose weaker endpoint is bigger (hub-to-hub first); then file order for stability.</summary>
