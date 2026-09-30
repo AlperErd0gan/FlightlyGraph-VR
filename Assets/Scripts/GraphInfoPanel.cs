@@ -67,7 +67,9 @@ public class GraphInfoPanel : MonoBehaviour
     public float minViewerDistance = 0.45f;
     public Color textColor = Color.white;
     public Color backgroundColor = new Color(0.08f, 0.09f, 0.12f, 1f);
-    [Tooltip("Optional. If unset, a URP Unlit material is created (make sure the shader is included in builds).")]
+    [Tooltip("Background opacity: 0 = invisible, 1 = solid. Overrides the alpha of backgroundColor.")]
+    [Range(0f, 1f)] public float backgroundAlpha = 0.55f;
+    [Tooltip("Optional. If unset, a transparent Sprites/Default material is created (make sure the shader is included in builds).")]
     public Material backgroundMaterial;
     [Tooltip("Optional material for the leader line (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
     public Material leaderLineMaterial;
@@ -224,8 +226,12 @@ public class GraphInfoPanel : MonoBehaviour
         Material mat = backgroundMaterial;
         if (mat == null)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            mat = new Material(shader) { color = backgroundColor };
+            // Sprites/Default alpha-blends out of the box (URP Unlit would need its transparent keywords set up).
+            Color see = backgroundColor;
+            see.a = backgroundAlpha;
+            mat = new Material(Shader.Find("Sprites/Default")) { color = see };
+            // Draw before the text (TMP uses queue 3000) so the see-through background never covers it.
+            mat.renderQueue = 2990;
             ownedAssets.Add(mat);
         }
         Renderer bgRenderer = bg.GetComponent<Renderer>();
