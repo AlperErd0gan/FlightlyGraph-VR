@@ -110,7 +110,9 @@ public class XRGraphInput : MonoBehaviour
             if (interactor == null || !interactor.isActiveAndEnabled) continue;
 
             // Hovering a node (or anything else interactable): XRI handles that select itself.
-            if (interactor.selectInput.ReadWasPerformedThisFrame() && !interactor.hasHover && !interactor.hasSelection)
+            // Pointing at UI (e.g. the dashboard) is not empty space: the press belongs to the UI.
+            if (interactor.selectInput.ReadWasPerformedThisFrame() && !interactor.hasHover && !interactor.hasSelection &&
+                !interactor.TryGetCurrentUIRaycastResult(out _))
             {
                 emptyPresses[interactor] = Time.time;
             }

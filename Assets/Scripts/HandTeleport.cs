@@ -82,7 +82,9 @@ public class HandTeleport : MonoBehaviour
             if (interactor.selectInput.ReadWasPerformedThisFrame())
             {
                 aim.pressTime = Time.time;
-                aim.eligible = !interactor.hasHover && !interactor.hasSelection;
+                // Not over nodes or UI (e.g. the dashboard): only empty space starts a teleport.
+                aim.eligible = !interactor.hasHover && !interactor.hasSelection &&
+                               !interactor.TryGetCurrentUIRaycastResult(out _);
                 aim.aiming = false;
                 aim.hasTarget = false;
             }

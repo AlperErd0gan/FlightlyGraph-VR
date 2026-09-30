@@ -82,6 +82,11 @@ public class GraphInfoPanel : MonoBehaviour
     private readonly List<Object> ownedAssets = new List<Object>();
     private Vector3 anchor;
     private bool following;
+    // While suppressed (e.g. the data dashboard is open) the panel stays hidden but keeps
+    // the last selection's text, so it comes back when the suppression ends.
+    private bool suppressed;
+    private string lastContent;
+    private Vector3 lastAnchor;
 
     private void Awake()
     {
@@ -296,7 +301,10 @@ public class GraphInfoPanel : MonoBehaviour
         sb.Append("\nConnections shown: <b>").Append(edges.Count).Append("</b>");
         if (graph.colorByCommunity)
         {
-            sb.Append(" · Cluster <b>").Append(node.community + 1).Append("</b>");
+            // Automatic name: the cluster's biggest airports.
+            sb.Append("\nCluster <b>").Append(node.community + 1).Append("</b>: ")
+              .Append(graph.CommunityName(node.community))
+              .Append(" <size=80%>(").Append(graph.CommunityMembers(node.community).Count).Append(" airports)</size>");
         }
 
         int count = Mathf.Min(topNeighbours, neighbours.Count);
@@ -324,9 +332,12 @@ public class GraphInfoPanel : MonoBehaviour
         bool rich = d != null && d.forward + d.backward > 0;
 
         var sb = new StringBuilder();
-        sb.Append("<b>").Append(a.label).Append("</b>\n");
-        sb.Append("<size=80%><-></size>\n");
-        sb.Append("<b>").Append(b.label).Append("</b>\n");
+        sb.Append("<b>").Append(a.label).Append("</b>");
+        AppendPlace(sb, a);
+        sb.Append("\n<size=80%><-></size>\n");
+        sb.Append("<b>").Append(b.label).Append("</b>");
+        AppendPlace(sb, b);
+        sb.Append('\n');
         sb.Append(weightLabel).Append(": <b>").Append(Num(edge.weight)).Append("</b>");
         if (rich)
         {
@@ -360,8 +371,11 @@ public class GraphInfoPanel : MonoBehaviour
         GraphNode to = nodes[nodes.Count - 1];
 
         var sb = new StringBuilder();
-        sb.Append("<b>").Append(from.ShortCode).Append(" > ").Append(to.ShortCode).Append("</b>\n");
-        sb.Append("<size=80%>").Append(from.label).Append("\n").Append(to.label).Append("</size>\n");
+        sb.Append("<b>").Append(from.ShortCode).Append(" > ").Append(to.ShortCode).Append("</b>");
+        string fromPlace = Place(from);
+        string toPlace = Place(to);
+        if (fromPlace.Length > 0 && toPlace.Length > 0) sb.Append("  <size=80%>").Append(fromPlace).Append(" > ").Append(toPlace).Append("</size>");
+        sb.Append("\n<size=80%>").Append(from.label).Append("\n").Append(to.label).Append("</size>\n");
 
         if (edges.Count == 1)
         {
@@ -376,12 +390,14 @@ public class GraphInfoPanel : MonoBehaviour
             {
                 if (i > 1) sb.Append(", ");
                 sb.Append(nodes[i].ShortCode);
+                string via = Place(nodes[i]);
+                if (via.Length > 0) sb.Append(" (").Append(via).Append(')');
             }
             sb.Append("\n<size=80%>");
             for (int i = 0; i < edges.Count; i++)
             {
                 if (i > 0) sb.Append('\n');
-                sb.Append("  ").Append(nodes[i].ShortCode).Append(" > ").Append(nodes[i + 1].ShortCode)
+                sb.Append("  ").Append(CodeAndCity(nodes[i])).Append(" > ").Append(CodeAndCity(nodes[i + 1]))
                   .Append(": ").Append(Num(edges[i].weight)).Append(' ').Append(weightLabel.ToLowerInvariant());
             }
             sb.Append("</size>");
@@ -399,6 +415,31 @@ public class GraphInfoPanel : MonoBehaviour
         }
 
         Show(sb.ToString(), to.transform.position + Vector3.up * to.transform.lossyScale.y * 0.5f);
+    }
+
+    /// <summary>"Istanbul, Turkey" from the node data; country or city alone if only one is known; "" if neither.</summary>
+    private static string Place(GraphNode node)
+    {
+        NodeData d = node.data;
+        if (d == null) return "";
+        bool hasCity = !string.IsNullOrEmpty(d.city);
+        bool hasCountry = !string.IsNullOrEmpty(d.country);
+        if (hasCity && hasCountry) return d.city + ", " + d.country;
+        return hasCity ? d.city : hasCountry ? d.country : "";
+    }
+
+    /// <summary>" · Istanbul, Turkey" in small text after an airport name, when known.</summary>
+    private static void AppendPlace(StringBuilder sb, GraphNode node)
+    {
+        string place = Place(node);
+        if (place.Length > 0) sb.Append("\n<size=80%>").Append(place).Append("</size>");
+    }
+
+    /// <summary>"FRA Frankfurt" for leg lists; just the code if the city is unknown.</summary>
+    private static string CodeAndCity(GraphNode node)
+    {
+        string city = node.data != null ? node.data.city : null;
+        return string.IsNullOrEmpty(city) ? node.ShortCode : node.ShortCode + " " + city;
     }
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -450,11 +491,29 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void Hide()
     {
+        lastContent = null;
         panel.gameObject.SetActive(false);
+    }
+
+    /// <summary>Hide the panel while another view shows the same information (the data dashboard).</summary>
+    public void SetSuppressed(bool value)
+    {
+        suppressed = value;
+        if (suppressed)
+        {
+            panel.gameObject.SetActive(false);
+        }
+        else if (lastContent != null)
+        {
+            Show(lastContent, lastAnchor);
+        }
     }
 
     private void Show(string content, Vector3 worldAnchor)
     {
+        lastContent = content;
+        lastAnchor = worldAnchor;
+        if (suppressed) return;
         anchor = worldAnchor;
         bool wasHidden = !panel.gameObject.activeSelf;
         panel.gameObject.SetActive(true);
