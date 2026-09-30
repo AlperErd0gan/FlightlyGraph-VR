@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using TMPro;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -18,7 +19,10 @@ using UnityEngine.XR.Interaction.Toolkit.UI;
 /// opened / closed with the left controller's menu button (F1 in the Editor).
 /// Tabs: Overview (size, period, flights per day over time), Airports (top 10),
 /// Routes (top 10), Traffic mix (market segments, flights per UTC hour), Clusters
-/// (communities, view-mode switch) and Selected (charts of the selected airport).
+/// (communities, view-mode switch), Selected (charts of the selected airport, or
+/// two airports side by side once one is pinned), Find (paged airport list by name,
+/// country or traffic; picking one selects it and turns you towards it) and Filters
+/// (market segment, country, minimum flights; Airports / Routes follow the filter).
 /// Everything is built at runtime (uGUI + TextMeshPro + UIChart), no prefab. Pages
 /// whose data the file lacks (e.g. OpenFlights has no time axis) say so instead.
 /// Buttons are pressed with the XR ray (trigger / pinch) or by poking.
@@ -31,8 +35,12 @@ public class DataDashboard : MonoBehaviour
     public GraphViewMode viewMode;
     [Tooltip("Optional; hidden while the dashboard is open (the Selected tab shows the same). Found in the scene if unset.")]
     public GraphInfoPanel infoPanel;
+    [Tooltip("Optional; adds a Tour button to the header. Found in the scene if unset.")]
+    public GuidedTour tour;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected tab.")]
     public bool followSelection = true;
+    [Tooltip("Picking an airport in the Find tab turns you (the XR Origin) to face it.")]
+    public bool turnToSelection = true;
     [Tooltip("Time axis file in StreamingAssets (periods, flights per period). Missing = no time charts.")]
     public string metaFileName = "meta_ectrl.json";
     public bool startOpen = false;
@@ -71,9 +79,11 @@ public class DataDashboard : MonoBehaviour
     public AudioClip closeSound;
     [Range(0f, 1f)] public float soundVolume = 0.5f;
 
-    private enum Tab { Overview, Airports, Routes, TrafficMix, Clusters, Selected }
+    public enum Tab { Overview, Airports, Routes, TrafficMix, Clusters, Selected, Find, Filters }
+    private enum FindSort { Name, Country, Traffic }
 
-    private static readonly string[] TabNames = { "Overview", "Airports", "Routes", "Traffic mix", "Clusters", "Selected" };
+    private static readonly string[] TabNames = { "Overview", "Airports", "Routes", "Traffic mix", "Clusters", "Selected", "Find", "Filters" };
+    private const int FindRowsPerPage = 9;
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private const float Pad = 30f;
 
@@ -81,6 +91,9 @@ public class DataDashboard : MonoBehaviour
     private RectTransform content;
     private readonly List<Image> tabImages = new List<Image>();
     private Tab current = Tab.Overview;
+    private GraphNode pinned;          // compared with the selected airport in the Selected tab
+    private FindSort findSort = FindSort.Name;
+    private int findPage;
     private MetaData meta;
     private InputAction toggleAction;
     private bool following;
@@ -92,6 +105,7 @@ public class DataDashboard : MonoBehaviour
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
         if (selector == null) selector = FindFirstObjectByType<GraphSelector>();
         if (viewMode == null) viewMode = FindFirstObjectByType<GraphViewMode>();
+        if (tour == null) tour = FindFirstObjectByType<GuidedTour>();
         if (infoPanel == null) infoPanel = FindFirstObjectByType<GraphInfoPanel>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
@@ -131,6 +145,13 @@ public class DataDashboard : MonoBehaviour
 
     private void Update()
     {
+        // During the guided tour the tour opens / closes the dashboard; its buttons are inert.
+        bool locked = GuidedTour.InputLocked;
+        if (canvas != null && IsOpen)
+        {
+            foreach (BaseRaycaster raycaster in canvas.GetComponents<BaseRaycaster>()) raycaster.enabled = !locked;
+        }
+        if (locked) return;
         if (toggleAction.WasPressedThisFrame())
         {
             if (IsOpen) Close();
@@ -329,12 +350,20 @@ public class DataDashboard : MonoBehaviour
 
         Label(rootRect, "<b>Flight data</b>", 34, Pad, 18, size.x - 200, 50);
         MakeButton(rootRect, "Close", size.x - Pad - 120, 18, 120, 46, Close, tabColor);
+        if (tour != null)
+        {
+            MakeButton(rootRect, "Tour", size.x - Pad - 250, 18, 120, 46, () => { Close(); tour.StartTour(); }, tabActiveColor);
+        }
 
         float tabWidth = (size.x - 2 * Pad - (TabNames.Length - 1) * 8f) / TabNames.Length;
         for (int i = 0; i < TabNames.Length; i++)
         {
             Tab tab = (Tab)i;
             Button button = MakeButton(rootRect, TabNames[i], Pad + i * (tabWidth + 8f), 80, tabWidth, 50, () => Show(tab), tabColor);
+            TextMeshProUGUI tabText = button.GetComponentInChildren<TextMeshProUGUI>();
+            tabText.enableAutoSizing = true; // eight tabs: long names shrink to fit
+            tabText.fontSizeMin = 14f;
+            tabText.fontSizeMax = 22f;
             tabImages.Add((Image)button.targetGraphic);
         }
 
@@ -344,6 +373,17 @@ public class DataDashboard : MonoBehaviour
     }
 
     // ---- Pages -----------------------------------------------------------
+
+    /// <summary>Opens the dashboard (if closed) on the given tab (used by the guided tour).</summary>
+    public void OpenTab(Tab tab)
+    {
+        current = tab;
+        if (!IsOpen) Open();
+        else Show(tab);
+    }
+
+    /// <summary>The time axis (meta file), or null when the dataset has none.</summary>
+    public MetaData TimeAxis => HasTimeAxis() ? meta : null;
 
     private void Show(Tab tab)
     {
@@ -360,6 +400,8 @@ public class DataDashboard : MonoBehaviour
             case Tab.TrafficMix: BuildTrafficMix(); break;
             case Tab.Clusters: BuildClusters(); break;
             case Tab.Selected: BuildSelected(); break;
+            case Tab.Find: BuildFind(); break;
+            case Tab.Filters: BuildFilters(); break;
         }
     }
 
@@ -408,35 +450,54 @@ public class DataDashboard : MonoBehaviour
 
     private void BuildAirports()
     {
-        var nodes = new List<GraphNode>(graph.Nodes.Values);
-        nodes.Sort((a, b) => a.value != b.value ? b.value.CompareTo(a.value) : string.CompareOrdinal(a.id, b.id));
+        var nodes = new List<GraphNode>();
+        foreach (GraphNode node in graph.Nodes.Values)
+        {
+            if (graph.NodeInFocus(node) && graph.DisplayValue(node) > 0) nodes.Add(node);
+        }
+        nodes.Sort((a, b) =>
+        {
+            int c = graph.DisplayValue(b).CompareTo(graph.DisplayValue(a));
+            return c != 0 ? c : string.CompareOrdinal(a.id, b.id);
+        });
         int n = Mathf.Min(10, nodes.Count);
         bool rich = n > 0 && nodes[0].data != null && nodes[0].data.departures + nodes[0].data.arrivals > 0;
 
-        var sb = new StringBuilder("<b>#<pos=5%>Airport<pos=52%>Country<pos=74%>Flights<pos=90%>Cargo</b>\n");
+        var sb = new StringBuilder(FilterNote());
+        sb.Append("<b>#<pos=5%>Airport<pos=52%>Country<pos=74%>Flights<pos=90%>Cargo</b>\n");
         var values = new float[n];
         var codes = new string[n];
         for (int i = 0; i < n; i++)
         {
             GraphNode node = nodes[i];
-            values[i] = node.value;
+            values[i] = graph.DisplayValue(node);
             codes[i] = node.ShortCode;
             sb.Append(i + 1).Append("<pos=5%>").Append(node.ShortCode).Append("  ").Append(Trim(ShortName(node), 26))
               .Append("<pos=52%>").Append(node.data != null ? Trim(node.data.country, 16) : "")
-              .Append("<pos=74%>").Append(Big(node.value))
+              .Append("<pos=74%>").Append(Big(graph.DisplayValue(node)))
               .Append("<pos=90%>").Append(rich ? Pct(node.data.cargoShare) : "-").Append('\n');
         }
-        Label(content, sb.ToString(), 20, 0, 0, W, 300);
+        if (n == 0) sb.Append("No airport matches the current filter.");
+        Label(content, sb.ToString(), 20, 0, 0, W, 310);
         BarsWithLabels(values, codes, 0, 320, W, 170);
     }
 
     private void BuildRoutes()
     {
-        var edges = new List<GraphEdge>(graph.Edges);
-        edges.Sort((a, b) => a.weight != b.weight ? b.weight.CompareTo(a.weight) : a.index.CompareTo(b.index));
+        var edges = new List<GraphEdge>();
+        foreach (GraphEdge e in graph.Edges)
+        {
+            if (graph.PassesFilter(e) && graph.FilteredWeight(e) > 0) edges.Add(e);
+        }
+        edges.Sort((a, b) =>
+        {
+            int c = graph.FilteredWeight(b).CompareTo(graph.FilteredWeight(a));
+            return c != 0 ? c : a.index.CompareTo(b.index);
+        });
         int n = Mathf.Min(10, edges.Count);
 
-        var sb = new StringBuilder("<b>#<pos=5%>Route<pos=22%>Cities<pos=66%>Flights<pos=80%>Distance</b>\n");
+        var sb = new StringBuilder(FilterNote());
+        sb.Append("<b>#<pos=5%>Route<pos=22%>Cities<pos=66%>Flights<pos=80%>Distance</b>\n");
         var values = new float[n];
         var names = new string[n];
         for (int i = 0; i < n; i++)
@@ -444,15 +505,27 @@ public class DataDashboard : MonoBehaviour
             GraphEdge e = edges[i];
             GraphNode a = graph.Nodes[e.sourceId];
             GraphNode b = graph.Nodes[e.targetId];
-            values[i] = e.weight;
+            values[i] = graph.FilteredWeight(e);
             names[i] = a.ShortCode + "-" + b.ShortCode;
             sb.Append(i + 1).Append("<pos=5%>").Append(names[i])
               .Append("<pos=22%>").Append(Trim(City(a), 16)).Append(" - ").Append(Trim(City(b), 16))
-              .Append("<pos=66%>").Append(Big(e.weight))
+              .Append("<pos=66%>").Append(Big(graph.FilteredWeight(e)))
               .Append("<pos=80%>").Append(Num(GreatCircleKm(a, b))).Append(" km\n");
         }
-        Label(content, sb.ToString(), 20, 0, 0, W, 300);
+        if (n == 0) sb.Append("No route matches the current filter.");
+        Label(content, sb.ToString(), 20, 0, 0, W, 310);
         BarsWithLabels(values, names, 0, 320, W, 170);
+    }
+
+    /// <summary>"Filter: Cargo · Germany · 5+ / day" line, or empty when nothing is filtered.</summary>
+    private string FilterNote()
+    {
+        if (!graph.HasFilter) return "";
+        var parts = new List<string>();
+        if (graph.FilterSegment != null) parts.Add(graph.FilterSegment);
+        if (graph.FilterCountry != null) parts.Add(graph.FilterCountry);
+        if (graph.FilterMinWeight > 0) parts.Add(MinWeightLabel(graph.FilterMinWeight));
+        return "<color=#FFB060>Filter: " + string.Join(" · ", parts) + "</color>\n";
     }
 
     private void BuildTrafficMix()
@@ -571,12 +644,31 @@ public class DataDashboard : MonoBehaviour
         GraphNode node = selector != null ? selector.SelectedNode : null;
         if (node == null)
         {
-            Label(content, "Select an airport (trigger / pinch) to see its charts here.", 22, 0, 0, W, 60);
+            Label(content, pinned != null
+                ? $"<b>{pinned.label}</b> is pinned. Select another airport to compare them."
+                : "Select an airport (trigger / pinch) to see its charts here.", 22, 0, 0, W - 260, 60);
+            if (pinned != null) MakeButton(content, "Unpin", W - 240, 0, 240, 50, () => { pinned = null; Show(Tab.Selected); }, tabColor);
             return;
         }
+
+        // Pin / unpin for a side-by-side comparison.
+        if (pinned == null)
+        {
+            MakeButton(content, "Pin to compare", W - 240, 0, 240, 50, () => { pinned = node; Show(Tab.Selected); }, tabColor);
+        }
+        else
+        {
+            MakeButton(content, "Unpin " + pinned.ShortCode, W - 240, 0, 240, 50, () => { pinned = null; Show(Tab.Selected); }, tabColor);
+            if (pinned != node)
+            {
+                BuildComparison(pinned, node);
+                return;
+            }
+        }
+
         NodeData d = node.data;
         string place = d != null && !string.IsNullOrEmpty(d.city) ? $"{d.city}, {d.country}" : (d != null ? d.country : "");
-        Label(content, $"<b>{node.label}</b>  <size=80%>{place}</size>\n{Big(node.value)} flights", 24, 0, 0, W, 70);
+        Label(content, $"<b>{node.label}</b>  <size=80%>{place}</size>\n{Big(node.value)} flights", 24, 0, 0, W - 260, 70);
 
         float half = (W - 40f) / 2f;
         bool hasMonths = d != null && d.monthly != null && d.monthly.Length > 0;
@@ -630,6 +722,351 @@ public class DataDashboard : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Two airports side by side: traffic as a share of each one's first month (so a small
+    /// and a big airport compare on the same scale, e.g. recovery after COVID), plus a table.
+    /// </summary>
+    private void BuildComparison(GraphNode a, GraphNode b)
+    {
+        string colorA = ColorUtility.ToHtmlStringRGB(accentColor);
+        string colorB = ColorUtility.ToHtmlStringRGB(highlightColor);
+        Label(content, $"<color=#{colorA}><b>{a.ShortCode}</b></color> {Trim(ShortName(a), 28)}  vs  " +
+                       $"<color=#{colorB}><b>{b.ShortCode}</b></color> {Trim(ShortName(b), 28)}", 24, 0, 0, W - 260, 60);
+
+        float[] seriesA = PerDaySeries(a);
+        float[] seriesB = PerDaySeries(b);
+        bool days = HasTimeAxis();
+        if (seriesA != null && seriesB != null && seriesA.Length == seriesB.Length && seriesA.Length > 1 && seriesA[0] > 0 && seriesB[0] > 0)
+        {
+            int n = seriesA.Length;
+            var indexA = new float[n];
+            var indexB = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                indexA[i] = seriesA[i] / seriesA[0] * 100f;
+                indexB[i] = seriesB[i] / seriesB[0] * 100f;
+            }
+            string from = days ? meta.periods[0] : "first";
+            string to = days ? meta.periods[n - 1] : "last";
+            Label(content, $"Traffic as % of {from} (100% = that month)", 22, 0, 60, W * 0.62f, 34);
+            UIChart chart = ChartWithAxis(indexA, UIChart.Kind.Line, 0, 100, W * 0.62f, 300, -1, from, to,
+                                          $"max {Max(indexA).ToString("0", Inv)}% / {Max(indexB).ToString("0", Inv)}%");
+            chart.SetSecondSeries(indexB, highlightColor);
+
+            var sb = new StringBuilder("<b><pos=0%>                 <pos=45%>" + a.ShortCode + "<pos=75%>" + b.ShortCode + "</b>\n");
+            sb.Append("Flights<pos=45%>").Append(Big(a.value)).Append("<pos=75%>").Append(Big(b.value)).Append('\n');
+            sb.Append("Lowest month<pos=45%>").Append(LowestLabel(indexA)).Append("<pos=75%>").Append(LowestLabel(indexB)).Append('\n');
+            sb.Append("Back to 90%<pos=45%>").Append(RecoveryLabel(indexA)).Append("<pos=75%>").Append(RecoveryLabel(indexB)).Append('\n');
+            sb.Append("Latest<pos=45%>").Append(indexA[n - 1].ToString("0", Inv)).Append("%<pos=75%>").Append(indexB[n - 1].ToString("0", Inv)).Append("%\n");
+            Label(content, sb.ToString(), 20, W * 0.62f + 30f, 100, W * 0.38f - 30f, 300);
+        }
+        else
+        {
+            var sb = new StringBuilder();
+            sb.Append($"{a.ShortCode}: {Big(a.value)} flights\n{b.ShortCode}: {Big(b.value)} flights\n");
+            sb.Append("(no monthly data in this dataset for a traffic-over-time comparison)");
+            Label(content, sb.ToString(), 22, 0, 70, W, 150);
+        }
+    }
+
+    /// <summary>Flights per day for each period (flights per period without a time axis), or null.</summary>
+    private float[] PerDaySeries(GraphNode node)
+    {
+        NodeData d = node.data;
+        if (d == null || d.monthly == null || d.monthly.Length == 0) return null;
+        int n = d.monthly.Length;
+        bool days = HasTimeAxis() && meta.periodDays.Length == n;
+        var series = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            series[i] = days && meta.periodDays[i] > 0 ? (float)d.monthly[i] / meta.periodDays[i] : d.monthly[i];
+        }
+        return series;
+    }
+
+    private string LowestLabel(float[] index)
+    {
+        int low = 0;
+        for (int i = 1; i < index.Length; i++) if (index[i] < index[low]) low = i;
+        return $"{index[low].ToString("0", Inv)}% ({PeriodName(low)})";
+    }
+
+    /// <summary>First period after the lowest one where traffic is back to 90% of the first period.</summary>
+    private string RecoveryLabel(float[] index)
+    {
+        int low = 0;
+        for (int i = 1; i < index.Length; i++) if (index[i] < index[low]) low = i;
+        for (int i = low; i < index.Length; i++)
+        {
+            if (index[i] >= 90f) return PeriodName(i);
+        }
+        return "not yet";
+    }
+
+    private string PeriodName(int i)
+    {
+        return HasTimeAxis() && i < meta.periods.Length ? meta.periods[i] : "#" + (i + 1);
+    }
+
+    // ---- Find ------------------------------------------------------------
+
+    private void BuildFind()
+    {
+        var nodes = new List<GraphNode>(graph.Nodes.Values);
+        CompareInfo compare = Inv.CompareInfo;
+        const CompareOptions options = CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace;
+        switch (findSort)
+        {
+            case FindSort.Name:
+                nodes.Sort((a, b) => compare.Compare(ShortName(a), ShortName(b), options));
+                break;
+            case FindSort.Country:
+                nodes.Sort((a, b) =>
+                {
+                    int c = compare.Compare(CountryName(a), CountryName(b), options);
+                    return c != 0 ? c : compare.Compare(ShortName(a), ShortName(b), options);
+                });
+                break;
+            default:
+                nodes.Sort((a, b) => a.value != b.value ? b.value.CompareTo(a.value) : string.CompareOrdinal(a.id, b.id));
+                break;
+        }
+
+        // Sort buttons.
+        string[] sortNames = { "Name", "Country", "Traffic" };
+        for (int i = 0; i < sortNames.Length; i++)
+        {
+            FindSort sort = (FindSort)i;
+            MakeButton(content, "By " + sortNames[i].ToLowerInvariant(), i * 170f, 0, 160, 44,
+                       () => { findSort = sort; findPage = 0; Show(Tab.Find); }, sort == findSort ? tabActiveColor : tabColor);
+        }
+
+        // Jump buttons: first letters of names or countries (traffic has no index).
+        if (findSort != FindSort.Traffic)
+        {
+            var letters = new List<char>();
+            var firstIndex = new Dictionary<char, int>();
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                char letter = Initial(findSort == FindSort.Name ? ShortName(nodes[i]) : CountryName(nodes[i]));
+                if (!firstIndex.ContainsKey(letter))
+                {
+                    firstIndex[letter] = i;
+                    letters.Add(letter);
+                }
+            }
+            float letterWidth = Mathf.Min(40f, (W - 4f * (letters.Count - 1)) / Mathf.Max(1, letters.Count));
+            for (int i = 0; i < letters.Count; i++)
+            {
+                int page = firstIndex[letters[i]] / FindRowsPerPage;
+                Button button = MakeButton(content, letters[i].ToString(), i * (letterWidth + 4f), 52, letterWidth, 40,
+                                           () => { findPage = page; Show(Tab.Find); }, tabColor);
+                TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
+                text.fontSize = 18f;
+            }
+        }
+
+        int pages = Mathf.Max(1, Mathf.CeilToInt(nodes.Count / (float)FindRowsPerPage));
+        findPage = Mathf.Clamp(findPage, 0, pages - 1);
+        for (int row = 0; row < FindRowsPerPage; row++)
+        {
+            int i = findPage * FindRowsPerPage + row;
+            if (i >= nodes.Count) break;
+            GraphNode node = nodes[i];
+            string place = findSort == FindSort.Country ? CountryName(node) : Place(node);
+            string text = $"<b>{node.ShortCode}</b>   {Trim(ShortName(node), 42)}   <size=80%><color=#A0A8B8>{place} · {Big(node.value)}</color></size>";
+            bool selected = selector != null && selector.SelectedNode == node;
+            MakeButton(content, text, 0, 100 + row * 40f, W, 36, () => FocusAirport(node), selected ? tabActiveColor : tabColor,
+                       TextAlignmentOptions.Left);
+        }
+
+        float pagerY = 100 + FindRowsPerPage * 40f + 6f;
+        MakeButton(content, "< Prev", 0, pagerY, 150, 40, () => { findPage--; Show(Tab.Find); }, tabColor);
+        Label(content, $"Page {findPage + 1} / {pages}  ({nodes.Count} airports)", 20, 170, pagerY + 8, W - 340, 34,
+              TextAlignmentOptions.Top);
+        MakeButton(content, "Next >", W - 150, pagerY, 150, 40, () => { findPage++; Show(Tab.Find); }, tabColor);
+    }
+
+    /// <summary>Selects the airport and, if enabled, turns the XR Origin to face it.</summary>
+    private void FocusAirport(GraphNode node)
+    {
+        if (selector != null) selector.SelectNode(node);
+        if (!turnToSelection) return;
+
+        XROrigin origin = FindFirstObjectByType<XROrigin>();
+        Camera cam = Camera.main;
+        if (origin == null || cam == null) return;
+        Vector3 forward = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up);
+        Vector3 toNode = Vector3.ProjectOnPlane(node.transform.position - cam.transform.position, Vector3.up);
+        if (forward.sqrMagnitude < 1e-6f || toNode.sqrMagnitude < 1e-6f) return;
+        float angle = Vector3.SignedAngle(forward, toNode, Vector3.up);
+        origin.RotateAroundCameraUsingOriginUp(angle);
+        // Keep the dashboard in front after the turn.
+        PlaceInFront(cam.transform);
+    }
+
+    private static char Initial(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return '?';
+        // "İstanbul" / "Ålesund" -> I / A: drop accents so letters group as expected.
+        foreach (char ch in s.Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark) continue;
+            if (char.IsLetterOrDigit(ch)) return char.ToUpperInvariant(ch);
+        }
+        return '?';
+    }
+
+    private static string CountryName(GraphNode node)
+    {
+        return node.data != null && !string.IsNullOrEmpty(node.data.country) ? node.data.country : "?";
+    }
+
+    private static string Place(GraphNode node)
+    {
+        NodeData d = node.data;
+        if (d == null) return "";
+        if (!string.IsNullOrEmpty(d.city) && !string.IsNullOrEmpty(d.country)) return d.city + ", " + d.country;
+        return !string.IsNullOrEmpty(d.city) ? d.city : d.country ?? "";
+    }
+
+    // ---- Filters ---------------------------------------------------------
+
+    private void BuildFilters()
+    {
+        // Segments by total flights, countries by airport traffic.
+        var segmentTotals = new Dictionary<string, long>();
+        foreach (GraphEdge e in graph.Edges)
+        {
+            if (e.data == null || e.data.segments == null) continue;
+            foreach (KeyValuePair<string, int> kv in e.data.segments)
+            {
+                segmentTotals.TryGetValue(kv.Key, out long sum);
+                segmentTotals[kv.Key] = sum + kv.Value;
+            }
+        }
+        var countryTotals = new Dictionary<string, long>();
+        foreach (GraphNode node in graph.Nodes.Values)
+        {
+            if (node.data == null || string.IsNullOrEmpty(node.data.country)) continue;
+            countryTotals.TryGetValue(node.data.country, out long sum);
+            countryTotals[node.data.country] = sum + node.value;
+        }
+        if (segmentTotals.Count == 0 && countryTotals.Count == 0)
+        {
+            Label(content, "This dataset has no market segments or countries to filter by.", 22, 0, 0, W, 60);
+            return;
+        }
+
+        float y = 0f;
+        if (segmentTotals.Count > 0)
+        {
+            var segments = SortedKeys(segmentTotals, 7);
+            Label(content, "<b>Market segment</b>", 22, 0, y, W, 32);
+            var labels = new List<string> { "All" };
+            foreach (string seg in segments) labels.Add(Abbreviate(seg));
+            ButtonRow(labels, y + 34, i =>
+            {
+                string seg = i == 0 ? null : segments[i - 1];
+                return (i == 0 ? graph.FilterSegment == null : graph.FilterSegment == seg,
+                        () => ApplyFilter(seg, graph.FilterCountry, graph.FilterMinWeight));
+            });
+            y += 100f;
+        }
+        if (countryTotals.Count > 0)
+        {
+            var countries = SortedKeys(countryTotals, 11);
+            Label(content, "<b>Country</b> (the biggest by traffic)", 22, 0, y, W, 32);
+            var labels = new List<string> { "All" };
+            foreach (string country in countries) labels.Add(Trim(country, 14));
+            ButtonRow(labels.GetRange(0, Mathf.Min(6, labels.Count)), y + 34, i =>
+            {
+                string country = i == 0 ? null : countries[i - 1];
+                return (i == 0 ? graph.FilterCountry == null : graph.FilterCountry == country,
+                        () => ApplyFilter(graph.FilterSegment, country, graph.FilterMinWeight));
+            });
+            if (labels.Count > 6)
+            {
+                ButtonRow(labels.GetRange(6, labels.Count - 6), y + 84, i =>
+                {
+                    string country = countries[i + 5];
+                    return (graph.FilterCountry == country, () => ApplyFilter(graph.FilterSegment, country, graph.FilterMinWeight));
+                });
+            }
+            y += 150f;
+        }
+
+        Label(content, "<b>Minimum flights per route</b>", 22, 0, y, W, 32);
+        int[] thresholds = MinWeightPresets();
+        var thresholdLabels = new List<string>();
+        foreach (int t in thresholds) thresholdLabels.Add(t == 0 ? "All" : MinWeightLabel(t));
+        ButtonRow(thresholdLabels, y + 34, i =>
+        {
+            int t = thresholds[i];
+            return (graph.FilterMinWeight == t, () => ApplyFilter(graph.FilterSegment, graph.FilterCountry, t));
+        });
+        y += 100f;
+
+        int visibleEdges = 0;
+        foreach (GraphEdge e in graph.Edges) if (e.visible) visibleEdges++;
+        int focusNodes = 0;
+        foreach (GraphNode node in graph.Nodes.Values) if (graph.NodeInFocus(node)) focusNodes++;
+        Label(content, $"Showing <b>{visibleEdges}</b> routes, <b>{focusNodes}</b> airports in focus", 22, 0, y, W - 260, 40);
+        MakeButton(content, "Reset filters", W - 240, y - 6, 240, 46, () => ApplyFilter(null, null, 0), tabActiveColor);
+    }
+
+    private void ApplyFilter(string segment, string country, int minWeight)
+    {
+        // Highlights are drawn on top of the old colours: drop them before restyling.
+        if (selector != null) selector.ClearSelection();
+        graph.SetFilter(segment, country, minWeight);
+        Show(Tab.Filters);
+    }
+
+    /// <summary>A row of equal buttons; setup(i) returns whether button i is active and its action.</summary>
+    private void ButtonRow(List<string> labels, float y, System.Func<int, (bool active, UnityAction action)> setup)
+    {
+        const float gap = 8f;
+        float width = (W - gap * (labels.Count - 1)) / labels.Count;
+        for (int i = 0; i < labels.Count; i++)
+        {
+            (bool active, UnityAction action) = setup(i);
+            Button button = MakeButton(content, labels[i], i * (width + gap), y, width, 44, action, active ? tabActiveColor : tabColor);
+            TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 14f;
+            text.fontSizeMax = 20f;
+        }
+    }
+
+    private static List<string> SortedKeys(Dictionary<string, long> totals, int max)
+    {
+        var list = new List<KeyValuePair<string, long>>(totals);
+        list.Sort((x, y) => y.Value != x.Value ? y.Value.CompareTo(x.Value) : string.CompareOrdinal(x.Key, y.Key));
+        var keys = new List<string>();
+        for (int i = 0; i < list.Count && i < max; i++) keys.Add(list[i].Key);
+        return keys;
+    }
+
+    /// <summary>Thresholds in flights per day over the whole period when there is a time axis, else raw counts.</summary>
+    private int[] MinWeightPresets()
+    {
+        if (meta != null && meta.days > 0)
+        {
+            float[] perDay = { 0f, 1f, 5f, 20f, 50f };
+            var result = new int[perDay.Length];
+            for (int i = 0; i < perDay.Length; i++) result[i] = Mathf.CeilToInt(perDay[i] * meta.days);
+            return result;
+        }
+        return new[] { 0, 10, 100, 1000, 10000 };
+    }
+
+    private string MinWeightLabel(int minWeight)
+    {
+        if (meta != null && meta.days > 0) return (minWeight / (float)meta.days).ToString("0.#", Inv) + "+ / day";
+        return Num(minWeight) + "+";
+    }
+
     private bool HasTimeAxis()
     {
         return meta != null && meta.periods != null && meta.periodDays != null && meta.periodFlights != null &&
@@ -639,8 +1076,8 @@ public class DataDashboard : MonoBehaviour
 
     // ---- Building blocks -------------------------------------------------
 
-    private void ChartWithAxis(float[] values, UIChart.Kind kind, float x, float y, float w, float h, int highlight,
-                               string leftLabel, string rightLabel, string maxLabel)
+    private UIChart ChartWithAxis(float[] values, UIChart.Kind kind, float x, float y, float w, float h, int highlight,
+                                  string leftLabel, string rightLabel, string maxLabel)
     {
         var chartRect = new GameObject("Chart", typeof(RectTransform)).GetComponent<RectTransform>();
         chartRect.SetParent(content, false);
@@ -654,6 +1091,7 @@ public class DataDashboard : MonoBehaviour
         Label(content, $"<size=80%>{maxLabel}</size>", 18, x, y, w, 26);
         Label(content, $"<size=80%>{leftLabel}</size>", 18, x, y + h - 26, w / 2, 26);
         Label(content, $"<size=80%>{rightLabel}</size>", 18, x + w / 2, y + h - 26, w / 2, 26, TextAlignmentOptions.TopRight);
+        return chart;
     }
 
     private void BarsWithLabels(float[] values, string[] labels, float x, float y, float w, float h)
@@ -690,7 +1128,8 @@ public class DataDashboard : MonoBehaviour
         return t;
     }
 
-    private Button MakeButton(RectTransform parent, string label, float x, float y, float w, float h, UnityAction onClick, Color color)
+    private Button MakeButton(RectTransform parent, string label, float x, float y, float w, float h, UnityAction onClick, Color color,
+                              TextAlignmentOptions align = TextAlignmentOptions.Center)
     {
         Image image = NewImage("Button " + label, parent, color);
         Place(image.rectTransform, x, y, w, h);
@@ -704,8 +1143,9 @@ public class DataDashboard : MonoBehaviour
         var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
         enter.callback.AddListener(_ => PlaySound(hoverSound));
         trigger.triggers.Add(enter);
-        TextMeshProUGUI text = Label(image.rectTransform, label, 22, 0, 0, w, h, TextAlignmentOptions.Center);
+        TextMeshProUGUI text = Label(image.rectTransform, label, 22, 0, 0, w, h, align);
         Stretch(text.rectTransform);
+        if (align != TextAlignmentOptions.Center) text.margin = new Vector4(14f, 0f, 14f, 0f);
         return button;
     }
 

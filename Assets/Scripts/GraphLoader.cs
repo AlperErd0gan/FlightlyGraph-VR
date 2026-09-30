@@ -129,6 +129,16 @@ public class GraphLoader : MonoBehaviour
     // Community id -> airports, biggest first (for names and labels).
     private readonly Dictionary<int, List<GraphNode>> communityMembers = new Dictionary<int, List<GraphNode>>();
 
+    // Data filter (SetFilter, used by the data dashboard). No filter = unchanged behaviour.
+    public string FilterSegment { get; private set; }
+    public string FilterCountry { get; private set; }
+    public int FilterMinWeight { get; private set; }
+    public bool HasFilter => FilterSegment != null || FilterCountry != null || FilterMinWeight > 0;
+    /// <summary>Raised after SetFilter has restyled the graph.</summary>
+    public event System.Action FilterChanged;
+    [Tooltip("Brightness of airports outside the current filter (data dashboard).")]
+    [Range(0f, 1f)] public float filteredNodeBrightness = 0.2f;
+
     public IReadOnlyList<GraphEdge> EdgesOf(string nodeId)
     {
         return edgesByNode.TryGetValue(nodeId, out List<GraphEdge> list) ? list : System.Array.Empty<GraphEdge>();
@@ -652,7 +662,84 @@ public class GraphLoader : MonoBehaviour
         ResetEdgeVisibility();
         foreach (GraphEdge edge in extra)
         {
-            edge.visible = true;
+            // A filtered-out edge stays hidden even for the selection.
+            if (PassesFilter(edge)) edge.visible = true;
+        }
+    }
+
+    /// <summary>
+    /// Filter the graph: only flights of one market segment (null = all), only routes
+    /// touching one country (null = all), only routes with at least minWeight flights
+    /// (counted in the segment when one is set). With a segment, node sizes follow the
+    /// airports' flights in that segment. Airports outside the filter are dimmed.
+    /// </summary>
+    public void SetFilter(string segment, string country, int minWeight)
+    {
+        FilterSegment = string.IsNullOrEmpty(segment) ? null : segment;
+        FilterCountry = string.IsNullOrEmpty(country) ? null : country;
+        FilterMinWeight = Mathf.Max(0, minWeight);
+        ApplyNodeStyle();
+        ApplyEdgeFilter();
+        FilterChanged?.Invoke();
+    }
+
+    /// <summary>Flights on the edge that count under the current segment filter.</summary>
+    public int FilteredWeight(GraphEdge edge)
+    {
+        if (FilterSegment == null) return edge.weight;
+        return edge.data != null && edge.data.segments != null && edge.data.segments.TryGetValue(FilterSegment, out int v) ? v : 0;
+    }
+
+    /// <summary>Airport traffic that counts under the current segment filter.</summary>
+    public int DisplayValue(GraphNode node)
+    {
+        if (FilterSegment == null) return node.value;
+        return node.data != null && node.data.segments != null && node.data.segments.TryGetValue(FilterSegment, out int v) ? v : 0;
+    }
+
+    public bool PassesFilter(GraphEdge edge)
+    {
+        if (!HasFilter) return true;
+        int weight = FilteredWeight(edge);
+        if (weight <= 0 || weight < FilterMinWeight) return false;
+        if (FilterCountry != null && CountryOf(nodeInstances[edge.sourceId]) != FilterCountry &&
+            CountryOf(nodeInstances[edge.targetId]) != FilterCountry) return false;
+        return true;
+    }
+
+    /// <summary>False for airports the filter leaves out (no traffic in the segment, other country).</summary>
+    public bool NodeInFocus(GraphNode node)
+    {
+        if (FilterSegment != null && DisplayValue(node) <= 0) return false;
+        if (FilterCountry != null && CountryOf(node) != FilterCountry) return false;
+        return true;
+    }
+
+    private static string CountryOf(GraphNode node)
+    {
+        return node.data != null ? node.data.country : null;
+    }
+
+    /// <summary>Node colours (view mode + filter dimming) and, with a segment filter, sizes.</summary>
+    private void ApplyNodeStyle()
+    {
+        int maxDisplay = 1;
+        foreach (GraphNode node in nodeInstances.Values) maxDisplay = Mathf.Max(maxDisplay, DisplayValue(node));
+        foreach (GraphNode node in nodeInstances.Values)
+        {
+            // Scale segment traffic up to the full range so the biggest airport of the segment is as big as the biggest overall.
+            float shown = FilterSegment == null ? node.value : (float)DisplayValue(node) * maxNodeValue / maxDisplay;
+            node.transform.localScale = Vector3.one * (nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(shown));
+
+            Color color = NodeColor(node.value, node.community);
+            if (!NodeInFocus(node))
+            {
+                color *= filteredNodeBrightness;
+                color.a = 1f;
+            }
+            node.baseColor = color;
+            Renderer renderer = node.GetComponent<Renderer>();
+            if (renderer != null) SetNodeColor(renderer, node.baseColor);
         }
     }
 
@@ -671,7 +758,7 @@ public class GraphLoader : MonoBehaviour
             int inter = 0;
             foreach (GraphEdge edge in ranked)
             {
-                if (edge.weight < edgeWeightThreshold) continue;
+                if (edge.weight < edgeWeightThreshold || !PassesFilter(edge)) continue;
                 bool inside = nodeInstances[edge.sourceId].community == nodeInstances[edge.targetId].community;
                 if (inside && intra < limit)
                 {
@@ -690,7 +777,7 @@ public class GraphLoader : MonoBehaviour
             foreach (GraphEdge edge in ranked)
             {
                 if (restVisibleEdges.Count >= limit) break;
-                if (edge.weight >= edgeWeightThreshold) restVisibleEdges.Add(edge);
+                if (edge.weight >= edgeWeightThreshold && PassesFilter(edge)) restVisibleEdges.Add(edge);
             }
         }
         ResetEdgeVisibility();
@@ -706,12 +793,7 @@ public class GraphLoader : MonoBehaviour
     {
         RegionalView = regional;
         colorByCommunity = regional;
-        foreach (GraphNode node in nodeInstances.Values)
-        {
-            node.baseColor = NodeColor(node.value, node.community);
-            Renderer renderer = node.GetComponent<Renderer>();
-            if (renderer != null) SetNodeColor(renderer, node.baseColor);
-        }
+        ApplyNodeStyle();
         foreach (GraphEdge edge in edgeInstances)
         {
             edge.baseColor = EdgeColor(edge.weight, nodeInstances[edge.sourceId].community, nodeInstances[edge.targetId].community);
@@ -819,7 +901,7 @@ public class GraphLoader : MonoBehaviour
     /// <summary>Heavier first; ties: the edge whose weaker endpoint is bigger (hub-to-hub first); then file order for stability.</summary>
     private int CompareImportance(GraphEdge x, GraphEdge y)
     {
-        int c = y.weight.CompareTo(x.weight);
+        int c = FilteredWeight(y).CompareTo(FilteredWeight(x));
         if (c != 0) return c;
         c = WeakerEndpointValue(y).CompareTo(WeakerEndpointValue(x));
         if (c != 0) return c;

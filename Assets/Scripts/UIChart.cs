@@ -4,7 +4,8 @@ using UnityEngine.UI;
 /// <summary>
 /// Minimal UI chart (a uGUI Graphic): a line or bar chart of float values scaled
 /// to the rect, with a baseline. Built as a mesh in OnPopulateMesh, so it needs no
-/// package and costs one draw call. One bar or point can be highlighted.
+/// package and costs one draw call. One bar or point can be highlighted. A line
+/// chart can draw a second series (values2 / color2) on the same scale.
 /// </summary>
 [RequireComponent(typeof(CanvasRenderer))]
 public class UIChart : MaskableGraphic
@@ -21,12 +22,22 @@ public class UIChart : MaskableGraphic
     [Tooltip("-1 = none.")]
     public int highlightIndex = -1;
     public Color highlightColor = new Color(1f, 0.55f, 0.15f, 1f);
+    [Tooltip("Optional second line (line charts only), on the same scale as values.")]
+    public float[] values2 = System.Array.Empty<float>();
+    public Color color2 = new Color(1f, 0.55f, 0.15f, 1f);
 
     public void SetData(float[] data, Kind chartKind, int highlight = -1)
     {
         values = data ?? System.Array.Empty<float>();
         kind = chartKind;
         highlightIndex = highlight;
+        SetVerticesDirty();
+    }
+
+    public void SetSecondSeries(float[] data, Color seriesColor)
+    {
+        values2 = data ?? System.Array.Empty<float>();
+        color2 = seriesColor;
         SetVerticesDirty();
     }
 
@@ -39,6 +50,10 @@ public class UIChart : MaskableGraphic
 
         float max = 0f;
         foreach (float v in values) max = Mathf.Max(max, v);
+        if (kind == Kind.Line && values2 != null)
+        {
+            foreach (float v in values2) max = Mathf.Max(max, v);
+        }
         if (max <= 0f) return;
 
         int n = values.Length;
@@ -61,18 +76,25 @@ public class UIChart : MaskableGraphic
             AddLine(vh, new Vector2(r.xMin, y), new Vector2(r.xMax, y), color);
             return;
         }
-        Vector2 previous = Point(r, 0, n, values[0], max);
-        for (int i = 1; i < n; i++)
-        {
-            Vector2 current = Point(r, i, n, values[i], max);
-            AddLine(vh, previous, current, color);
-            previous = current;
-        }
+        DrawSeries(vh, r, values, max, color);
+        if (values2 != null && values2.Length > 1) DrawSeries(vh, r, values2, max, color2);
         if (highlightIndex >= 0 && highlightIndex < n)
         {
             Vector2 p = Point(r, highlightIndex, n, values[highlightIndex], max);
             float s = lineWidth * 2f;
             AddQuad(vh, p - new Vector2(s, s), p + new Vector2(s, s), highlightColor);
+        }
+    }
+
+    private void DrawSeries(VertexHelper vh, Rect r, float[] series, float max, Color c)
+    {
+        int n = series.Length;
+        Vector2 previous = Point(r, 0, n, series[0], max);
+        for (int i = 1; i < n; i++)
+        {
+            Vector2 current = Point(r, i, n, series[i], max);
+            AddLine(vh, previous, current, c);
+            previous = current;
         }
     }
 
