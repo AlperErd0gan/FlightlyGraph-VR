@@ -47,7 +47,8 @@ public class GraphInfoPanel : MonoBehaviour
     public float snapDistance = 1.5f;
     [Tooltip("InView: follow smoothing; higher = snappier.")]
     public float followSpeed = 4f;
-    [Tooltip("Farther than this from the selected node / edge, the panel closes and the selection is cleared (m). 0 = never.")]
+    [Tooltip("Walking / teleporting farther than this from where you made the selection closes the panel and clears " +
+             "the selection (m). How far the selected node itself is does not matter. 0 = never.")]
     public float autoClearDistance = 5f;
     [Tooltip("Thin line from the panel to the selected node / edge.")]
     public bool showLeaderLine = true;
@@ -85,6 +86,9 @@ public class GraphInfoPanel : MonoBehaviour
     // While suppressed (e.g. the data dashboard is open) the panel stays hidden but keeps
     // the last selection's text, so it comes back when the suppression ends.
     private bool suppressed;
+    // Viewer position when the current selection was made (for autoClearDistance).
+    private Vector3 selectionViewerPosition;
+    private bool hasSelectionPosition;
     private string lastContent;
     private Vector3 lastAnchor;
 
@@ -127,9 +131,12 @@ public class GraphInfoPanel : MonoBehaviour
     {
         if (!panel.gameObject.activeSelf || !ResolveViewer()) return;
 
-        if (autoClearDistance > 0f && Vector3.Distance(viewer.position, anchor) > autoClearDistance)
+        // Walked / teleported away since selecting: drop it (Hide runs via SelectionCleared). Measured from
+        // where the viewer stood, not from the node, so selecting a far airport keeps working. The guided
+        // tour controls the selection itself.
+        if (autoClearDistance > 0f && hasSelectionPosition && !GuidedTour.InputLocked &&
+            Vector3.Distance(viewer.position, selectionViewerPosition) > autoClearDistance)
         {
-            // Walked / teleported away from what the panel describes: drop it (Hide runs via SelectionCleared).
             selector.ClearSelection();
             return;
         }
@@ -492,6 +499,7 @@ public class GraphInfoPanel : MonoBehaviour
     private void Hide()
     {
         lastContent = null;
+        hasSelectionPosition = false;
         panel.gameObject.SetActive(false);
     }
 
@@ -511,6 +519,12 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void Show(string content, Vector3 worldAnchor)
     {
+        // A new selection (not the same text shown again after suppression) starts a new walk-away check.
+        if (content != lastContent && ResolveViewer())
+        {
+            selectionViewerPosition = viewer.position;
+            hasSelectionPosition = true;
+        }
         lastContent = content;
         lastAnchor = worldAnchor;
         if (suppressed) return;

@@ -131,12 +131,27 @@ public class GuidedTour : MonoBehaviour
         if (graph.HasFilter) graph.SetFilter(null, null, 0);
         if (viewMode != null && viewMode.Mode != GraphViewMode.ViewMode.TopRoutes) viewMode.Apply(GraphViewMode.ViewMode.TopRoutes, false);
 
-        var steps = new List<StepAction> { Intro, Hubs, TrafficOverTime, Clusters, ConnectingRoute, Outro };
+        var steps = new List<StepAction> { Intro, Hubs, TrafficOverTime, Insights, Clusters, ConnectingRoute, Outro };
         int total = steps.Count;
         for (int i = 0; i < steps.Count; i++)
         {
-            string text = steps[i]();
-            if (string.IsNullOrEmpty(text)) continue; // no data for this step
+            // A failing step is logged and skipped instead of stopping the tour half way
+            // (the coroutine would die and leave the input locked).
+            string text;
+            try
+            {
+                text = steps[i]();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"GuidedTour: step {i + 1} ({steps[i].Method.Name}) failed: {ex}");
+                text = null;
+            }
+            if (string.IsNullOrEmpty(text))
+            {
+                Debug.Log($"GuidedTour: step {i + 1} ({steps[i].Method.Name}) skipped");
+                continue;
+            }
             yield return Say(text, i + 1, total);
         }
         Finish();
@@ -240,6 +255,17 @@ public class GuidedTour : MonoBehaviour
                $"By {MonthName(axis.periods[n - 1])} they were at {lastShare:0} percent.";
     }
 
+    private string Insights()
+    {
+        if (dashboard == null) return null;
+        List<GraphInsight> found = GraphInsights.Compute(graph, dashboard.TimeAxis, 1);
+        GraphInsight fastest = found.Find(i => i.category == GraphInsights.FastestRecovery);
+        GraphInsight slowest = found.Find(i => i.category == GraphInsights.SlowestRecovery);
+        if (fastest == null && slowest == null) return null;
+        dashboard.OpenTab(DataDashboard.Tab.Insights);
+        return ((fastest != null ? fastest.spoken : "") + " " + (slowest != null ? slowest.spoken : "")).Trim();
+    }
+
     private string Clusters()
     {
         if (dashboard != null && dashboard.IsOpen) dashboard.Close();
@@ -254,7 +280,11 @@ public class GuidedTour : MonoBehaviour
     private string ConnectingRoute()
     {
         if (viewMode != null) viewMode.Apply(GraphViewMode.ViewMode.TopRoutes, false);
-        if (connections == null) return null;
+        if (connections == null)
+        {
+            Debug.LogWarning("GuidedTour: no ConnectionFinder in the scene; connecting-route step skipped.");
+            return null;
+        }
         List<GraphNode> top = TopNodes(1);
         if (top.Count == 0) return null;
         GraphNode hub = top[0];
@@ -279,9 +309,14 @@ public class GuidedTour : MonoBehaviour
                 bestEdges = edges;
             }
         }
-        if (target == null || bestEdges.Count < 2) return null; // everything is one flight away
+        if (target == null || bestEdges.Count < 2)
+        {
+            Debug.Log($"GuidedTour: every airport is one flight from {hub.label}; connecting-route step skipped.");
+            return null;
+        }
 
         selector.SelectPath(bestNodes, bestEdges);
+        Debug.Log($"GuidedTour: connecting route {string.Join(" > ", bestNodes.ConvertAll(n => n.ShortCode))}");
         TurnToward(target.transform.position);
         var via = new List<GraphNode>();
         for (int i = 1; i < bestNodes.Count - 1; i++) via.Add(bestNodes[i]);
