@@ -3,8 +3,16 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 data/raw/
+new_data/
 .claude/
-# EUROCONTROL-derived data (research licence, do not commit)
-data/processed/*_ectrl.json
-Assets/StreamingAssets/*_ectrl.json
-Assets/StreamingAssets/*_ectrl.json.meta
+# EUROCONTROL data (research licence, do not commit): raw exports and anything derived,
+# wherever they end up (data/processed, StreamingAssets, zips, other folders)
+Flights_*.csv
+Flights_*.csv.gz
+Flight_*.csv.gz
+FIR_*.csv.gz
+Route_*.csv.gz
+AIRAC_*.csv.gz
+*_ectrl.json
+*_ectrl.json.meta
+*_ectrl*.zip
