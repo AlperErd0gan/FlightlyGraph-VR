@@ -64,6 +64,14 @@ public class GraphLoader : MonoBehaviour
 
     public enum EdgeShape { LiftedArc, AroundCenter }
 
+    [Tooltip("AroundCenter only. GreatCircle: natural arcs over / under the viewer (arcs that would reach the floor are lifted smoothly so they just touch minEdgeHeight). Horizontal: arcs go round the viewer at the endpoints' heights.")]
+    public AroundCenterPath aroundCenterPath = AroundCenterPath.GreatCircle;
+
+    public enum AroundCenterPath { GreatCircle, Horizontal }
+
+    [Tooltip("Lowest world height (m) any edge point may have; keeps edges above the floor (floor at y = 0).")]
+    public float minEdgeHeight = 0.05f;
+
     [Header("Edge filtering / community colours")]
     [Tooltip("-1 = all edges. 0 = none at rest: edges appear only for the selection. N = the N most important edges (weight, then the smaller endpoint value, so hub-to-hub links win ties).")]
     public int maxVisibleEdges = -1;
@@ -341,6 +349,11 @@ public class GraphLoader : MonoBehaviour
                 displayWidth = edgeWidth,
             };
             FillArc(a.transform.position, b.transform.position, ge.points);
+            for (int i = 0; i < ge.points.Length; i++)
+            {
+                // Safety net: never draw an edge below the floor.
+                if (ge.points[i].y < minEdgeHeight) ge.points[i].y = minEdgeHeight;
+            }
 
             edgeInstances.Add(ge);
             edgesByNode[edge.source].Add(ge);
@@ -505,9 +518,14 @@ public class GraphLoader : MonoBehaviour
     }
 
     /// <summary>
-    /// Arc that keeps its distance from this object's position: direction is
-    /// slerped and radius lerped between the endpoints, so with the viewer at the
-    /// centre an edge between opposite sides goes around the head, not through it.
+    /// Arc around this object's position (the viewer's head in the immersive view);
+    /// the radius is interpolated between the endpoints, so no edge passes through the head.
+    /// GreatCircle: the direction follows the shortest great circle, giving natural
+    /// arcs over or under the viewer; an arc that would come closer to the floor than
+    /// minEdgeHeight is lifted as a whole (see FillGreatCircle) so its lowest point
+    /// just touches that height, a smooth tangent dip instead of sliding along the floor.
+    /// Horizontal: azimuth and elevation are interpolated separately, so the arc
+    /// never dips below its lower endpoint and goes round the viewer instead.
     /// </summary>
     private void FillArcAroundCenter(Vector3 a, Vector3 b, Vector3[] points)
     {
@@ -519,15 +537,70 @@ public class GraphLoader : MonoBehaviour
         int n = points.Length - 1;
         if (ra < 1e-4f || rb < 1e-4f)
         {
-            // Endpoint at the centre: no direction to slerp, fall back to a straight line.
+            // Endpoint at the centre: no direction to interpolate, fall back to a straight line.
             for (int i = 0; i <= n; i++) points[i] = Vector3.Lerp(a, b, (float)i / n);
             return;
         }
+
+        if (aroundCenterPath == AroundCenterPath.GreatCircle)
+        {
+            Vector3 ua = da / ra;
+            Vector3 ub = db / rb;
+            if (FillGreatCircle(center, ua, ub, ra, rb, 0f, points) < minEdgeHeight)
+            {
+                // Smallest lift (binary search) that keeps the whole arc at or above minEdgeHeight:
+                // the lowest point then just touches it.
+                float low = 0f;
+                float high = Mathf.PI * 0.5f;
+                for (int iteration = 0; iteration < 20; iteration++)
+                {
+                    float mid = (low + high) * 0.5f;
+                    if (FillGreatCircle(center, ua, ub, ra, rb, mid, points) >= minEdgeHeight) high = mid;
+                    else low = mid;
+                }
+                FillGreatCircle(center, ua, ub, ra, rb, high, points);
+            }
+            return;
+        }
+
+        float elevationA = Mathf.Asin(Mathf.Clamp(da.y / ra, -1f, 1f));
+        float elevationB = Mathf.Asin(Mathf.Clamp(db.y / rb, -1f, 1f));
+        float azimuthA = Mathf.Atan2(da.x, da.z);
+        float azimuthB = Mathf.Atan2(db.x, db.z);
+        float deltaAzimuth = Mathf.DeltaAngle(azimuthA * Mathf.Rad2Deg, azimuthB * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+
         for (int i = 0; i <= n; i++)
         {
             float t = (float)i / n;
-            points[i] = center + Vector3.Slerp(da / ra, db / rb, t) * Mathf.Lerp(ra, rb, t);
+            float radius = Mathf.Lerp(ra, rb, t);
+            float elevation = Mathf.Lerp(elevationA, elevationB, t);
+            float azimuth = azimuthA + deltaAzimuth * t;
+            float horizontal = radius * Mathf.Cos(elevation);
+            points[i] = center + new Vector3(horizontal * Mathf.Sin(azimuth), radius * Mathf.Sin(elevation), horizontal * Mathf.Cos(azimuth));
         }
+    }
+
+    /// <summary>
+    /// Great-circle arc from direction ua to ub (radius lerped from ra to rb) whose
+    /// elevation is raised by lift * sin(pi * t): zero at both endpoints, largest in
+    /// the middle, so the lifted arc stays smooth. Returns the lowest world y.
+    /// </summary>
+    private static float FillGreatCircle(Vector3 center, Vector3 ua, Vector3 ub, float ra, float rb, float lift, Vector3[] points)
+    {
+        int n = points.Length - 1;
+        float lowest = float.PositiveInfinity;
+        for (int i = 0; i <= n; i++)
+        {
+            float t = (float)i / n;
+            float radius = Mathf.Lerp(ra, rb, t);
+            Vector3 direction = Vector3.Slerp(ua, ub, t);
+            float elevation = Mathf.Asin(Mathf.Clamp(direction.y, -1f, 1f)) + lift * Mathf.Sin(Mathf.PI * t);
+            float azimuth = Mathf.Atan2(direction.x, direction.z);
+            float horizontal = radius * Mathf.Cos(elevation);
+            points[i] = center + new Vector3(horizontal * Mathf.Sin(azimuth), radius * Mathf.Sin(elevation), horizontal * Mathf.Cos(azimuth));
+            lowest = Mathf.Min(lowest, points[i].y);
+        }
+        return lowest;
     }
 
     /// <summary>
