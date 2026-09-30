@@ -53,7 +53,7 @@ public class GraphSelector : MonoBehaviour
     {
         Keyboard kb = Keyboard.current;
         Mouse mouse = Mouse.current;
-        if (!mouseInput || mouse == null || targetCamera == null || graph == null || !graph.IsLoaded)
+        if (!mouseInput || mouse == null || targetCamera == null || graph == null || !graph.IsLoaded || GuidedTour.InputLocked)
         {
             return;
         }

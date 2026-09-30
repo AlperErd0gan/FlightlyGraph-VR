@@ -69,6 +69,17 @@ public class HandTeleport : MonoBehaviour
 
     private void Update()
     {
+        if (GuidedTour.InputLocked)
+        {
+            // No teleports during the guided tour; forget any aim in progress.
+            foreach (Aim aim in aims.Values)
+            {
+                aim.eligible = false;
+                aim.aiming = false;
+            }
+            HideVisuals();
+            return;
+        }
         NearFarInteractor shown = null;
         foreach (NearFarInteractor interactor in interactors)
         {

@@ -55,6 +55,10 @@ public class NodeNarrator : MonoBehaviour
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private MethodInfo speakMethod;
     private MethodInfo stopMethod;
+    private PropertyInfo speakingProperty;
+
+    /// <summary>Speak selections automatically. The guided tour turns this off while it narrates.</summary>
+    public bool AutoNarration { get; set; } = true;
     private string lastText;
     private float lastTime = -999f;
 
@@ -77,6 +81,8 @@ public class NodeNarrator : MonoBehaviour
         System.Type type = speaker.GetType();
         speakMethod = type.GetMethod("Speak", new[] { typeof(string) });
         stopMethod = type.GetMethod("Stop", System.Type.EmptyTypes);
+        // IsActive (loading or speaking) where the SDK has it, else IsSpeaking (audio playing).
+        speakingProperty = BoolProperty(type, "IsActive") ?? BoolProperty(type, "IsSpeaking");
         if (speakMethod == null)
         {
             Debug.LogError($"NodeNarrator: {type.FullName} has no Speak(string); narration disabled.");
@@ -120,18 +126,56 @@ public class NodeNarrator : MonoBehaviour
 
     private void OnNode(GraphNode node)
     {
-        if (speakNodes) Say(DescribeNode(node), node.transform.position);
+        if (speakNodes && AutoNarration) Say(DescribeNode(node), node.transform.position);
     }
 
     private void OnEdge(GraphEdge edge)
     {
-        if (speakEdges) Say(DescribeEdge(edge), edge.Midpoint);
+        if (speakEdges && AutoNarration) Say(DescribeEdge(edge), edge.Midpoint);
     }
 
     private void OnPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
     {
-        if (speakRoutes) Say(DescribeRoute(nodes, edges), nodes[nodes.Count - 1].transform.position);
+        if (speakRoutes && AutoNarration) Say(DescribeRoute(nodes, edges), nodes[nodes.Count - 1].transform.position);
     }
+
+    /// <summary>Speak any text from a position (used by the guided tour).</summary>
+    public void SpeakText(string text, Vector3 position)
+    {
+        Say(text, position);
+    }
+
+    /// <summary>
+    /// True while the TTS speaker is loading or playing speech (as far as the SDK reports it);
+    /// null if this SDK version exposes neither IsActive nor IsSpeaking.
+    /// </summary>
+    public bool? IsSpeaking
+    {
+        get
+        {
+            if (speaker == null || speakingProperty == null) return null;
+            return (bool)speakingProperty.GetValue(speaker);
+        }
+    }
+
+    private static PropertyInfo BoolProperty(System.Type type, string name)
+    {
+        PropertyInfo property = type.GetProperty(name);
+        return property != null && property.PropertyType == typeof(bool) ? property : null;
+    }
+
+    /// <summary>Rough speaking time of a sentence (about 2.5 words per second).</summary>
+    public static float EstimateSeconds(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0f;
+        return text.Split(' ').Length / 2.5f + 0.5f;
+    }
+
+    /// <summary>Spoken short airport name ("Amsterdam Schiphol", "Rome").</summary>
+    public static string SpokenShortName(GraphNode node) => ShortName(node);
+
+    /// <summary>Spoken amount ("2.2 million", "215 thousand").</summary>
+    public static string SpokenAmount(long value) => value > int.MaxValue ? (value / 1000000f).ToString("0.#", Inv) + " million" : Amount((int)value);
 
     private void Say(string text, Vector3 position)
     {

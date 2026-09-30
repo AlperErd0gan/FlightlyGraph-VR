@@ -82,6 +82,12 @@ public class XRGraphInput : MonoBehaviour
             WireNodes();
         }
 
+        if (GuidedTour.InputLocked)
+        {
+            CancelHolds();
+            emptyPresses.Clear();
+            return;
+        }
         UpdateHolds();
         UpdateEmptySpaceTaps();
     }
@@ -155,6 +161,7 @@ public class XRGraphInput : MonoBehaviour
 
     private void OnNodeSelectEntered(GraphNode node, IXRSelectInteractor interactor)
     {
+        if (GuidedTour.InputLocked) return; // the guided tour drives the selection
         GraphNode selected = selector.SelectedNode;
         if (connectionFinder == null || selected == null || selected == node)
         {
@@ -168,6 +175,13 @@ public class XRGraphInput : MonoBehaviour
             startTime = Time.time,
             baseScale = node.transform.localScale,
         };
+    }
+
+    /// <summary>Drops pending hold-to-connect gestures and restores the held nodes' size.</summary>
+    private void CancelHolds()
+    {
+        foreach (PendingHold hold in holds.Values) hold.node.transform.localScale = hold.baseScale;
+        holds.Clear();
     }
 
     private void OnNodeSelectExited(IXRSelectInteractor interactor)

@@ -57,7 +57,7 @@ public class ConnectionFinder : MonoBehaviour
 
     private void Update()
     {
-        if (graph == null || selector == null || !graph.IsLoaded) return;
+        if (graph == null || selector == null || !graph.IsLoaded || GuidedTour.InputLocked) return;
         if (rightButton.WasPressedThisFrame()) TryConnect(InteractorHandedness.Right);
         if (leftButton.WasPressedThisFrame()) TryConnect(InteractorHandedness.Left);
     }
@@ -100,6 +100,12 @@ public class ConnectionFinder : MonoBehaviour
             return;
         }
         selector.SelectPath(nodes, edges);
+    }
+
+    /// <summary>Fewest-edges route between two airports, without selecting it (used by the guided tour).</summary>
+    public bool TryFindPath(GraphNode from, GraphNode to, List<GraphNode> nodes, List<GraphEdge> edges)
+    {
+        return FindPath(from, to, nodes, edges);
     }
 
     /// <summary>Fewest-edges route (BFS). Fills nodes (from..to) and edges (legs in order).</summary>

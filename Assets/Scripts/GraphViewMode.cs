@@ -84,7 +84,8 @@ public class GraphViewMode : MonoBehaviour
             applied = true;
         }
 
-        if (toggleAction.WasPressedThisFrame() || LeftPalmUpPinchStarted())
+        bool palmPinch = LeftPalmUpPinchStarted(); // always read, so the gesture state stays current
+        if (!GuidedTour.InputLocked && (toggleAction.WasPressedThisFrame() || palmPinch))
         {
             Apply(Mode == ViewMode.TopRoutes ? ViewMode.Regional : ViewMode.TopRoutes, true);
         }
