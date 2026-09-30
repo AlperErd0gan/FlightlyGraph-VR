@@ -45,7 +45,7 @@ def test_edges_still_reference_nodes(nodes3d):
 def test_shell_and_comfort_band(nodes3d):
     for n in nodes3d:
         r = math.sqrt(n["x"] ** 2 + n["y"] ** 2 + n["z"] ** 2)
-        assert 2.0 - 1e-3 <= r <= 4.0 + 1e-3
+        assert 3.0 - 1e-3 <= r <= 8.0 + 1e-3
         # eyes ~1.5 m above floor: keep every node at least 0.4 m above it
         assert n["y"] >= -1.1
 

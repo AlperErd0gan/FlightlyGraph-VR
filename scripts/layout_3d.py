@@ -144,11 +144,11 @@ def main(argv=None):
     p.add_argument("--dataset", choices=sorted(DATASETS), default="openflights")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--iterations", type=int, default=300)
-    p.add_argument("--inner", type=float, default=2.0, help="closest node distance from the viewer (m)")
-    p.add_argument("--outer", type=float, default=4.0, help="farthest node distance from the viewer (m)")
-    p.add_argument("--min-elev", type=float, default=-15.0,
-                   help="lowest elevation (deg); with outer=4 m and eyes at 1.5 m, -15 keeps nodes >0.4 m above the floor")
-    p.add_argument("--max-elev", type=float, default=55.0, help="highest elevation (deg), avoids straight overhead")
+    p.add_argument("--inner", type=float, default=3.0, help="closest node distance from the viewer (m)")
+    p.add_argument("--outer", type=float, default=8.0, help="farthest node distance from the viewer (m)")
+    p.add_argument("--min-elev", type=float, default=-7.0,
+                   help="lowest elevation (deg); with outer=8 m and eyes at 1.5 m, -7 keeps nodes >0.5 m above the floor")
+    p.add_argument("--max-elev", type=float, default=60.0, help="highest elevation (deg), avoids straight overhead")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 

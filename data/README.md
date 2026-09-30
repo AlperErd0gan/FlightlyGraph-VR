@@ -86,8 +86,8 @@ input nodes file, plus `community`; the edges file is reused unchanged.
   weights `log1p(weight)`, fixed seed), not geography.
 - Each node's direction from the layout centre becomes its direction around the
   viewer; its centre-to-periphery rank becomes its distance, spread evenly in
-  `--inner`..`--outer` metres (default 2-4 m, central hubs closest).
-- Elevation is squeezed into `--min-elev`..`--max-elev` (default -15..55 deg) so
+  `--inner`..`--outer` metres (default 3-8 m, central hubs closest).
+- Elevation is squeezed into `--min-elev`..`--max-elev` (default -7..60 deg) so
   nodes stay above the floor and out of the zenith; the biggest hub is rotated
   to straight ahead (+Z).
 - `community` — Louvain community id (0 = largest), for colouring clusters.
