@@ -1,8 +1,23 @@
 # Data
 
+## Layout
+
+Everything under `data/raw/` is gitignored (downloaded or licence-restricted):
+
+```
+data/
+  raw/
+    eurocontrol/
+      flights/<YYYY>/Flights_<YYYYMMDD>_<YYYYMMDD>.csv.gz   input of build_graph_ectrl.py
+      other/202102/        FIR / AUA / point profile / route / AIRAC files of Feb 2021 (unused)
+    ourairports/           airports.csv, countries.csv (downloaded by build_graph_ectrl.py)
+    openflights/           airports.dat, routes.dat (downloaded by build_graph.py)
+  processed/               JSON for Unity (*_ectrl.json gitignored)
+```
+
 ## Source: OpenFlights
 
-`data/raw/airports.dat` and `data/raw/routes.dat` are downloaded verbatim from
+`data/raw/openflights/airports.dat` and `routes.dat` are downloaded verbatim from
 the [OpenFlights](https://openflights.org/data.html) project
 (https://github.com/jpatokal/openflights).
 
@@ -37,44 +52,85 @@ edges.json: [{ "source", "target", "weight" }, ...]
   the number of distinct directed routes between the pair, collapsed into one
   undirected edge.
 
-## Source: EUROCONTROL R&D Archive (Feb 2021)
+## Source: EUROCONTROL R&D Archive (monthly flight files)
 
-`new_data/Flights_20210201_20210228.csv.gz` (gitignored) comes from the
-EUROCONTROL Aviation Data Repository for Research. It covers flights
-departing, arriving or overflying the EUROCONTROL area in February 2021
-(COVID period, reduced traffic). Use is governed by the EUROCONTROL R&D data
-licence (research only) — check it before redistributing the raw files or the
-derived `*_ectrl.json`.
+Monthly `Flights_<YYYYMMDD>_<YYYYMMDD>.csv[.gz]` files come from the
+EUROCONTROL Aviation Data Repository for Research. Each covers flights
+departing, arriving or overflying the EUROCONTROL area in one month; the
+project uses every month from January 2020 to August 2025 in
+`data/raw/eurocontrol/flights/2020/` .. `2025/`. Only the `Flights_*` files are
+used; the FIR / AUA / point profile / route files are not needed. Use is
+governed by the EUROCONTROL R&D data licence (research only) — check it before
+redistributing the raw files or the derived `*_ectrl.json`.
 
-`scripts/build_graph_ectrl.py` builds `nodes_ectrl.json`, `edges_ectrl.json`
-and `meta_ectrl.json`. Airport names/city/country/elevation are joined from
-OpenFlights `airports.dat` on ICAO code. Flights with `ZZZZ` (unknown airport),
-missing coordinates or ADEP == ADES are dropped. All times are UTC.
+To add more months, drop the unchanged `Flights_*` files into their year folder
+(e.g. `data/raw/eurocontrol/flights/2019/Flights_20190301_20190331.csv.gz`) and
+re-run the script: every `Flights_*` file under `data/raw/eurocontrol/flights/`
+becomes one period on the time axis. A month found twice is read once.
+
+## Source: OurAirports
+
+Airport name, IATA code, city, country and elevation come from
+[OurAirports](https://ourairports.com/data/) (`airports.csv`, `countries.csv`,
+public domain), downloaded to `data/raw/ourairports/` on the first run and
+joined on ICAO code. Positions come from EUROCONTROL (latest period); only
+when a file leaves a known airport's coordinates empty (e.g. FAOR, HSSK in
+2020-2022) is the OurAirports position used, so those flights are kept.
+If the OurAirports row is more than 20 km away, the code belongs to another
+place (e.g. a closed airport) and the label falls back to the ICAO code.
+
+## EUROCONTROL graph (time axis)
+
+`scripts/build_graph_ectrl.py [--input PATH ...] [--top 200] [--min-daily 1]`
+builds `nodes_ectrl.json`, `edges_ectrl.json` and `meta_ectrl.json`. Flights
+with an unknown airport (`ZZZZ` / `AFIL`), coordinates missing in both
+EUROCONTROL and OurAirports, no usable
+off-block / arrival time or ADEP == ADES are dropped. All times are UTC.
 
 ```
 nodes_ectrl.json: [{ id (ICAO), label, x, y, z, value, lat, lon, city, country,
                      departures, arrivals, avgDepDelayMin, avgArrDelayMin,
                      scheduledShare, cargoShare, segments, topOperator, topAcType,
-                     daily, hourly }, ...]
+                     monthly, monthlyDepDelayMin, monthlyArrDelayMin, hourly }, ...]
 edges_ectrl.json: [{ source, target, weight, forward, backward,
                      avgDistanceNm, avgDurationMin, avgDelayMin,
                      scheduledShare, cargoShare, segments, topOperator, topAcType,
-                     daily, hourly }, ...]
-meta_ectrl.json:  { source, dateFrom, dateTo, days, timezone, totalFlights, nodeCount, edgeCount }
+                     monthly, monthlyDelayMin, hourly }, ...]
+meta_ectrl.json:  { source, files, airportInfo, dateFrom, dateTo, periods, periodDays,
+                    periodFlights, segmentCoverage, days, timezone, totalFlights,
+                    topN, minDaily, nodeCount, edgeCount }
 ```
 
-- `value` — flights touching the airport (departures + arrivals), all airports counted.
-- `weight` — flights between the pair, both directions; `forward` = source→target
-  (source < target alphabetically), `backward` = the other way.
+- Nodes are the top `--top` airports by flights over all periods. An edge is
+  kept if it has at least `--min-daily` flights per day in at least one period,
+  so seasonal routes stay; airports left without edges are dropped.
+- `meta.periods[i]` (`"yyyy-MM"`) is the period of `monthly[i]` and
+  `monthlyXxxDelayMin[i]` in every node and edge. `meta.periodDays[i]` is its
+  length, so `monthly[i] / periodDays[i]` is flights per day. Periods need not be
+  consecutive. A flight belongs to the period of the file it is in.
+- `meta.periodFlights[i]` — all kept flights in the period (whole network, not
+  only the graph); `meta.totalFlights` is their sum.
+- `value` — flights touching the airport (departures + arrivals), all airports
+  counted, all periods; `sum(monthly) == sum(hourly) == value`.
+- `weight` — flights between the pair, both directions, all periods; `forward` =
+  source→target (source < target alphabetically), `backward` = the other way;
+  `sum(monthly) == sum(hourly) == weight`.
 - `avgDepDelayMin` / `avgArrDelayMin` / `avgDelayMin` — actual minus filed
   off-block / arrival time; negative = early. Gaps > 24 h are discarded.
+  `avgDelayMin` and `monthlyDelayMin` are arrival delays. Monthly delays are
+  null for a period without data.
 - `avgDurationMin` — actual off-block to actual arrival (includes taxi).
-- `segments` — STATFOR market segment → flight count.
+- `segments` — STATFOR market segment → flight count, known segments only;
+  `cargoShare` is `All-Cargo` among those flights (0 if none is known). Seven
+  source files carry no segment at all (`Not Classified` for every flight:
+  2022-09, 2022-12, 2023-03, 2023-06, 2023-09, 2023-12, 2024-03); their flights
+  are left out of both. 2020-03 uses the older `Traditional Scheduled` label
+  (Mainline + Regional together), kept as is.
+- `meta.segmentCoverage[i]` — share of the period's flights with a known segment.
 - `topOperator` — most frequent ICAO operator code, excluding anonymised `ZZZ`
-  (null if all flights are anonymised).
-- `daily[i]` — flights on day `meta.dateFrom + i` (departure time for edges and
-  departing flights, arrival time for arriving flights; actual, else filed).
-- `hourly[h]` — flights in UTC hour `h` over the whole month.
+  (null if all flights are anonymised); ties go to the alphabetically first code.
+- `hourly[h]` — flights in UTC hour `h` over all periods (off-block hour for
+  edges and departures, arrival hour for arrivals; actual, else filed).
 
 ## Immersive 3D layout
 

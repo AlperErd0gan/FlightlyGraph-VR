@@ -32,7 +32,10 @@ public class NodeData
     public Dictionary<string, int> segments;
     public string topOperator;
     public string topAcType;
-    public int[] daily;
+    // Time axis: element i belongs to MetaData.periods[i] (one month each).
+    public int[] monthly;
+    public float?[] monthlyDepDelayMin;
+    public float?[] monthlyArrDelayMin;
     public int[] hourly;
 }
 
@@ -54,6 +57,34 @@ public class EdgeData
     public Dictionary<string, int> segments;
     public string topOperator;
     public string topAcType;
-    public int[] daily;
+    // Time axis: element i belongs to MetaData.periods[i] (one month each).
+    public int[] monthly;
+    public float?[] monthlyDelayMin;
     public int[] hourly;
+}
+
+/// <summary>
+/// meta_ectrl.json: the time axis shared by every monthly[] array.
+/// monthly[i] / periodDays[i] is flights per day in periods[i] ("yyyy-MM").
+/// dateFrom / dateTo are left out on purpose: Newtonsoft would parse the
+/// "yyyy-MM-dd" strings as DateTime and hand back a culture-formatted string.
+/// </summary>
+[Serializable]
+public class MetaData
+{
+    public string source;
+    public string[] files;
+    public string airportInfo;
+    public string[] periods;
+    public int[] periodDays;
+    public int[] periodFlights;
+    // Share of flights in periods[i] with a known market segment (0 for months the source left unclassified).
+    public float[] segmentCoverage;
+    public int days;
+    public string timezone;
+    public int totalFlights;
+    public int topN;
+    public float minDaily;
+    public int nodeCount;
+    public int edgeCount;
 }
