@@ -79,10 +79,10 @@ public class DataDashboard : MonoBehaviour
     public AudioClip closeSound;
     [Range(0f, 1f)] public float soundVolume = 0.5f;
 
-    public enum Tab { Overview, Airports, Routes, TrafficMix, Clusters, Selected, Find, Filters }
+    public enum Tab { Overview, Insights, Airports, Routes, TrafficMix, Clusters, Selected, Find, Filters }
     private enum FindSort { Name, Country, Traffic }
 
-    private static readonly string[] TabNames = { "Overview", "Airports", "Routes", "Traffic mix", "Clusters", "Selected", "Find", "Filters" };
+    private static readonly string[] TabNames = { "Overview", "Insights", "Airports", "Routes", "Traffic mix", "Clusters", "Selected", "Find", "Filters" };
     private const int FindRowsPerPage = 9;
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private const float Pad = 30f;
@@ -92,6 +92,7 @@ public class DataDashboard : MonoBehaviour
     private readonly List<Image> tabImages = new List<Image>();
     private Tab current = Tab.Overview;
     private GraphNode pinned;          // compared with the selected airport in the Selected tab
+    private List<GraphInsight> insights; // computed once per time axis (GraphInsights)
     private FindSort findSort = FindSort.Name;
     private int findPage;
     private MetaData meta;
@@ -331,6 +332,7 @@ public class DataDashboard : MonoBehaviour
                 Debug.LogWarning($"DataDashboard: could not read {metaFileName}: {ex.Message}");
             }
         }
+        insights = null; // recompute with the time axis
         if (IsOpen) Show(current);
     }
 
@@ -354,7 +356,6 @@ public class DataDashboard : MonoBehaviour
         {
             MakeButton(rootRect, "Tour", size.x - Pad - 250, 18, 120, 46, () => { Close(); tour.StartTour(); }, tabActiveColor);
         }
-
         float tabWidth = (size.x - 2 * Pad - (TabNames.Length - 1) * 8f) / TabNames.Length;
         for (int i = 0; i < TabNames.Length; i++)
         {
@@ -395,6 +396,7 @@ public class DataDashboard : MonoBehaviour
         switch (tab)
         {
             case Tab.Overview: BuildOverview(); break;
+            case Tab.Insights: BuildInsights(); break;
             case Tab.Airports: BuildAirports(); break;
             case Tab.Routes: BuildRoutes(); break;
             case Tab.TrafficMix: BuildTrafficMix(); break;
@@ -891,18 +893,82 @@ public class DataDashboard : MonoBehaviour
     private void FocusAirport(GraphNode node)
     {
         if (selector != null) selector.SelectNode(node);
-        if (!turnToSelection) return;
+        TurnToward(node.transform.position);
+    }
 
+    private void TurnToward(Vector3 point)
+    {
+        if (!turnToSelection) return;
         XROrigin origin = FindFirstObjectByType<XROrigin>();
         Camera cam = Camera.main;
         if (origin == null || cam == null) return;
         Vector3 forward = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up);
-        Vector3 toNode = Vector3.ProjectOnPlane(node.transform.position - cam.transform.position, Vector3.up);
-        if (forward.sqrMagnitude < 1e-6f || toNode.sqrMagnitude < 1e-6f) return;
-        float angle = Vector3.SignedAngle(forward, toNode, Vector3.up);
-        origin.RotateAroundCameraUsingOriginUp(angle);
+        Vector3 toPoint = Vector3.ProjectOnPlane(point - cam.transform.position, Vector3.up);
+        if (forward.sqrMagnitude < 1e-6f || toPoint.sqrMagnitude < 1e-6f) return;
+        origin.RotateAroundCameraUsingOriginUp(Vector3.SignedAngle(forward, toPoint, Vector3.up));
         // Keep the dashboard in front after the turn.
-        PlaceInFront(cam.transform);
+        if (IsOpen) PlaceInFront(cam.transform);
+    }
+
+    // ---- Insights --------------------------------------------------------
+
+    private void BuildInsights()
+    {
+        if (insights == null) insights = GraphInsights.Compute(graph, meta);
+        if (insights.Count == 0)
+        {
+            Label(content, "No insights for this dataset: they need a monthly time axis or market segments.", 22, 0, 0, W, 60);
+            return;
+        }
+
+        // Categories in order, each placed in the shorter of two columns.
+        var categories = new List<string>();
+        foreach (GraphInsight insight in insights)
+        {
+            if (!categories.Contains(insight.category)) categories.Add(insight.category);
+        }
+        const float gap = 20f;
+        float columnWidth = (W - gap) / 2f;
+        var columnY = new float[2];
+        foreach (string category in categories)
+        {
+            int column = columnY[0] <= columnY[1] ? 0 : 1;
+            float x = column * (columnWidth + gap);
+            Label(content, $"<b>{category}</b>", 20, x, columnY[column], columnWidth, 28);
+            columnY[column] += 30f;
+            foreach (GraphInsight insight in insights)
+            {
+                if (insight.category != category) continue;
+                GraphInsight target = insight;
+                Button button = MakeButton(content, insight.text, x, columnY[column], columnWidth, 34, () => OpenInsight(target),
+                                           tabColor, TextAlignmentOptions.Left);
+                TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
+                text.enableAutoSizing = true;
+                text.fontSizeMin = 13f;
+                text.fontSizeMax = 18f;
+                columnY[column] += 38f;
+            }
+            columnY[column] += 8f;
+        }
+        float noteY = Mathf.Max(columnY[0], columnY[1]) + 4f;
+        Label(content, "<size=80%><color=#A0A8B8>Season-neutral: growth compares the same months of the latest year with the " +
+                       "first months of the data; recovery uses 12-month averages. An airport opening or another one closing nearby " +
+                       "shows up as growth.</color></size>", 18, 0, noteY, W, 60);
+    }
+
+    /// <summary>Airport: select it and turn to it (the Selected tab shows its charts). Route: close the dashboard and show it.</summary>
+    private void OpenInsight(GraphInsight insight)
+    {
+        if (insight.node != null)
+        {
+            FocusAirport(insight.node);
+        }
+        else if (insight.edge != null && selector != null)
+        {
+            Close(); // the info panel describes the route
+            selector.SelectEdge(insight.edge);
+            TurnToward(insight.edge.Midpoint);
+        }
     }
 
     private static char Initial(string s)
