@@ -23,9 +23,13 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Tooltip("Airports collapsed into a city land on the city's spot. Found in the scene if unset.")]
     public CityClusters cities;
 
+    public enum MapStyle { Dark, Satellite }
+
     [Header("Files (StreamingAssets)")]
     public string mapFileName = "geomap.json";
-    [Tooltip("Texture used instead of the one named in the map file (same projection, e.g. a satellite image). Empty = the map file's.")]
+    [Tooltip("Dark: drawn map (coastlines, borders). Satellite: NASA Blue Marble imagery. Can be changed while playing.")]
+    public MapStyle style = MapStyle.Dark;
+    [Tooltip("Texture used instead of the style's (same projection as build_geomap.py). Empty = the style's.")]
     public string textureOverride = "";
 
     [Header("Placement (from the graph centre: your eyes after Go to graph centre)")]
@@ -95,6 +99,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         public float radiusDeg;
         public float textureHalfSizeDeg;
         public string texture;
+        public string satelliteTexture;
         public List<Label> labels;
     }
 
@@ -111,6 +116,9 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private readonly HashSet<GraphNode> outside = new HashSet<GraphNode>();
     private MapFile map;
     private Texture2D texture;
+    private Material mapSurfaceMaterial;
+    private MapStyle loadedStyle;
+    private bool loadingStyle;
     private readonly List<Object> owned = new List<Object>();
     private Transform visual;
     private InputAction toggleAction;
@@ -158,7 +166,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         }
 
         byte[] image = null;
-        string textureFile = string.IsNullOrEmpty(textureOverride) ? map.texture : textureOverride;
+        loadedStyle = style;
+        string textureFile = TextureFile(style);
         if (!string.IsNullOrEmpty(textureFile)) yield return ReadStreamingAsset(textureFile, bytes => image = bytes);
         if (image != null) texture = LoadTexture(image);
 
@@ -176,6 +185,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private void Update()
     {
         if (!Ready) return;
+        if (style != loadedStyle && !loadingStyle) StartCoroutine(ChangeStyle(style));
         if (GuidedTour.InputLocked)
         {
             // The tour's steps are written for the 3D layout.
@@ -239,6 +249,37 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         graph.SetEdgeFade(1f);
         transition = null;
         ModeChanged?.Invoke(onMap);
+    }
+
+    private string TextureFile(MapStyle s)
+    {
+        if (!string.IsNullOrEmpty(textureOverride)) return textureOverride;
+        if (s == MapStyle.Satellite) return string.IsNullOrEmpty(map.satelliteTexture) ? "geomap_satellite.jpg" : map.satelliteTexture;
+        return map.texture;
+    }
+
+    // Loads the other style's texture and puts it on the map (the old one is freed).
+    private IEnumerator ChangeStyle(MapStyle target)
+    {
+        loadingStyle = true;
+        byte[] image = null;
+        yield return ReadStreamingAsset(TextureFile(target), bytes => image = bytes);
+        loadedStyle = target;
+        loadingStyle = false;
+        Texture2D loaded = image != null ? LoadTexture(image) : null;
+        if (loaded == null) yield break;
+        if (texture != null)
+        {
+            owned.Remove(texture);
+            Destroy(texture);
+        }
+        texture = loaded;
+        if (mapSurfaceMaterial != null)
+        {
+            if (mapSurfaceMaterial.HasProperty("_BaseMap")) mapSurfaceMaterial.SetTexture("_BaseMap", texture);
+            mapSurfaceMaterial.mainTexture = texture;
+        }
+        Debug.Log($"GeoMapView: map style {target}");
     }
 
     // ---- IGraphLayout -----------------------------------------------------
@@ -518,6 +559,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
         if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f); // visible from behind too
         owned.Add(m);
+        mapSurfaceMaterial = m;
         return m;
     }
 
