@@ -45,14 +45,17 @@ public class FlightSimulator : MonoBehaviour
     public bool loop = true;
 
     [Header("Aircraft")]
-    [Tooltip("Optional mesh pointing along +Z (e.g. an aircraft model). Default: a small dart built at runtime.")]
+    [Tooltip("Optional mesh pointing along +Z (e.g. an aircraft model). Default: a small flat aircraft silhouette built at runtime.")]
     public Mesh aircraftMesh;
     [Tooltip("Material with 'Enable GPU Instancing' (e.g. URP/Unlit). Assign it so the shader is in builds; " +
              "if unset, URP Unlit is looked up by name. A runtime copy gets aircraftColor.")]
     public Material aircraftMaterial;
-    public Color aircraftColor = new Color(1f, 0.85f, 0.25f);
-    [Tooltip("Aircraft length in metres.")]
-    public float aircraftSize = 0.05f;
+    [Tooltip("Light and plain so the aircraft do not compete with the orange / blue airports.")]
+    public Color aircraftColor = new Color(0.86f, 0.9f, 0.98f);
+    [Tooltip("Aircraft length in the 3D layout (m).")]
+    public float aircraftSize = 0.06f;
+    [Tooltip("Aircraft length on the map (m); the map is closer and Europe is ~2 m wide.")]
+    public float mapAircraftSize = 0.024f;
     [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
     public float mapCruiseHeight = 0.04f;
 
@@ -473,7 +476,7 @@ public class FlightSimulator : MonoBehaviour
         }
         else
         {
-            ownedMesh = BuildDartMesh();
+            ownedMesh = BuildAircraftMesh();
             mesh = ownedMesh;
         }
 
@@ -508,29 +511,38 @@ public class FlightSimulator : MonoBehaviour
     }
 
     /// <summary>
-    /// Unit-length dart along +Z: flat swept wings with a notch at the back and a
-    /// small vertical fin, so the direction reads from above and from the side.
+    /// Unit-length aircraft silhouette along +Z, flat (seen from above like a map symbol):
+    /// slim fuselage, swept wings, tailplane, plus a low fin so it does not vanish edge-on.
     /// Every face is present in both windings, so any culling mode shows it.
     /// </summary>
-    private static Mesh BuildDartMesh()
+    private static Mesh BuildAircraftMesh()
     {
-        var vertices = new[]
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        void Polygon(params Vector3[] points)
         {
-            new Vector3(0f, 0f, 0.5f),      // 0 nose
-            new Vector3(-0.4f, 0f, -0.5f),  // 1 left wing tip
-            new Vector3(0f, 0f, -0.2f),     // 2 tail notch
-            new Vector3(0.4f, 0f, -0.5f),   // 3 right wing tip
-            new Vector3(0f, 0.2f, -0.45f),  // 4 fin top
-        };
-        int[] triangles =
-        {
-            0, 1, 2, 0, 2, 3, // wings, one side
-            0, 2, 1, 0, 3, 2, // wings, other side
-            0, 4, 2, 0, 2, 4, // fin, both sides
-        };
-        var mesh = new Mesh { name = "Flight Sim Dart" };
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
+            int start = vertices.Count;
+            vertices.AddRange(points);
+            for (int i = 1; i + 1 < points.Length; i++)
+            {
+                triangles.AddRange(new[] { start, start + i, start + i + 1, start, start + i + 1, start + i });
+            }
+        }
+        Vector3 P(float x, float z) => new Vector3(x, 0f, z);
+        // Fuselage (nose at +Z).
+        Polygon(P(0f, 0.5f), P(0.045f, 0.4f), P(0.045f, -0.36f), P(0f, -0.5f), P(-0.045f, -0.36f), P(-0.045f, 0.4f));
+        // Wings, swept back.
+        Polygon(P(0.04f, 0.14f), P(0.48f, -0.1f), P(0.48f, -0.17f), P(0.04f, -0.06f));
+        Polygon(P(-0.04f, 0.14f), P(-0.04f, -0.06f), P(-0.48f, -0.17f), P(-0.48f, -0.1f));
+        // Tailplane.
+        Polygon(P(0.03f, -0.33f), P(0.18f, -0.43f), P(0.18f, -0.48f), P(0.03f, -0.44f));
+        Polygon(P(-0.03f, -0.33f), P(-0.03f, -0.44f), P(-0.18f, -0.48f), P(-0.18f, -0.43f));
+        // Fin.
+        Polygon(new Vector3(0f, 0f, -0.28f), new Vector3(0f, 0.13f, -0.46f), new Vector3(0f, 0f, -0.48f));
+
+        var mesh = new Mesh { name = "Flight Sim Aircraft" };
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
@@ -546,7 +558,7 @@ public class FlightSimulator : MonoBehaviour
     private void UpdateInstances()
     {
         activeCount = 0;
-        Vector3 scale = Vector3.one * aircraftSize;
+        Vector3 scale = Vector3.one * (activeMode == PathMode.Trajectory ? mapAircraftSize : aircraftSize);
         Vector3 up = activeMode == PathMode.Trajectory ? mapUp : Vector3.up;
         foreach (SimFlight f in flights)
         {
