@@ -83,6 +83,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>Raised when a switch has finished (true = map).</summary>
     public event System.Action<bool> ModeChanged;
     public GeoMapProjection Projection => projection;
+    /// <summary>Radius of the map of Europe in degrees of arc (beyond it: the outer band).</summary>
+    public float MapRadiusDegrees => map != null ? map.radiusDeg : 0f;
     public int OutsideCount => outside.Count;
     public bool IsOutside(GraphNode node) => outside.Contains(node);
 

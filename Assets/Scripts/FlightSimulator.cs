@@ -13,11 +13,12 @@ using UnityEngine.Rendering;
 /// <summary>
 /// Plays flights_ectrl.json (scripts/build_flight_sim.py) on top of the graph: one
 /// small arrow per flight, moving in simulated UTC time and pointing where it flies.
-/// - Map view (GraphLoader.edgeShape = LiftedArc, geographic node positions): each
-///   aircraft follows its timed path (lat / lon / flight level) with the nodes'
-///   projection, x = lon / 18, z = lat / 18, times GraphLoader.positionScale.
-/// - Immersive view (AroundCenter, layout positions are not geographic): each
-///   aircraft flies along its graph edge arc from origin to destination, same timing.
+/// - Map view (GeoMapView): each aircraft follows its timed path (lat / lon / flight
+///   level) at its real position over the map, with the map's projection; parts beyond
+///   the map run along the outer band, to or from the airport's spot there.
+/// - 3D layout (positions are not geographic): each aircraft flies along its route's
+///   arc from origin to destination, same timing.
+/// Follows the switch between the two.
 /// Aircraft are drawn with GPU instancing (one draw call per 1023), no GameObject
 /// per flight, so hundreds of them stay cheap on Quest.
 /// Controls: B (right controller) or P = play / pause; Y (left controller) or ] =
@@ -26,11 +27,13 @@ using UnityEngine.Rendering;
 public class FlightSimulator : MonoBehaviour
 {
     public GraphLoader graph;
+    [Tooltip("Map view: aircraft fly at their real positions over it. Found in the scene if unset.")]
+    public GeoMapView geoMap;
     [Tooltip("Relative to Application.streamingAssetsPath.")]
     public string flightsFileName = "flights_ectrl.json";
 
     public enum PathMode { Auto, Trajectory, EdgeArc }
-    [Tooltip("Auto: Trajectory when the graph is the map view (edgeShape LiftedArc), EdgeArc in the immersive view.")]
+    [Tooltip("Auto: Trajectory (real positions) on the map view, EdgeArc (along the route arcs) in the 3D layout.")]
     public PathMode pathMode = PathMode.Auto;
 
     [Header("Time")]
@@ -50,8 +53,8 @@ public class FlightSimulator : MonoBehaviour
     public Color aircraftColor = new Color(1f, 0.85f, 0.25f);
     [Tooltip("Aircraft length in metres.")]
     public float aircraftSize = 0.05f;
-    [Tooltip("Map view: height of FL400 (40,000 ft) above the map, in map units (the map is 20 x 10), before positionScale.")]
-    public float cruiseHeight = 0.08f;
+    [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
+    public float mapCruiseHeight = 0.04f;
 
     [Header("Clock")]
     [Tooltip("Floating label (time, aircraft in the air, speed) that follows the viewer.")]
@@ -64,7 +67,6 @@ public class FlightSimulator : MonoBehaviour
     public Color clockColor = new Color(1f, 1f, 1f, 0.9f);
 
     private const int MaxInstancesPerCall = 1023;
-    private const float MapDegreesPerUnit = 18f;  // build_graph*.py projection
     private const float MinStepSqr = 1e-10f;
 
     /// <summary>Runtime state of one flight.</summary>
@@ -87,6 +89,8 @@ public class FlightSimulator : MonoBehaviour
     private readonly Dictionary<string, SimFlight> flightsById = new Dictionary<string, SimFlight>();
     private FlightSimData data;
     private PathMode activeMode;
+    // Map view: the map's normal (world), aircraft lie flat on it.
+    private Vector3 mapUp = Vector3.up;
     private float simTime;
     private float lastSimTime;
     private bool playing;
@@ -121,6 +125,7 @@ public class FlightSimulator : MonoBehaviour
     private void Awake()
     {
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
+        if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
         playPauseButton = new InputAction("Flight Sim Play/Pause", InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
         fasterButton = new InputAction("Flight Sim Faster", InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
     }
@@ -129,12 +134,22 @@ public class FlightSimulator : MonoBehaviour
     {
         playPauseButton.Enable();
         fasterButton.Enable();
+        if (geoMap != null) geoMap.ModeChanged += OnMapModeChanged;
     }
 
     private void OnDisable()
     {
         playPauseButton.Disable();
         fasterButton.Disable();
+        if (geoMap != null) geoMap.ModeChanged -= OnMapModeChanged;
+    }
+
+    // Map <-> 3D: paths are rebuilt for the new layout (real positions or route arcs).
+    private void OnMapModeChanged(bool onMap)
+    {
+        if (!ready) return;
+        BuildFlights();
+        ResetCursors();
     }
 
     private void OnDestroy()
@@ -214,6 +229,8 @@ public class FlightSimulator : MonoBehaviour
         if (simTime < lastSimTime) ResetCursors(); // looped or seeked back
         lastSimTime = simTime;
 
+        // While the airports fly between the 3D layout and the map, the paths do not fit either.
+        if (geoMap != null && geoMap.Switching) return;
         UpdateInstances();
         for (int start = 0; start < activeCount; start += MaxInstancesPerCall)
         {
@@ -285,11 +302,19 @@ public class FlightSimulator : MonoBehaviour
         }
     }
 
+    private bool MapShown => geoMap != null && geoMap.Ready && geoMap.IsMap;
+
     private void BuildFlights()
     {
-        activeMode = pathMode != PathMode.Auto
-            ? pathMode
-            : graph.edgeShape == GraphLoader.EdgeShape.LiftedArc ? PathMode.Trajectory : PathMode.EdgeArc;
+        flights.Clear();
+        flightsById.Clear();
+        activeMode = pathMode == PathMode.Auto ? (MapShown ? PathMode.Trajectory : PathMode.EdgeArc) : pathMode;
+        if (activeMode == PathMode.Trajectory && !MapShown)
+        {
+            Debug.LogWarning("FlightSimulator: Trajectory needs the map view (GeoMapView); flying along the route arcs instead.");
+            activeMode = PathMode.EdgeArc;
+        }
+        if (activeMode == PathMode.Trajectory) mapUp = graph.transform.TransformDirection(geoMap.Projection.normal);
 
         var arcLengths = new Dictionary<GraphEdge, float[]>();
         int malformed = 0;
@@ -334,19 +359,47 @@ public class FlightSimulator : MonoBehaviour
                   (noEdge > 0 ? $", {noEdge} without a graph edge skipped" : ""));
     }
 
-    /// <summary>Path points in the graph's local space (same projection as the nodes) and travel directions.</summary>
+    /// <summary>
+    /// Path points in the graph's local space, on the map (GeoMapView's projection), and
+    /// travel directions. Beyond the map's rim a flight runs along the outer band: from its
+    /// airport's spot there to where it enters the map (and back out the same way).
+    /// </summary>
     private void BuildTrajectory(SimFlight sim)
     {
         FlightData f = sim.data;
         int n = f.t.Length;
-        float scale = graph.positionScale;
+        GeoMapProjection proj = geoMap.Projection;
+        float radius = geoMap.MapRadiusDegrees;
+        var planar = new Vector2[n];
+        int firstOnMap = -1;
+        int lastOnMap = -1;
+        for (int i = 0; i < n; i++)
+        {
+            planar[i] = proj.Project(f.lat[i], f.lon[i]);
+            if (planar[i].magnitude > radius) continue;
+            if (firstOnMap < 0) firstOnMap = i;
+            lastOnMap = i;
+        }
+        Vector2 startSpot = EndSpot(f.origin, planar[0], radius);
+        Vector2 endSpot = EndSpot(f.destination, planar[n - 1], radius);
+        if (firstOnMap < 0)
+        {
+            // Never over the map: straight from one end's spot to the other's, in time.
+            for (int i = 0; i < n; i++) planar[i] = Vector2.Lerp(startSpot, endSpot, Progress(f.t, 0, n - 1, i));
+        }
+        else
+        {
+            Vector2 entry = Rim(planar[firstOnMap], radius);
+            Vector2 exit = Rim(planar[lastOnMap], radius);
+            for (int i = 0; i < firstOnMap; i++) planar[i] = Vector2.Lerp(startSpot, entry, Progress(f.t, 0, firstOnMap, i));
+            for (int i = lastOnMap + 1; i < n; i++) planar[i] = Vector2.Lerp(exit, endSpot, Progress(f.t, lastOnMap, n - 1, i));
+            for (int i = firstOnMap; i <= lastOnMap; i++) if (planar[i].magnitude > radius) planar[i] = Rim(planar[i], radius);
+        }
+
         sim.local = new Vector3[n];
         for (int i = 0; i < n; i++)
         {
-            sim.local[i] = new Vector3(
-                f.lon[i] / MapDegreesPerUnit,
-                f.fl[i] / 400f * cruiseHeight,
-                f.lat[i] / MapDegreesPerUnit) * scale;
+            sim.local[i] = proj.Surface(planar[i], geoMap.nodeLift + Mathf.Max(0, f.fl[i]) / 400f * mapCruiseHeight);
         }
 
         // Direction at point i: towards the next point that is somewhere else
@@ -372,6 +425,25 @@ public class FlightSimulator : MonoBehaviour
             if (sim.direction[i] == Vector3.zero) sim.direction[i] = fallback;
             else fallback = sim.direction[i];
         }
+    }
+
+    // An airport beyond the map sits on the outer band: its spot there; otherwise the point itself, kept on the map.
+    private Vector2 EndSpot(string airport, Vector2 point, float radius)
+    {
+        if (airport != null && graph.Nodes.TryGetValue(airport, out GraphNode node) && geoMap.IsOutside(node)) return geoMap.PlanarOf(node);
+        return point.magnitude > radius ? Rim(point, radius) : point;
+    }
+
+    private static Vector2 Rim(Vector2 point, float radius)
+    {
+        return point.sqrMagnitude > 1e-12f ? point.normalized * radius : point;
+    }
+
+    // Share of the time from point a to point b reached at point i.
+    private static float Progress(int[] t, int a, int b, int i)
+    {
+        float span = t[b] - t[a];
+        return span > 0f ? Mathf.Clamp01((t[i] - t[a]) / span) : 1f;
     }
 
     private GraphEdge FindEdge(string a, string b)
@@ -475,11 +547,12 @@ public class FlightSimulator : MonoBehaviour
     {
         activeCount = 0;
         Vector3 scale = Vector3.one * aircraftSize;
+        Vector3 up = activeMode == PathMode.Trajectory ? mapUp : Vector3.up;
         foreach (SimFlight f in flights)
         {
             if (simTime < f.start || simTime > f.end) continue;
             Pose(f, out Vector3 position, out Vector3 forward);
-            matrices[activeCount++] = Matrix4x4.TRS(position, Quaternion.LookRotation(forward, Vector3.up), scale);
+            matrices[activeCount++] = Matrix4x4.TRS(position, Quaternion.LookRotation(forward, up), scale);
         }
     }
 
