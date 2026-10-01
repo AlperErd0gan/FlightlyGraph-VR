@@ -6,6 +6,7 @@
  "radiusDeg": 28.026,
  "textureHalfSizeDeg": 28.526,
  "texture": "geomap_dark.png",
+ "satelliteTexture": "geomap_satellite.jpg",
  "labels": [
   {
    "name": "Belgium",
