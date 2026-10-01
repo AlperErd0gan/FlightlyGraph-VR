@@ -24,6 +24,8 @@ public class HubLabels : MonoBehaviour
     public Color color = new Color(1f, 1f, 1f, 0.85f);
     [Tooltip("Regional view: labelled airports per community.")]
     public int perCommunity = 3;
+    [Tooltip("Label size while another layout is shown (GeoMapView's map: closer, airports packed tighter).")]
+    public float layoutLabelScale = 0.35f;
 
     private readonly List<Transform> labels = new List<Transform>();
     private readonly List<Transform> anchors = new List<Transform>();
@@ -46,6 +48,7 @@ public class HubLabels : MonoBehaviour
         if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
         if (viewer == null) return;
 
+        Vector3 scale = Vector3.one * (graph.Layout != null ? layoutLabelScale : 1f);
         for (int i = 0; i < labels.Count; i++)
         {
             Transform node = anchors[i];
@@ -54,7 +57,8 @@ public class HubLabels : MonoBehaviour
             bool shown = node.gameObject.activeInHierarchy;
             if (label.gameObject.activeSelf != shown) label.gameObject.SetActive(shown);
             if (!shown) continue;
-            label.position = node.position + Vector3.up * (node.lossyScale.y * 0.5f + gap);
+            label.localScale = scale;
+            label.position = node.position + Vector3.up * (node.lossyScale.y * 0.5f + gap * scale.x);
             // TMP text reads correctly when its +Z points away from the viewer.
             Vector3 away = label.position - viewer.position;
             if (away.sqrMagnitude > 1e-6f) label.rotation = Quaternion.LookRotation(away, Vector3.up);
