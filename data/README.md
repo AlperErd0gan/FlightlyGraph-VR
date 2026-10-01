@@ -14,7 +14,6 @@ data/
     ourairports/           airports.csv, countries.csv (downloaded by build_graph_ectrl.py)
     openflights/           airports.dat, routes.dat (downloaded by build_graph.py)
     naturalearth/          country / coastline / lake GeoJSON (downloaded by build_geomap.py)
-    bluemarble/            NASA Blue Marble world image (build_geomap.py --style satellite)
   processed/               JSON for Unity (*_ectrl.json gitignored)
 ```
 
@@ -223,11 +222,6 @@ countries (French point of view: borders as France recognises them, e.g.
 Crimea in Ukraine, Cyprus undivided), 1:10m coastline and 1:50m lakes,
 downloaded from https://github.com/nvkelso/natural-earth-vector.
 
-`geomap_satellite.jpg` (`--style satellite`) is NASA's Blue Marble Next
-Generation, July 2004, with topography and bathymetry
-(https://visibleearth.nasa.gov/images/73751), reprojected the same way.
-
-**License:** both public domain; no attribution required (credit is welcome:
-Natural Earth; NASA Earth Observatory, Reto Stöckli). The map files contain no
-EUROCONTROL figures, only the map centre fitted to the airports' positions, so
-they are committed.
+**License:** public domain; no attribution required (credit is welcome). The
+map files contain no EUROCONTROL figures, only the map centre fitted to the
+airports' positions, so they are committed.

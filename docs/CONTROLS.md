@@ -141,7 +141,6 @@ you in front of the map. Starting the guided tour switches back to 3D.
 |---|---|---|---|
 | Map ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Closer look | walk / teleport to the map | same | fly camera |
-| Dark ↔ satellite map | `GeoMapView.style` in the Inspector (also while playing) | — | — |
 
 ## Guided tour (dashboard → Tour)
 
