@@ -48,7 +48,6 @@ public class CityClusters : MonoBehaviour
     {
         public string name;
         public List<GraphNode> members;   // busiest first; members[0] is the anchor
-        public Vector3[] homes;           // members' own local positions in the graph
         public List<GraphEdge> edges;     // routes touching a member
         public List<GraphEdge> inner;     // routes between two members
         public float t;                   // 0 = at home (expanded) .. 1 = gathered (collapsed)
@@ -192,7 +191,6 @@ public class CityClusters : MonoBehaviour
             {
                 name = string.IsNullOrEmpty(metro.name) ? members[0].ShortCode : metro.name,
                 members = members,
-                homes = new Vector3[members.Count],
                 edges = new List<GraphEdge>(),
                 inner = new List<GraphEdge>(),
             };
@@ -200,7 +198,6 @@ public class CityClusters : MonoBehaviour
             var edgeSet = new HashSet<GraphEdge>();
             for (int i = 0; i < members.Count; i++)
             {
-                city.homes[i] = members[i].transform.localPosition;
                 cityOf[members[i]] = city;
                 foreach (GraphEdge e in graph.EdgesOf(members[i].id))
                 {
@@ -333,12 +330,23 @@ public class CityClusters : MonoBehaviour
     /// <summary>Members between their homes (t = 0) and the anchor's home (t = 1), eased.</summary>
     private void ApplyPositions(City city)
     {
+        foreach (GraphNode m in city.members) m.transform.localPosition = Resting(city, m);
+    }
+
+    // Homes come from the graph's current layout (3D or map), so they follow a layout switch.
+    private Vector3 Resting(City city, GraphNode member)
+    {
         float s = city.t * city.t * (3f - 2f * city.t);
-        Vector3 anchorHome = city.homes[0];
-        for (int i = 0; i < city.members.Count; i++)
-        {
-            city.members[i].transform.localPosition = Vector3.Lerp(city.homes[i], anchorHome, s);
-        }
+        return Vector3.Lerp(graph.HomePosition(member), graph.HomePosition(city.Anchor), s);
+    }
+
+    /// <summary>
+    /// Where an airport rests now (local): its home in the current layout, or on the way to /
+    /// at its city's anchor while the city is (being) collapsed. Used by layout switches.
+    /// </summary>
+    public Vector3 RestingPosition(GraphNode node)
+    {
+        return cityOf.TryGetValue(node, out City city) ? Resting(city, node) : graph.HomePosition(node);
     }
 
     private void FinishIfSettled(City city)
@@ -369,7 +377,8 @@ public class CityClusters : MonoBehaviour
         if (city.label.gameObject.activeSelf != showLabel) city.label.gameObject.SetActive(showLabel);
         if (!collapsed && !showLabel) return;
 
-        Vector3 centre = graph.transform.TransformPoint(city.homes[0]);
+        // The anchor never leaves its home, so it carries the city along when the layout changes.
+        Vector3 centre = city.Anchor.transform.position;
         float size;
         if (collapsed)
         {
