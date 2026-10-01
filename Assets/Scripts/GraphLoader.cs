@@ -671,6 +671,9 @@ public class GraphLoader : MonoBehaviour
         }
 
         runtimeEdgeMaterial.name = "Graph Edges (runtime)";
+        // Before the other transparent things (panels, labels): the route mesh's centre is near
+        // the viewer, so distance sorting would draw it last, over the dashboard and info card.
+        runtimeEdgeMaterial.renderQueue = (int)RenderQueue.Transparent - 10;
         Color tint = runtimeEdgeMaterial.GetColor("_Tint");
         edgeTint = new Color(tint.r * edgeIntensity, tint.g * edgeIntensity, tint.b * edgeIntensity, tint.a);
         runtimeEdgeMaterial.SetColor("_Tint", edgeTint);
