@@ -72,3 +72,20 @@ everything else works as before.
   into one node with a ring and a "London · 6" label; their routes start there.
   Selecting it opens the city (airports fly back), selecting its label closes
   it; selecting a hidden airport (e.g. from the dashboard) opens its city.
+
+## 6. Info card, guided tour and controls
+
+Also no scene change. The info card (`GraphInfoPanel`) and the tour caption
+(`GuidedTour`) use the dashboard's look (`UIKit`). Inspector fields renamed, so
+old scene values no longer apply: `GraphInfoPanel.cardWidth` (was
+`panelWidth`), `valueUnit` / `weightUnit` (were `valueLabel` / `weightLabel`,
+now "Flights"), `GuidedTour.captionCentreHeight` (was `captionHeight`).
+
+- **Info card**: opens to the lower right of your view (`viewSideOffset`),
+  shows the airport / route / connection as tiles and lines, follows the
+  timeline's month, and has a close X.
+- **Tour**: 8 steps with a title, a progress bar, Next and Stop; step 7 opens
+  the dashboard's Controls page.
+- **Controls**: every button per panel / situation is in
+  [CONTROLS.md](CONTROLS.md); the in-app table (dashboard → Controls) comes from
+  `Assets/Scripts/UI/ControlsHelp.cs`. Keep the two in sync.

@@ -6,21 +6,22 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using UnityEngine.XR.Interaction.Toolkit.UI;
 
 /// <summary>
 /// A guided tour for demos: started from the data dashboard's Tour button, it walks a
-/// newcomer through the project in about two minutes, each step with a caption and
-/// (if a NodeNarrator is present) spoken text:
+/// newcomer through the project in about two minutes, each step with a caption card
+/// (step title, text, progress) and, if a NodeNarrator is present, spoken text:
 ///   1. what the scene shows (airports, routes, flights, period)
-///   2. the biggest hubs (selects the top airport and turns you to it)
+///   2. the biggest hub (selects the top airport and turns you to it)
 ///   3. traffic over time (dashboard Overview chart: lowest month, recovery)
-///   4. regional clusters (switches to the regional view)
-///   5. a connecting route (no direct flight, shortest route via a hub)
-///   6. how to explore on your own
+///   4. what changed (dashboard Insights: fastest / slowest recovery)
+///   5. regional clusters (switches to the regional view)
+///   6. a connecting route (no direct flight, shortest route via a hub)
+///   7. the controls (dashboard Controls page, also available any time)
+///   8. how to explore on your own
 /// Every sentence is built from the loaded data, so the tour works with any dataset;
 /// steps whose data is missing (no time axis, no clusters) are skipped.
-/// Stop any time with the Stop button on the caption.
+/// Next skips to the next step, Stop ends the tour.
 /// </summary>
 public class GuidedTour : MonoBehaviour
 {
@@ -43,8 +44,8 @@ public class GuidedTour : MonoBehaviour
 
     [Header("Caption")]
     public float captionDistance = 1.0f;
-    [Tooltip("Height of the caption relative to the eyes (m); below the gaze so the graph stays visible.")]
-    public float captionHeight = -0.38f;
+    [Tooltip("Height of the caption card's centre relative to the eyes (m); below the gaze so the graph and the info card stay visible.")]
+    public float captionCentreHeight = -0.47f;
     [Tooltip("Caption height while the dashboard is open (m), low enough not to cover its chart.")]
     public float captionHeightWithDashboard = -0.62f;
     [Tooltip("The caption lazily follows the head: it moves once you turn this many degrees away from it...")]
@@ -53,8 +54,6 @@ public class GuidedTour : MonoBehaviour
     public float followDistance = 0.35f;
     public float snapDistance = 2f;
     public float followSpeed = 3f;
-    public Color captionColor = new Color(0.06f, 0.07f, 0.1f, 0.9f);
-    public Color buttonColor = new Color(0.22f, 0.45f, 0.65f, 1f);
 
     public bool IsRunning { get; private set; }
 
@@ -68,10 +67,16 @@ public class GuidedTour : MonoBehaviour
 
     private delegate string StepAction();
 
+    private static readonly Vector2 CaptionSize = new Vector2(940f, 252f);
+    private const float CaptionPad = 28f;
+
     private Coroutine running;
     private Canvas caption;
     private TextMeshProUGUI captionText;
     private TextMeshProUGUI stepText;
+    private TextMeshProUGUI titleText;
+    private readonly List<Image> progress = new List<Image>();
+    private bool skipRequested;
     private GraphViewMode.ViewMode modeBefore;
     private bool following;
     // XRI teleport interactors (thumbstick teleport) switched off during the tour.
@@ -119,6 +124,12 @@ public class GuidedTour : MonoBehaviour
         if (IsRunning) Finish();
     }
 
+    /// <summary>Ends the current step now (stops its narration) and goes on to the next one.</summary>
+    public void NextStep()
+    {
+        if (IsRunning) skipRequested = true;
+    }
+
     // ---- Flow ------------------------------------------------------------
 
     private IEnumerator Run()
@@ -132,7 +143,11 @@ public class GuidedTour : MonoBehaviour
         graph.SetPeriod(-1); // the tour talks about all months together
         if (viewMode != null && viewMode.Mode != GraphViewMode.ViewMode.TopRoutes) viewMode.Apply(GraphViewMode.ViewMode.TopRoutes, false);
 
-        var steps = new List<StepAction> { Intro, Hubs, TrafficOverTime, Insights, Clusters, ConnectingRoute, Outro };
+        var steps = new List<(string title, StepAction action)>
+        {
+            ("Welcome", Intro), ("The biggest hub", Hubs), ("Traffic over time", TrafficOverTime), ("What changed", Insights),
+            ("Clusters", Clusters), ("A connecting route", ConnectingRoute), ("Controls", Controls), ("Your turn", Outro),
+        };
         int total = steps.Count;
         for (int i = 0; i < steps.Count; i++)
         {
@@ -141,19 +156,19 @@ public class GuidedTour : MonoBehaviour
             string text;
             try
             {
-                text = steps[i]();
+                text = steps[i].action();
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"GuidedTour: step {i + 1} ({steps[i].Method.Name}) failed: {ex}");
+                Debug.LogError($"GuidedTour: step {i + 1} ({steps[i].action.Method.Name}) failed: {ex}");
                 text = null;
             }
             if (string.IsNullOrEmpty(text))
             {
-                Debug.Log($"GuidedTour: step {i + 1} ({steps[i].Method.Name}) skipped");
+                Debug.Log($"GuidedTour: step {i + 1} ({steps[i].action.Method.Name}) skipped");
                 continue;
             }
-            yield return Say(text, i + 1, total);
+            yield return Say(steps[i].title, text, i + 1, total);
         }
         Finish();
         running = null;
@@ -174,10 +189,11 @@ public class GuidedTour : MonoBehaviour
         if (caption != null) caption.gameObject.SetActive(false);
     }
 
-    /// <summary>Shows the caption, speaks it and waits until the speech is over (or an estimate of it).</summary>
-    private IEnumerator Say(string text, int step, int total)
+    /// <summary>Shows the caption, speaks it and waits until the speech is over (or an estimate of it), or Next.</summary>
+    private IEnumerator Say(string title, string text, int step, int total)
     {
-        ShowCaption(text, step, total);
+        skipRequested = false;
+        ShowCaption(title, text, step, total);
         if (narrator != null) narrator.SpeakText(text, caption.transform.position);
 
         float start = Time.time;
@@ -187,6 +203,13 @@ public class GuidedTour : MonoBehaviour
         float startedAt = -1f;
         while (Time.time - start < maxStepSeconds)
         {
+            if (skipRequested)
+            {
+                if (narrator != null) narrator.Stop();
+                Debug.Log($"GuidedTour: step {step}/{total} skipped with Next after {Time.time - start:F1} s");
+                skipRequested = false;
+                yield break;
+            }
             float elapsed = Time.time - start;
             bool? speaking = narrator != null ? narrator.IsSpeaking : null;
             if (speaking == true && !started)
@@ -202,7 +225,9 @@ public class GuidedTour : MonoBehaviour
         }
         Debug.Log($"GuidedTour: step {step}/{total} took {Time.time - start:F1} s " +
                   (started ? $"(speech started after {startedAt:F1} s)" : "(no speech detected)"));
-        yield return new WaitForSeconds(pauseBetweenSteps);
+        float pauseEnd = Time.time + pauseBetweenSteps;
+        while (Time.time < pauseEnd && !skipRequested) yield return null;
+        skipRequested = false;
     }
 
     // ---- Steps (each returns its sentence, or null to skip) ----------------
@@ -324,10 +349,20 @@ public class GuidedTour : MonoBehaviour
         return $"No direct flight from {Name(hub)} to {Name(target)}. The shortest way is via {SpokenList(via, via.Count)}.";
     }
 
+    private string Controls()
+    {
+        if (dashboard == null) return null;
+        selector.ClearSelection();
+        dashboard.OpenTab(DataDashboard.Tab.Controls);
+        return "Here are all the controls. Point and press the trigger to select; hold it on a second airport for the route. " +
+               "You find this page any time in the dashboard, under Controls.";
+    }
+
     private string Outro()
     {
         ClearScene();
-        return "Your turn: point at an airport and press the trigger. The left menu button opens the dashboard.";
+        return "Your turn: point at an airport and press the trigger. The left menu button opens the dashboard; " +
+               "its Timeline button plays the months.";
     }
 
     // ---- Helpers ---------------------------------------------------------
@@ -449,53 +484,66 @@ public class GuidedTour : MonoBehaviour
 
     private Vector3 CaptionTarget(Transform head, Vector3 forward)
     {
-        float height = dashboard != null && dashboard.IsOpen ? captionHeightWithDashboard : captionHeight;
+        float height = dashboard != null && dashboard.IsOpen ? captionHeightWithDashboard : captionCentreHeight;
         return head.position + forward * captionDistance + Vector3.up * height;
     }
 
     // ---- Caption ---------------------------------------------------------
 
+    /// <summary>Caption card in the dashboard's look: tag, step title, text, Next / Stop, progress bar.</summary>
     private void BuildCaption()
     {
-        var root = new GameObject("GuidedTour Caption", typeof(RectTransform));
-        caption = root.AddComponent<Canvas>();
-        caption.renderMode = RenderMode.WorldSpace;
-        root.AddComponent<TrackedDeviceGraphicRaycaster>();
-        root.AddComponent<GraphicRaycaster>();
-        var rootRect = (RectTransform)root.transform;
-        rootRect.sizeDelta = new Vector2(900f, 230f);
-        rootRect.localScale = Vector3.one * 0.001f; // 1000 units = 1 m
+        UIKit.EnsureXREventSystem();
+        caption = UIKit.WorldCanvas("GuidedTour Caption", CaptionSize);
+        Transform root = caption.transform;
+        Image background = UIKit.Box(root, "Background", UIKit.PanelColor, UIKit.PanelRadius);
+        UIKit.Stretch(background.rectTransform);
 
-        Image background = NewRect<Image>("Background", rootRect, 0, 0, 900, 230);
-        background.color = captionColor;
+        float w = CaptionSize.x - 2f * CaptionPad;
+        stepText = UIKit.Text(root, "", 14f, UIKit.AccentColor, CaptionPad, 24f, 520f, 22f);
+        stepText.fontStyle = FontStyles.Bold;
+        stepText.characterSpacing = 10f;
+        titleText = UIKit.Text(root, "", 30f, UIKit.TextColor, CaptionPad, 50f, w - 290f, 40f);
+        titleText.fontStyle = FontStyles.Bold;
+        captionText = UIKit.Text(root, "", 22f, UIKit.TextColor, CaptionPad, 100f, w, 110f);
+        captionText.lineSpacing = 4f;
+        captionText.overflowMode = TextOverflowModes.Overflow;
 
-        stepText = NewRect<TextMeshProUGUI>("Step", rootRect, 24, 14, 400, 30);
-        stepText.fontSize = 20;
-        stepText.color = new Color(1f, 1f, 1f, 0.6f);
-        stepText.raycastTarget = false;
-
-        captionText = NewRect<TextMeshProUGUI>("Text", rootRect, 24, 46, 852, 170);
-        captionText.fontSize = 24;
-        captionText.color = Color.white;
-        captionText.textWrappingMode = TextWrappingModes.Normal;
-        captionText.raycastTarget = false;
-
-        Image stopImage = NewRect<Image>("Stop", rootRect, 900 - 24 - 150, 10, 150, 40);
-        stopImage.color = buttonColor;
-        Button stop = stopImage.gameObject.AddComponent<Button>();
-        stop.targetGraphic = stopImage;
-        stop.onClick.AddListener(StopTour);
-        TextMeshProUGUI stopText = NewRect<TextMeshProUGUI>("Label", stopImage.rectTransform, 0, 0, 150, 40);
-        stopText.text = "Stop tour";
-        stopText.fontSize = 20;
-        stopText.alignment = TextAlignmentOptions.Center;
-        stopText.raycastTarget = false;
+        float right = CaptionSize.x - CaptionPad;
+        UIKit.Button(root, "Stop", StopTour, right - 120f, 22f, 120f, 46f, UIKit.ButtonStyle.Ghost, UIKit.SmallSize, UIIcon.Shape.Close);
+        UIKit.Button(root, "Next", NextStep, right - 120f - 10f - 136f, 22f, 136f, 46f, UIKit.ButtonStyle.Secondary,
+                     UIKit.SmallSize, UIIcon.Shape.Next);
     }
 
-    private void ShowCaption(string text, int step, int total)
+    /// <summary>One bar segment per step: done = accent, current = highlight, upcoming = faint.</summary>
+    private void UpdateProgress(int step, int total)
     {
-        stepText.text = $"Guided tour  {step} / {total}";
+        if (progress.Count != total)
+        {
+            foreach (Image image in progress) Destroy(image.gameObject);
+            progress.Clear();
+            const float gap = 6f;
+            float w = CaptionSize.x - 2f * CaptionPad;
+            float segment = (w - gap * (total - 1)) / total;
+            for (int i = 0; i < total; i++)
+            {
+                Image bar = UIKit.Box(caption.transform, "Progress " + (i + 1), Color.white, 3f);
+                UIKit.Place(bar.rectTransform, CaptionPad + i * (segment + gap), CaptionSize.y - 26f, segment, 6f);
+                progress.Add(bar);
+            }
+        }
+        for (int i = 0; i < total; i++)
+        {
+            progress[i].color = i + 1 < step ? UIKit.AccentColor : i + 1 == step ? UIKit.HighlightColor : new Color(1f, 1f, 1f, 0.14f);
+        }
+    }
+
+    private void ShowCaption(string title, string text, int step, int total)
+    {
+        stepText.text = "GUIDED TOUR  ·  STEP " + step + " OF " + total;
+        titleText.text = title;
         captionText.text = text;
+        UpdateProgress(step, total);
         Camera cam = Camera.main;
         if (cam != null)
         {
@@ -508,19 +556,5 @@ public class GuidedTour : MonoBehaviour
             caption.worldCamera = cam;
         }
         caption.gameObject.SetActive(true);
-    }
-
-    /// <summary>Child UI element of type T, placed from the parent's top-left corner (y down).</summary>
-    private static T NewRect<T>(string name, RectTransform parent, float x, float y, float w, float h) where T : Component
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-        var rt = (RectTransform)go.transform;
-        rt.anchorMin = new Vector2(0f, 1f);
-        rt.anchorMax = new Vector2(0f, 1f);
-        rt.pivot = new Vector2(0f, 1f);
-        rt.anchoredPosition = new Vector2(x, -y);
-        rt.sizeDelta = new Vector2(w, h);
-        return go.AddComponent<T>();
     }
 }

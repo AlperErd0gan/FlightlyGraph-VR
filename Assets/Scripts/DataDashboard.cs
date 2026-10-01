@@ -72,7 +72,7 @@ public class DataDashboard : MonoBehaviour
     public AudioClip closeSound;
     [Range(0f, 1f)] public float soundVolume = 0.5f;
 
-    public enum Tab { Overview, Insights, Airports, Routes, TrafficMix, Clusters, Selected, Find, Filters }
+    public enum Tab { Overview, Insights, Airports, Routes, TrafficMix, Clusters, Selected, Find, Filters, Controls }
     private enum FindSort { Name, Country, Traffic }
 
     // Layout (canvas units, 1000 = 1 m). Fixed on purpose: the panel is designed as a whole.
@@ -84,7 +84,7 @@ public class DataDashboard : MonoBehaviour
     private const int FindRowsPerPage = 9;
 
     private static readonly Tab[] ExploreTabs = { Tab.Overview, Tab.Insights, Tab.Airports, Tab.Routes, Tab.TrafficMix, Tab.Clusters };
-    private static readonly Tab[] ToolTabs = { Tab.Selected, Tab.Find, Tab.Filters };
+    private static readonly Tab[] ToolTabs = { Tab.Selected, Tab.Find, Tab.Filters, Tab.Controls };
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly string[] MonthShort = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
@@ -292,7 +292,7 @@ public class DataDashboard : MonoBehaviour
         datasetText = UIKit.Text(root, "", 17f, UIKit.MutedTextColor, Pad, Pad + 44f, SideWidth - Pad - 10f, 70f);
         datasetText.lineSpacing = -8f;
 
-        float y = 150f;
+        float y = 146f;
         y = NavGroup(root, "EXPLORE", ExploreTabs, y);
         NavGroup(root, "TOOLS", ToolTabs, y + 10f);
         if (timeline != null)
@@ -332,7 +332,7 @@ public class DataDashboard : MonoBehaviour
         foreach (Tab tab in tabs)
         {
             Tab t = tab;
-            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 40f,
+            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 38f,
                                          UIKit.ButtonStyle.Ghost, UIKit.BodySize);
             TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
             label.alignment = TextAlignmentOptions.Left;
@@ -344,7 +344,7 @@ public class DataDashboard : MonoBehaviour
             indicator.rectTransform.sizeDelta = new Vector2(4f, 0f);
             indicator.rectTransform.anchoredPosition = new Vector2(6f, 0f);
             nav[tab] = new NavItem { button = button, indicator = indicator, label = label };
-            y += 42f;
+            y += 40f;
         }
         return y;
     }
@@ -387,6 +387,7 @@ public class DataDashboard : MonoBehaviour
             case Tab.Selected: return pinned != null ? "Two airports side by side" : "Charts of the airport you selected";
             case Tab.Find: return "Pick an airport to select it and turn towards it";
             case Tab.Filters: return "Show part of the network; airports outside it are dimmed";
+            case Tab.Controls: return "Every control in the headset and in the Editor (also in docs/CONTROLS.md)";
             default: return "";
         }
     }
@@ -422,7 +423,24 @@ public class DataDashboard : MonoBehaviour
             case Tab.Selected: BuildSelected(); break;
             case Tab.Find: BuildFind(); break;
             case Tab.Filters: BuildFilters(); break;
+            case Tab.Controls: BuildControls(); break;
         }
+    }
+
+    // ---- Controls ------------------------------------------------------
+
+    private void BuildControls()
+    {
+        var rows = new List<string[]>();
+        string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
+        foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+        {
+            rows.Add(row.IsSection
+                ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
+                : new[] { row.action, row.controller, row.hands, row.editor });
+        }
+        Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
+              31f, 17f);
     }
 
     private float W => content.rect.width;
@@ -1325,7 +1343,7 @@ public class DataDashboard : MonoBehaviour
     /// Returns the y below the table.
     /// </summary>
     private float Table(float x, float y, float w, string[] headers, float[] columns, List<string[]> rows, List<UnityAction> actions,
-                        float rowHeight = RowHeight)
+                        float rowHeight = RowHeight, float fontSize = 19f)
     {
         float height = 34f + rows.Count * rowHeight + 10f;
         UIKit.Card(content, x, y, w, height);
@@ -1359,7 +1377,7 @@ public class DataDashboard : MonoBehaviour
             {
                 float cx = offsetX + columns[c] * inner;
                 float cw = (c + 1 < columns.Length ? columns[c + 1] : 1f) * inner - columns[c] * inner;
-                TextMeshProUGUI cell = UIKit.Text(parent, rows[r][c], 19f, UIKit.TextColor, cx + 8f, offsetY + 3f, cw - 8f, rowHeight - 4f,
+                TextMeshProUGUI cell = UIKit.Text(parent, rows[r][c], fontSize, UIKit.TextColor, cx + 8f, offsetY + 3f, cw - 8f, rowHeight - 4f,
                                                   TextAlignmentOptions.Left);
                 cell.textWrappingMode = TextWrappingModes.NoWrap;
             }
