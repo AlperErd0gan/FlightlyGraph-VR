@@ -110,8 +110,12 @@ public class GraphLoader : MonoBehaviour
     private GameObject edgesObject;
     private Mesh edgeMesh;
     private Material runtimeEdgeMaterial;
+    private Vector3[] edgeVertices;
+    private Vector3[] edgeDirections;
     private Vector2[] edgeUVs;
     private Color32[] edgeColors;
+    // Edges kept hidden whatever the filter or selection (RebuildEdges callers, e.g. inside a collapsed city).
+    private readonly HashSet<GraphEdge> suppressedEdges = new HashSet<GraphEdge>();
     private int builtSegments;
     private bool edgesDirty;
 
@@ -152,6 +156,9 @@ public class GraphLoader : MonoBehaviour
     /// <summary>Raised after SetPeriod has restyled the graph.</summary>
     public event System.Action PeriodChanged;
     public int PeriodCount => HasTimeAxis ? Meta.periods.Length : 0;
+    // Size scales of the current view, set by ApplyNodeStyle (see ShownValue).
+    private float periodScale = 1f;
+    private float segmentScale = 1f;
     /// <summary>Days in the current view: the month's length, or the whole time axis (0 without one).</summary>
     public int CurrentDays => !HasTimeAxis ? 0 : HasPeriod ? Meta.periodDays[Period] : Meta.days;
 
@@ -452,27 +459,20 @@ public class GraphLoader : MonoBehaviour
         int verticesPerEdge = pointsPerEdge * 2;
         int vertexCount = edgeInstances.Count * verticesPerEdge;
 
-        var vertices = new Vector3[vertexCount];
-        var directions = new Vector3[vertexCount];
+        edgeVertices = new Vector3[vertexCount];
+        edgeDirections = new Vector3[vertexCount];
         var indices = new int[edgeInstances.Count * builtSegments * 6];
         edgeUVs = new Vector2[vertexCount];
         edgeColors = new Color32[vertexCount];
 
-        int vi = 0;
         int ii = 0;
         foreach (GraphEdge e in edgeInstances)
         {
-            int first = vi;
-            for (int p = 0; p < pointsPerEdge; p++)
+            int first = e.index * verticesPerEdge;
+            WriteEdgeGeometry(e);
+            for (int v = first; v < first + verticesPerEdge; v++)
             {
-                Vector3 direction = e.points[Mathf.Min(p + 1, pointsPerEdge - 1)] - e.points[Mathf.Max(p - 1, 0)];
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    vertices[vi] = e.points[p];
-                    directions[vi] = direction;
-                    edgeUVs[vi] = new Vector2(side, 0f);
-                    vi++;
-                }
+                edgeUVs[v] = new Vector2((v - first) % 2 == 0 ? -1f : 1f, 0f);
             }
             for (int seg = 0; seg < builtSegments; seg++)
             {
@@ -490,16 +490,12 @@ public class GraphLoader : MonoBehaviour
         edgeMesh = new Mesh { name = "Graph Edges" };
         edgeMesh.indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
         edgeMesh.MarkDynamic();
-        edgeMesh.vertices = vertices;
-        edgeMesh.normals = directions;
+        edgeMesh.vertices = edgeVertices;
+        edgeMesh.normals = edgeDirections;
         edgeMesh.SetUVs(0, edgeUVs);
         edgeMesh.colors32 = edgeColors;
         edgeMesh.SetIndices(indices, MeshTopology.Triangles, 0);
-        edgeMesh.RecalculateBounds();
-        // Ribbons are widened in the shader, beyond the centre-line bounds.
-        Bounds bounds = edgeMesh.bounds;
-        bounds.Expand(1f);
-        edgeMesh.bounds = bounds;
+        UpdateEdgeBounds();
 
         edgesObject = new GameObject("Edges (GraphLoader)");
         edgesObject.AddComponent<MeshFilter>().sharedMesh = edgeMesh;
@@ -511,6 +507,80 @@ public class GraphLoader : MonoBehaviour
         meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 
         edgesDirty = true;
+    }
+
+    /// <summary>Writes an edge's centre-line points and directions into the mesh arrays (2 vertices per point).</summary>
+    private void WriteEdgeGeometry(GraphEdge e)
+    {
+        int pointsPerEdge = builtSegments + 1;
+        int vi = e.index * pointsPerEdge * 2;
+        for (int p = 0; p < pointsPerEdge; p++)
+        {
+            Vector3 direction = e.points[Mathf.Min(p + 1, pointsPerEdge - 1)] - e.points[Mathf.Max(p - 1, 0)];
+            edgeVertices[vi] = edgeVertices[vi + 1] = e.points[p];
+            edgeDirections[vi] = edgeDirections[vi + 1] = direction;
+            vi += 2;
+        }
+    }
+
+    private void UpdateEdgeBounds()
+    {
+        edgeMesh.RecalculateBounds();
+        // Ribbons are widened in the shader, beyond the centre-line bounds.
+        Bounds bounds = edgeMesh.bounds;
+        bounds.Expand(1f);
+        edgeMesh.bounds = bounds;
+    }
+
+    /// <summary>
+    /// Recomputes the arcs of `edges` from their airports' current positions and updates
+    /// the mesh: call it after moving airports at runtime (e.g. CityClusters gathering a
+    /// city's airports in one spot). GraphEdge.points follow, so picking stays right.
+    /// </summary>
+    public void RebuildEdges(IEnumerable<GraphEdge> edges)
+    {
+        if (edgeMesh == null) return;
+        bool any = false;
+        foreach (GraphEdge e in edges)
+        {
+            FillArc(nodeInstances[e.sourceId].transform.position, nodeInstances[e.targetId].transform.position, e.points);
+            for (int i = 0; i < e.points.Length; i++)
+            {
+                if (e.points[i].y < minEdgeHeight) e.points[i].y = minEdgeHeight;
+            }
+            WriteEdgeGeometry(e);
+            any = true;
+        }
+        if (!any) return;
+        edgeMesh.vertices = edgeVertices;
+        edgeMesh.normals = edgeDirections;
+        UpdateEdgeBounds();
+    }
+
+    /// <summary>
+    /// Keeps edges hidden whatever the filter or the selection (e.g. routes inside a
+    /// collapsed city, whose airports sit in one spot), or shows them again.
+    /// </summary>
+    public void SetEdgesSuppressed(IEnumerable<GraphEdge> edges, bool suppressed)
+    {
+        foreach (GraphEdge e in edges)
+        {
+            if (suppressed) suppressedEdges.Add(e);
+            else suppressedEdges.Remove(e);
+        }
+        ApplyEdgeFilter();
+    }
+
+    /// <summary>Traffic that sets an airport's size in the current view (month, segment), on the all-months scale.</summary>
+    public float ShownValue(GraphNode node)
+    {
+        return DisplayValue(node) * periodScale * segmentScale;
+    }
+
+    /// <summary>Sphere diameter for a shown value (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).</summary>
+    public float NodeSize(float shownValue)
+    {
+        return nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0f, shownValue));
     }
 
     /// <summary>Runtime copy of the ribbon material with edgeIntensity applied to _Tint.</summary>
@@ -813,6 +883,7 @@ public class GraphLoader : MonoBehaviour
 
     public bool PassesFilter(GraphEdge edge)
     {
+        if (suppressedEdges.Count > 0 && suppressedEdges.Contains(edge)) return false;
         if (!HasFilter && !HasPeriod) return true;
         int weight = FilteredWeight(edge);
         if (weight <= 0 || !AtLeast(weight, FilterMinWeight)) return false;
@@ -851,9 +922,9 @@ public class GraphLoader : MonoBehaviour
         // One month is scaled to the whole time axis (flights per day x all days), so an
         // airport at its average level is as big as in the all-months view and the COVID
         // months visibly shrink.
-        float periodScale = HasPeriod ? (float)Meta.days / Mathf.Max(1, Meta.periodDays[Period]) : 1f;
+        periodScale = HasPeriod ? (float)Meta.days / Mathf.Max(1, Meta.periodDays[Period]) : 1f;
         // With a segment, its biggest airport (all months) is as big as the biggest overall.
-        float segmentScale = 1f;
+        segmentScale = 1f;
         if (FilterSegment != null)
         {
             int maxSegment = 1;
@@ -865,8 +936,7 @@ public class GraphLoader : MonoBehaviour
         }
         foreach (GraphNode node in nodeInstances.Values)
         {
-            float shown = DisplayValue(node) * periodScale * segmentScale;
-            node.transform.localScale = Vector3.one * (nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(shown));
+            node.transform.localScale = Vector3.one * NodeSize(ShownValue(node));
 
             Color color = NodeColor(node.value, node.community);
             if (!NodeInFocus(node))

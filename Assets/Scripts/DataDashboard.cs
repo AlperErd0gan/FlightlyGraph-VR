@@ -37,6 +37,8 @@ public class DataDashboard : MonoBehaviour
     public GuidedTour tour;
     [Tooltip("Timeline (time slider) opened from the sidebar. Found in the scene if unset; added to this object if the scene has none.")]
     public TimelinePanel timeline;
+    [Tooltip("City grouping (several airports of one city as one node), switched on the Clusters page. Found in the scene if unset; added to this object if the scene has none.")]
+    public CityClusters cityClusters;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport (Find, Airports, Insights) turns you (the XR Origin) to face it.")]
@@ -120,6 +122,8 @@ public class DataDashboard : MonoBehaviour
         if (infoPanel == null) infoPanel = FindFirstObjectByType<GraphInfoPanel>();
         if (timeline == null) timeline = FindFirstObjectByType<TimelinePanel>();
         if (timeline == null) timeline = gameObject.AddComponent<TimelinePanel>();
+        if (cityClusters == null) cityClusters = FindFirstObjectByType<CityClusters>();
+        if (cityClusters == null) cityClusters = gameObject.AddComponent<CityClusters>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
         toggleAction.AddBinding("<XRController>{LeftHand}/{MenuButton}");
@@ -379,7 +383,7 @@ public class DataDashboard : MonoBehaviour
             case Tab.Airports: return "Busiest airports in the current view · tap a row to go there";
             case Tab.Routes: return "Busiest routes in the current view · tap a row to show it";
             case Tab.TrafficMix: return "Market segments and hours of the day";
-            case Tab.Clusters: return "Groups of airports that mostly fly to each other (Louvain communities)";
+            case Tab.Clusters: return "Groups of airports that mostly fly to each other, and airports of one city";
             case Tab.Selected: return pinned != null ? "Two airports side by side" : "Charts of the airport you selected";
             case Tab.Find: return "Pick an airport to select it and turn towards it";
             case Tab.Filters: return "Show part of the network; airports outside it are dimmed";
@@ -675,12 +679,29 @@ public class DataDashboard : MonoBehaviour
         }
         float y = Table(0f, 0f, W, new[] { "Cluster", "Biggest airports", "Airports", "Traffic" },
                         new[] { 0f, 0.14f, 0.64f, 0.82f }, rows, null);
-        BarsCard(shares, names, 0f, y + 12f, W * 0.62f, H - y - 12f);
+        BarsCard(shares, names, 0f, y + 12f, W * 0.6f, H - y - 12f);
+
+        // Right column: view mode and city groups.
+        float bx = W * 0.6f + 18f;
+        float bw = W - bx;
         bool regional = graph.RegionalView;
-        float bx = W * 0.62f + 18f;
-        Body(regional ? "The graph shows the regional view." : "The graph shows the top routes.", bx, y + 24f, W - bx, 60f);
-        UIKit.Button(content, regional ? "Show top routes" : "Show regional view", ToggleView, bx, y + 84f, W - bx, 52f,
-                     UIKit.ButtonStyle.Primary, UIKit.BodySize, UIIcon.Shape.Grid);
+        Heading("View", bx, y + 14f, bw);
+        UIKit.Text(content, regional ? "Regional clusters are shown." : "The top routes are shown.", UIKit.SmallSize, UIKit.MutedTextColor,
+                   bx, y + 44f, bw, 26f);
+        UIKit.Button(content, regional ? "Show top routes" : "Show regional view", ToggleView, bx, y + 74f, bw, 48f,
+                     regional ? UIKit.ButtonStyle.Secondary : UIKit.ButtonStyle.Primary, UIKit.SmallSize, UIIcon.Shape.Grid);
+
+        if (cityClusters != null && cityClusters.CityCount > 0)
+        {
+            bool grouped = cityClusters.Grouped;
+            Heading("City groups", bx, y + 146f, bw);
+            UIKit.Text(content, cityClusters.CityCount + " cities have several airports: " + cityClusters.Summary(6) +
+                                (grouped ? ". Tap a city to open it, its label to close it." : "."),
+                       15f, UIKit.MutedTextColor, bx, y + 176f, bw, 84f);
+            UIKit.Button(content, grouped ? "Show single airports" : "Group cities",
+                         () => { cityClusters.SetGrouped(!cityClusters.Grouped); Show(Tab.Clusters); },
+                         bx, y + 264f, bw, 48f, grouped ? UIKit.ButtonStyle.Secondary : UIKit.ButtonStyle.Primary, UIKit.SmallSize);
+        }
     }
 
     private void ToggleView()

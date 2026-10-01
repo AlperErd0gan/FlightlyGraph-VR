@@ -50,6 +50,10 @@ public class HubLabels : MonoBehaviour
         {
             Transform node = anchors[i];
             Transform label = labels[i];
+            // Airports hidden inside a collapsed city group (CityClusters) have no label.
+            bool shown = node.gameObject.activeInHierarchy;
+            if (label.gameObject.activeSelf != shown) label.gameObject.SetActive(shown);
+            if (!shown) continue;
             label.position = node.position + Vector3.up * (node.lossyScale.y * 0.5f + gap);
             // TMP text reads correctly when its +Z points away from the viewer.
             Vector3 away = label.position - viewer.position;

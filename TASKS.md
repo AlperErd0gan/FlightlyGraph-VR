@@ -22,7 +22,7 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] X2: MapPlane.cs + NASA Blue Marble texture; build_graph.py projection fixed to 2:1 (z = lat/18), lat/lon exported
 - [x] X3: GraphLoader — sqrt node sizing, value colour gradient, arced edges, GraphNode/GraphEdge metadata
 - [x] X4: GraphSelector.cs — click node (raycast) / edge (screen-space pick); highlight incident edges, dim rest; Esc clears
-- [ ] X5: Same-city clustering — collapse airports sharing a city (e.g. LHR/LGW/STN -> "London") into one cluster node; click expands to member airports, click again collapses. Needs `city` in nodes.json (build_graph.py A_CITY column), cluster edge aggregation (sum weights), and GraphSelector expand/collapse state.
+- [x] X5: Same-city clustering — done as CityClusters (IATA multi-airport cities by ICAO code, not the `city` text: CDG / MXP list municipalities); collapse / expand animated, routes follow; dashboard Clusters page or C. Original note: — collapse airports sharing a city (e.g. LHR/LGW/STN -> "London") into one cluster node; click expands to member airports, click again collapses. Needs `city` in nodes.json (build_graph.py A_CITY column), cluster edge aggregation (sum weights), and GraphSelector expand/collapse state.
 - [x] X6: Edge weight threshold — done as the dashboard's Filters tab (minimum flights per route, plus segment / country)
 - [x] X7: World-space info panel for the selection (GraphInfoPanel: follows the view, city / country, routes, clusters)
 
@@ -31,9 +31,11 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] V2: Immersive 3D layout (layout_3d.py: force-directed on a 3-8 m shell, Louvain communities); edges arc around the viewer and touch the floor tangentially at most
 - [x] V3: All edges in one mesh (EdgeRibbon shader), shared node materials, runtime assets cleaned up
 - [x] V4: XR input: select with trigger / pinch, hold-to-connect routes (ConnectionFinder, A / X), hand teleport, input ignored over UI
-- [x] V5: View modes (top routes / regional clusters), rank colour scale, hub labels
+- [x] V5: View modes (top routes / regional clusters), rank colour scale, hub labels — toggle moved from B / Y to one button, L3 (GraphViewMode.toggleBinding)
 - [x] V6: Data dashboard (left menu button): overview chart, top airports / routes, traffic mix, clusters, selected airport, Find list (turns you to the airport), Filters, pinned comparison; follows the user, UI sounds
 - [x] V7: Spoken narration via Meta Voice SDK / Wit.ai (NodeNarrator) and a guided tour (GuidedTour: 6 data-driven steps, input locked while it runs)
+- [x] V8: Timeline (TimelinePanel + GraphLoader.SetPeriod): month slider over the 68 months with play / step / speed / all months; sizes, routes, selection, info panel and dashboard lists follow the month
+- [x] V9: Dashboard redesign: sidebar navigation (Explore / Tools), page titles, cards, KPI tiles, tables with clickable rows, shared UIKit look (rounded boxes, hover colours, icons)
 
 ## Backlog
 - [ ] B1: 3D view of the selected airport ("Fly to airport"). Options, pick by target platform:

@@ -36,6 +36,11 @@ public class GraphSelector : MonoBehaviour
     public event Action<IReadOnlyList<GraphNode>, IReadOnlyList<GraphEdge>> PathSelected;
     /// <summary>Desktop: Shift+click on a second node asks for the connection (handled by ConnectionFinder).</summary>
     public event Action<GraphNode, GraphNode> ConnectionRequested;
+    /// <summary>
+    /// Desktop: a click hit a collider; a handler returns true if it used the click
+    /// (e.g. CityClusters' city nodes, which are not GraphNodes).
+    /// </summary>
+    public event Func<Collider, bool> ColliderClicked;
 
     public GraphNode SelectedNode => selectedNode;
     public GraphEdge SelectedEdge => selectedEdge;
@@ -111,6 +116,7 @@ public class GraphSelector : MonoBehaviour
         Ray ray = targetCamera.ScreenPointToRay(screenPos);
         if (Physics.Raycast(ray, out RaycastHit hit, maxRayDistance))
         {
+            if (ColliderClicked != null && ColliderClicked(hit.collider)) return;
             GraphNode node = hit.collider.GetComponent<GraphNode>();
             if (node != null)
             {
