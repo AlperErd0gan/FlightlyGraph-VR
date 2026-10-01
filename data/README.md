@@ -218,9 +218,11 @@ extras_meta_ectrl.json:  { source, files, graph, flightsOnEdges, edgesWithFlight
 
 `data/processed/geomap.json` and `geomap_dark.png` (scripts/build_geomap.py) are
 drawn from [Natural Earth](https://www.naturalearthdata.com/) 1:10m admin-0
-countries (French point of view: borders as France recognises them, e.g.
-Crimea in Ukraine, Cyprus undivided), 1:10m coastline and 1:50m lakes,
-downloaded from https://github.com/nvkelso/natural-earth-vector.
+countries, Turkish point of view as chosen for the project (Crimea in Ukraine;
+Northern Cyprus and Kosovo shown; the Golan Heights in Syria), with the
+Morocco / Western Sahara line at 27°40′N added (that view draws them as one;
+`SPLIT_LINES` in the script), 1:10m coastline and 1:50m lakes, downloaded from
+https://github.com/nvkelso/natural-earth-vector.
 
 **License:** public domain; no attribution required (credit is welcome). The
 map files contain no EUROCONTROL figures, only the map centre fitted to the

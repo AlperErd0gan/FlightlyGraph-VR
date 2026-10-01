@@ -1,6 +1,6 @@
 {
  "projection": "azimuthal equidistant; x east, y north, degrees of arc from the centre",
- "source": "Natural Earth (public domain): 1:10m admin-0 countries (French point of view), 1:10m coastline, 1:50m lakes",
+ "source": "Natural Earth (public domain): 1:10m admin-0 countries (Turkish point of view, Morocco / Western Sahara line at 27 deg 40' N added), 1:10m coastline, 1:50m lakes",
  "centerLat": 44.1786,
  "centerLon": 8.8022,
  "radiusDeg": 28.026,
@@ -197,6 +197,12 @@
    "name": "Switzerland",
    "x": -0.918,
    "y": 2.548,
+   "rank": 4
+  },
+  {
+   "name": "W. Sahara",
+   "x": -20.113,
+   "y": -17.504,
    "rank": 4
   },
   {

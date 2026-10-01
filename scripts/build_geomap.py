@@ -13,9 +13,11 @@ Outputs (public domain map data, safe to commit; no EUROCONTROL figures):
   data/processed/geomap.json       centre, map radius, texture extent, country labels
   data/processed/geomap_dark.png   square texture: x = east, y = north (top row = north)
 
-Source: Natural Earth 1:10m admin-0 countries, French point of view (borders as
-France recognises them; the project is at the University of Angers), 1:10m
-coastline and 1:50m lakes. Downloaded once into data/raw/naturalearth/.
+Source: Natural Earth 1:10m admin-0 countries, Turkish point of view (as chosen for
+the project: Crimea in Ukraine, Northern Cyprus and Kosovo shown, the Golan Heights
+in Syria), plus the Morocco / Western Sahara line at 27 deg 40' N that this view
+leaves out; 1:10m coastline and 1:50m lakes. Downloaded once into
+data/raw/naturalearth/.
 
 Usage: python scripts/build_geomap.py [--nodes PATH] [--size 4096]
            [--region LON_MIN LON_MAX LAT_MIN LAT_MAX] [--margin 1.4]
@@ -34,7 +36,10 @@ ROOT = Path(__file__).resolve().parent.parent
 PROCESSED = ROOT / "data" / "processed"
 NATURAL_EARTH = ROOT / "data" / "raw" / "naturalearth"
 NE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/{}.geojson"
-COUNTRIES = "ne_10m_admin_0_countries_fra"
+COUNTRIES = "ne_10m_admin_0_countries_tur"
+# Lines the point of view does not draw: (country polygon, latitude, name south of it, its label at lat / lon).
+# Morocco and Western Sahara are one polygon there; the internationally recognised line between them is 27 deg 40' N.
+SPLIT_LINES = [("Morocco", 27.0 + 40.0 / 60.0, "W. Sahara", (24.3, -13.0))]
 COASTLINE = "ne_10m_coastline"
 LAKES = "ne_50m_lakes"
 
@@ -179,6 +184,23 @@ def graticule(step=10):
     return lines
 
 
+def latitude_line(countries, name, lat, step=0.25):
+    """[lon, lat] points along `lat` across the named country's polygon (its westmost to eastmost crossing)."""
+    xs = []
+    for f in countries["features"]:
+        if f["properties"].get("NAME") != name:
+            continue
+        for ring in rings(f["geometry"])[0]:
+            for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+                if (y1 - lat) * (y2 - lat) < 0:
+                    xs.append(x1 + (lat - y1) * (x2 - x1) / (y2 - y1))
+    if len(xs) < 2:
+        return None
+    a, b = min(xs), max(xs)
+    n = max(2, int(math.ceil((b - a) / step)) + 1)
+    return [[a + (b - a) * i / (n - 1), lat] for i in range(n)]
+
+
 def render(countries, coastline, lakes, size, half, lat0, lon0, scale=2):
     canvas = Canvas(size, half, lat0, lon0, scale)
     for line in graticule():
@@ -197,6 +219,10 @@ def render(countries, coastline, lakes, size, half, lat0, lon0, scale=2):
         outer, holes = rings(f["geometry"])
         for ring in outer + holes:
             canvas.line(ring, BORDER, 1.6)
+    for name, lat, _, _ in SPLIT_LINES:
+        line = latitude_line(countries, name, lat)
+        if line is not None:
+            canvas.line(line, BORDER, 1.6)
     for f in coastline["features"]:
         lines, _ = rings(f["geometry"])
         for line in lines:
@@ -229,6 +255,10 @@ def country_labels(countries, lat0, lon0, radius, max_min_label=5.0, min_area_km
             continue
         x, y = project(ly, lx, lat0, lon0)
         labels.append({"name": p["NAME"], "x": round(x, 3), "y": round(y, 3), "rank": rank})
+    for _, _, south, (la, lo) in SPLIT_LINES:
+        if angular_distance(la, lo, lat0, lon0) <= radius - 1.0:
+            x, y = project(la, lo, lat0, lon0)
+            labels.append({"name": south, "x": round(x, 3), "y": round(y, 3), "rank": 4})
     labels.sort(key=lambda l: (l["rank"], l["name"]))
     return labels
 
@@ -248,7 +278,8 @@ def build(airports, countries, coastline, lakes, region=DEFAULT_REGION, margin=1
     image = render(countries, coastline, lakes, size, half, lat0, lon0, scale)
     meta = {
         "projection": "azimuthal equidistant; x east, y north, degrees of arc from the centre",
-        "source": "Natural Earth (public domain): 1:10m admin-0 countries (French point of view), "
+        "source": "Natural Earth (public domain): 1:10m admin-0 countries (Turkish point of view, "
+                  "Morocco / Western Sahara line at 27 deg 40' N added), "
                   "1:10m coastline, 1:50m lakes",
         "centerLat": lat0,
         "centerLon": lon0,
