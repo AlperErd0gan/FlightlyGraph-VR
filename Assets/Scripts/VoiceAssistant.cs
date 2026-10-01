@@ -42,6 +42,7 @@ public class VoiceAssistant : MonoBehaviour
     public TimelinePanel timeline;
     public CityClusters cityClusters;
     public GraphRecenter recenter;
+    public GeoMapView geoMap;
     [Tooltip("AppVoiceExperience component (Meta Voice SDK) with the Wit configuration. Found in the scene by type name if unset.")]
     public Component voice;
 
@@ -451,7 +452,7 @@ public class VoiceAssistant : MonoBehaviour
         if (Is(c, @"^(help|what can i say|what can you do|commands|show commands)$"))
         {
             reply = "Try: show Istanbul · route from London to Ankara · filter cargo · reset filters · " +
-                    "regional view · top routes · play timeline · show April 2020 · group cities · " +
+                    "regional view · top routes · map view · 3D view · play timeline · show April 2020 · group cities · " +
                     "open dashboard · open insights · start tour · go to centre · clear · stop.";
             Say("You can say: show an airport, route from one city to another, filter cargo, regional view, " +
                 "play timeline, open dashboard or start tour.");
@@ -543,6 +544,25 @@ public class VoiceAssistant : MonoBehaviour
             bool regional = viewMode.Mode != GraphViewMode.ViewMode.Regional;
             viewMode.Apply(regional ? GraphViewMode.ViewMode.Regional : GraphViewMode.ViewMode.TopRoutes, true);
             reply = regional ? "Regional view." : "Top routes view.";
+            Say(reply);
+            return true;
+        }
+
+        // Map of Europe (GeoMapView) and back to the 3D layout.
+        if (Is(c, @"^((show|open|switch to|go to|change to)( the)? (map|map view|geographic view)|map( view)?|(show|put)( the)? (airports|them|it) on (the|a) map)$"))
+        {
+            if (GeoMap == null || !GeoMap.Ready) return NotAvailable("map view", out reply);
+            if (dashboard != null && dashboard.IsOpen) dashboard.Close();
+            GeoMap.SetMap(true);
+            reply = $"Map view: {GeoMap.OutsideCount} airports beyond Europe are on the outer ring.";
+            Say("Map view.");
+            return true;
+        }
+        if (Is(c, @"^((show|open|switch to|go to|back to|change to)( the)? (3 ?d|three d|network|graph)( view| layout)?|(3 ?d|three d|network)( view| layout)|(close|hide|leave)( the)? map)$"))
+        {
+            if (GeoMap == null || !GeoMap.Ready) return NotAvailable("map view", out reply);
+            GeoMap.SetMap(false);
+            reply = "3D view.";
             Say(reply);
             return true;
         }
@@ -979,6 +999,15 @@ public class VoiceAssistant : MonoBehaviour
         {
             if (cityClusters == null) cityClusters = dashboard != null && dashboard.cityClusters != null ? dashboard.cityClusters : FindFirstObjectByType<CityClusters>();
             return cityClusters;
+        }
+    }
+
+    private GeoMapView GeoMap
+    {
+        get
+        {
+            if (geoMap == null) geoMap = dashboard != null && dashboard.geoMap != null ? dashboard.geoMap : FindFirstObjectByType<GeoMapView>();
+            return geoMap;
         }
     }
 
