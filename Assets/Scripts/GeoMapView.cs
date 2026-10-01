@@ -43,10 +43,12 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Header("Airports and routes on the map")]
     [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer).")]
     public float nodeScale = 0.45f;
-    [Tooltip("Route width multiplier on the map.")]
-    public float edgeWidthScale = 0.6f;
+    [Tooltip("Route width multiplier on the map (highlighted routes too: an airport's ~170 routes must not cover it).")]
+    public float edgeWidthScale = 0.35f;
     [Tooltip("Route arc height as a fraction of its length on the map.")]
-    public float arcHeight = 0.22f;
+    public float arcHeight = 0.12f;
+    [Tooltip("Highest arc above the map (m), so the long intercontinental routes do not tower towards you.")]
+    public float maxArcLift = 0.2f;
     [Tooltip("Airport centres above the map surface (m).")]
     public float nodeLift = 0.012f;
 
@@ -253,7 +255,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         Transform t = graph.transform;
         Vector2 pa = projection.Unproject(t.InverseTransformPoint(a));
         Vector2 pb = projection.Unproject(t.InverseTransformPoint(b));
-        float lift = arcHeight * Vector2.Distance(pa, pb) * projection.metersPerDegree;
+        float lift = Mathf.Min(maxArcLift, arcHeight * Vector2.Distance(pa, pb) * projection.metersPerDegree);
         projection.FillArc(pa, pb, nodeLift, lift, points);
         for (int i = 0; i < points.Length; i++) points[i] = t.TransformPoint(points[i]);
     }
