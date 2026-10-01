@@ -80,7 +80,7 @@ def test_window_and_graph_filter(setup):
     assert data["candidateFlights"] == data["flightCount"] == 2
     assert data["startEpoch"] == calendar.timegm(datetime(2025, 8, 1, 6, 0).timetuple())
     assert data["durationSec"] == 7200
-    assert data["pathSources"] == {"actual": 1, "greatCircle": 1}
+    assert data["pathSources"] == {"actual": 1, "partial": 0, "greatCircle": 1}
 
 
 def test_actual_profile(setup):
@@ -112,7 +112,7 @@ def test_great_circle_fallback(setup):
 
 def test_no_points_and_max_flights(setup):
     data, flights = run(setup, "gc.json", "--no-points")
-    assert data["pathSources"] == {"actual": 0, "greatCircle": 2} and data["pointsFile"] is None
+    assert data["pathSources"] == {"actual": 0, "partial": 0, "greatCircle": 2} and data["pointsFile"] is None
     data, flights = run(setup, "one.json", "--max-flights", "1")
     assert set(flights) == {"2"}  # earliest off-block kept first
     assert data["candidateFlights"] == 2 and data["flightCount"] == 1
@@ -125,3 +125,59 @@ def test_real_data(tmp_path):
     subprocess.run([sys.executable, str(SCRIPT), "--out", str(out), "--max-flights", "200"], check=True)
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["flightCount"] == 200 and data["candidateFlights"] > 1000
+
+
+sys.path.insert(0, str(ROOT / "scripts"))
+import build_flight_sim as bfs  # noqa: E402
+
+
+def test_busiest_day_counts_graph_edge_flights(tmp_path):
+    def f(fid, adep, ades, day):
+        t = f"{day:02d}-08-2025 10:00:00"
+        return [fid, adep, *POS[adep], ades, *POS[ades], t, t, t, t, "A320", "THY", "R", "S", "M", "350", "1"]
+    rows = [f("1", "AAAA", "BBBB", 1), f("2", "BBBB", "AAAA", 1),
+            f("3", "AAAA", "CCCC", 2), f("4", "CCCC", "AAAA", 2), f("5", "AAAA", "BBBB", 2),
+            *[f(str(10 + i), "BBBB", "CCCC", 3) for i in range(5)]]   # not a graph edge
+    path = tmp_path / "Flights_20250801_20250831.csv.gz"
+    write_csv_gz(path, FLIGHT_HEADER, rows)
+    day, count = bfs.busiest_day(path, {"AAAA", "BBBB", "CCCC"}, {"AAAA|BBBB", "AAAA|CCCC"})
+    assert (day.day, count) == (2, 3)
+
+
+def test_simplify_keeps_turns_climbs_and_stops():
+    # Straight, steady, level: only the ends.
+    t = [0, 60, 120, 180, 240]
+    lat = [40.0] * 5
+    lon = [20.0, 20.5, 21.0, 21.5, 22.0]
+    assert bfs.simplify(t, lat, lon, [350] * 5, 3.0, 30) == [0, 4]
+    # A stop (taxi): same place for 10 min, then moving: the stop's end is kept.
+    t2 = [0, 600, 900, 1200]
+    assert 1 in bfs.simplify(t2, [40.0] * 4, [20.0, 20.0, 20.5, 21.0], [0, 0, 100, 200], 3.0, 30)
+    # A turn (north, then east) keeps its corner; a climb keeps its top.
+    assert 2 in bfs.simplify([0, 60, 120, 180, 240], [40.0, 40.5, 41.0, 41.0, 41.0],
+                             [20.0, 20.0, 20.0, 20.7, 21.4], [350] * 5, 3.0, 30)
+    assert 2 in bfs.simplify(t, lat, lon, [0, 150, 300, 300, 300], 3.0, 30)
+    # max_points: never more, ends kept.
+    n = 200
+    zig = bfs.simplify(list(range(0, 60 * n, 60)), [40.0 + 0.05 * (i % 2) for i in range(n)],
+                       [20.0 + 0.02 * i for i in range(n)], [350] * n, 0.1, 30)
+    assert len(zig) <= 30 and zig[0] == 0 and zig[-1] == n - 1
+
+
+def test_fill_ends_bridges_a_profile_that_starts_far_away():
+    import pandas as pd
+    w0 = pd.Timestamp("2025-08-01 00:00")
+    row = {"off": pd.Timestamp("2025-08-01 06:00"), "arr": pd.Timestamp("2025-08-01 10:00"),
+           "ADEP Latitude": 40.6, "ADEP Longitude": -73.8, "ADES Latitude": 51.5, "ADES Longitude": -0.5}
+    # Profile only near Europe: from 20W at 08:30 to the destination at 10:00.
+    t = [8.5 * 3600, 9.5 * 3600, 10 * 3600]
+    lat, lon, fl = [52.0, 51.6, 51.5], [-20.0, -5.0, -0.5], [370, 200, 0]
+    t2, lat2, lon2, fl2, filled = bfs.fill_ends(row, w0, t, lat, lon, fl)
+    assert filled
+    assert (t2[0], lat2[0], lon2[0], fl2[0]) == (6 * 3600, 40.6, -73.8, 0)   # at New York at off-block
+    assert all(a <= b for a, b in zip(t2, t2[1:]))
+    assert t2[-3:] == t and lon2[-3:] == lon                                  # the real part kept as is
+    assert max(fl2[:-3]) <= 370 and min(lon2) >= -73.81                       # climbs to the profile's level
+    # A complete profile is left alone.
+    t3, *_, filled3 = bfs.fill_ends(row, w0, [6 * 3600, 10 * 3600], [40.6, 51.5], [-73.8, -0.5], [0, 0])
+    assert not filled3 and t3 == [6 * 3600, 10 * 3600]

@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Timed flight paths for the Unity flight simulation (Assets/Scripts/FlightSimulator.cs).
 
-Picks the flights of one time window (default 2025-08-01 06:00-09:00 UTC) that
-fly between two airports of the ECTRL graph along one of its edges, and writes a
-timed path for each: points with time, latitude, longitude, flight level and
-heading (initial great-circle course to the next point, degrees from true north).
+Picks the flights of one time window that fly between two airports of the ECTRL
+graph along one of its edges, and writes a timed path for each: points with
+time, latitude, longitude, flight level and heading (initial great-circle course
+to the next point, degrees from true north). Default: every such flight of the
+busiest day of --month (00:00-24:00 UTC), e.g. ~33,000 in August 2025.
 
 Path source, per flight:
   actual       EUROCONTROL actual point profile (Flight_Points_Actual_<month>*),
                used when that month's file is found under data/raw/eurocontrol/
-               (or given with --points)
+               (or given with --points); simplified so its shape is kept
+               (Douglas-Peucker, --tolerance-km, at most --max-points points)
+  partial      a point profile that starts or ends far from the airport (it only
+               covers the EUROCONTROL area, e.g. New York - London); the missing
+               ends are filled along the great circle with the real times
   greatCircle  no point profile: great circle from origin to destination with the
                flight's real off-block / arrival times, taxi on the ground, climb
                to its requested flight level and descent. Timing and direction are
@@ -23,8 +28,9 @@ Output: data/processed/flights_ectrl.json
 t / dep / arr are seconds from the window start (startEpoch, Unix time, UTC);
 a flight already under way at the start has a negative dep.
 
-Usage: python scripts/build_flight_sim.py [--day 2025-08-01] [--start 06:00] [--hours 3]
-           [--max-flights 800] [--points PATH | --no-points]
+Usage: python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD]
+           [--start 00:00] [--hours 24] [--max-flights 0] [--max-points 30] [--tolerance-km 3]
+           [--points PATH | --no-points]
 """
 import argparse
 import json
@@ -50,6 +56,10 @@ DEFAULT_CRUISE_FL, MIN_CRUISE_FL, MAX_CRUISE_FL = 350, 50, 510
 GREAT_CIRCLE_STEP_MIN = 5
 # Consecutive points closer than this have no meaningful heading (taxi, holding).
 MIN_HEADING_KM = 0.5
+# A profile whose first / last point is farther than this from the airport gets the gap filled.
+FILL_KM = 30.0
+# Flight levels count this much (km per FL) when simplifying, so climbs and descents keep their points.
+SIMPLIFY_KM_PER_FL = 0.1
 
 FLIGHT_COLUMNS = ["ECTRL ID", "ADEP", "ADEP Latitude", "ADEP Longitude", "ADES", "ADES Latitude",
                   "ADES Longitude", "FILED OFF BLOCK TIME", "FILED ARRIVAL TIME", "ACTUAL OFF BLOCK TIME",
@@ -89,6 +99,23 @@ def read_flights(path, node_ids, edge_keys, w0, w1):
     df = df.dropna(subset=["ADEP Latitude", "ADEP Longitude", "ADES Latitude", "ADES Longitude"])
     df["id_num"] = pd.to_numeric(df["ECTRL ID"], errors="coerce")
     return df.sort_values(["off", "id_num", "ECTRL ID"]).reset_index(drop=True)
+
+
+def busiest_day(path, node_ids, edge_keys):
+    """UTC day of the month with the most flights on graph edges (by off-block date), and that count."""
+    df = pd.read_csv(path, usecols=["ADEP", "ADES", "FILED OFF BLOCK TIME", "ACTUAL OFF BLOCK TIME"],
+                     dtype=str, keep_default_na=False)
+    off = pd.to_datetime(df["ACTUAL OFF BLOCK TIME"], format=TIME_FMT, errors="coerce").fillna(
+        pd.to_datetime(df["FILED OFF BLOCK TIME"], format=TIME_FMT, errors="coerce"))
+    lo = df["ADEP"].where(df["ADEP"] < df["ADES"], df["ADES"])
+    hi = df["ADES"].where(df["ADEP"] < df["ADES"], df["ADEP"])
+    on_edge = (lo + "|" + hi).isin(edge_keys) & df["ADEP"].isin(node_ids) & df["ADES"].isin(node_ids)
+    counts = off[on_edge & off.notna()].dt.normalize().value_counts()
+    if counts.empty:
+        raise ValueError(f"no flights on graph edges in {path}")
+    # Most flights; the earliest day among equals, so the choice is stable.
+    best = max(counts.items(), key=lambda kv: (kv[1], -kv[0].value))
+    return best[0].to_pydatetime(), int(best[1])
 
 
 def evenly(n, k):
@@ -221,14 +248,92 @@ def great_circle_path(row, w0):
     return t, lat, lon, fl
 
 
-def actual_path(points, w0, max_points):
-    """(t, lat, lon, fl) lists from a point profile, thinned to max_points (first and last kept)."""
-    keep = evenly(len(points), max_points)
-    p = points.iloc[keep]
-    t = [(x - w0).total_seconds() for x in p["time"]]
+def simplify(t, lat, lon, fl, tolerance_km, max_points):
+    """
+    Indices of the points to keep (first and last always): Douglas-Peucker with the
+    time-synchronised distance (how far a point is from where the simplified path would be
+    at that moment) on local kilometres, flight level counted as height. Turns, climbs /
+    descents and stops (taxi, holding) keep their points; steady straight legs collapse.
+    The tolerance grows until at most max_points remain.
+    """
+    n = len(lat)
+    if n <= 2:
+        return list(range(n))
+    ts = np.asarray(t, dtype=float)
+    lat0 = math.radians(float(np.mean(lat)))
+    xyz = np.column_stack([np.radians(lon) * 6371.0 * math.cos(lat0), np.radians(lat) * 6371.0,
+                           np.asarray(fl, dtype=float) * SIMPLIFY_KM_PER_FL])
+
+    def run(tol):
+        keep = np.zeros(n, dtype=bool)
+        keep[0] = keep[-1] = True
+        stack = [(0, n - 1)]
+        while stack:
+            a, b = stack.pop()
+            if b - a < 2:
+                continue
+            span = ts[b] - ts[a]
+            u = (ts[a + 1:b] - ts[a]) / span if span > 0 else np.zeros(b - a - 1)
+            expected = xyz[a] + np.outer(np.clip(u, 0.0, 1.0), xyz[b] - xyz[a])
+            d = np.linalg.norm(xyz[a + 1:b] - expected, axis=1)
+            i = int(np.argmax(d))
+            if d[i] > tol:
+                keep[a + 1 + i] = True
+                stack.append((a, a + 1 + i))
+                stack.append((a + 1 + i, b))
+        return list(np.flatnonzero(keep))
+
+    tol = tolerance_km
+    keep = run(tol)
+    while max_points and len(keep) > max_points:
+        tol *= 1.5
+        keep = run(tol)
+    return keep
+
+
+def actual_path(points, w0, max_points, tolerance_km=3.0):
+    """(t, lat, lon, fl) lists from a point profile, simplified to its shape (first and last kept)."""
     # Time Over is not always monotonic between neighbouring points; never go back in time.
-    t = list(np.maximum.accumulate(t))
+    t_all = list(np.maximum.accumulate([(x - w0).total_seconds() for x in points["time"]]))
+    keep = simplify(t_all, list(points["lat"]), list(points["lon"]), list(points["fl"]), tolerance_km, max_points)
+    p = points.iloc[keep]
+    t = [t_all[i] for i in keep]
     return t, list(p["lat"]), list(p["lon"]), [max(0, int(v)) for v in p["fl"]]
+
+
+def bridge(lat1, lon1, t1, fl1, lat2, lon2, t2, fl2):
+    """Points strictly between two ends: great circle every GREAT_CIRCLE_STEP_MIN, time and level linear."""
+    span = t2 - t1
+    n = max(2, math.ceil(span / (GREAT_CIRCLE_STEP_MIN * 60)) + 1)
+    fractions = [i / (n - 1) for i in range(1, n - 1)]
+    pts = great_circle(lat1, lon1, lat2, lon2, fractions)
+    return ([t1 + f * span for f in fractions], [p[0] for p in pts], [p[1] for p in pts],
+            [fl1 + f * (fl2 - fl1) for f in fractions])
+
+
+def fill_ends(row, w0, t, lat, lon, fl):
+    """
+    A profile that starts / ends far from its airport (it covers only the EUROCONTROL area):
+    the gap from off-block (taxi out) to the first point and from the last point to the
+    arrival (taxi in) along the great circle, with the real times. Returns the lists and
+    whether anything was filled.
+    """
+    off = (row["off"] - w0).total_seconds()
+    arr = (row["arr"] - w0).total_seconds()
+    a = (row["ADEP Latitude"], row["ADEP Longitude"])
+    b = (row["ADES Latitude"], row["ADES Longitude"])
+    filled = False
+    if distance_km(a[0], a[1], lat[0], lon[0]) > FILL_KM and t[0] > off:
+        takeoff = min(off + TAXI_OUT_MIN * 60, (off + t[0]) / 2)
+        bt, blat, blon, bfl = bridge(a[0], a[1], takeoff, 0, lat[0], lon[0], t[0], fl[0])
+        t, lat, lon, fl = [off, takeoff] + bt + t, [a[0], a[0]] + blat + lat, [a[1], a[1]] + blon + lon, [0, 0] + bfl + fl
+        filled = True
+    if distance_km(b[0], b[1], lat[-1], lon[-1]) > FILL_KM and arr > t[-1]:
+        landing = max(arr - TAXI_IN_MIN * 60, (arr + t[-1]) / 2)
+        bt, blat, blon, bfl = bridge(lat[-1], lon[-1], t[-1], fl[-1], b[0], b[1], landing, 0)
+        t, lat, lon, fl = t + bt + [landing, arr], lat + blat + [b[0], b[0]], lon + blon + [b[1], b[1]], fl + bfl + [0, 0]
+        filled = True
+    return t, lat, lon, [max(0, int(round(v))) for v in fl], filled
 
 
 def flight_record(row, path_kind, t, lat, lon, fl):
@@ -277,11 +382,13 @@ def validate(path, node_ids, edge_keys):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--day", default="2025-08-01", help="UTC day, YYYY-MM-DD")
-    p.add_argument("--start", default="06:00", help="window start, UTC HH:MM")
-    p.add_argument("--hours", type=float, default=3.0, help="window length")
-    p.add_argument("--max-flights", type=int, default=800, help="flights kept, spread evenly over departure time")
-    p.add_argument("--max-points", type=int, default=40, help="points kept per actual profile")
+    p.add_argument("--month", default="2025-08", help="YYYY-MM, for --day busiest")
+    p.add_argument("--day", default="busiest", help="UTC day, YYYY-MM-DD, or 'busiest' (most flights on graph edges in --month)")
+    p.add_argument("--start", default="00:00", help="window start, UTC HH:MM")
+    p.add_argument("--hours", type=float, default=24.0, help="window length")
+    p.add_argument("--max-flights", type=int, default=0, help="flights kept, spread evenly over departure time (0 = all)")
+    p.add_argument("--max-points", type=int, default=30, help="most points kept per actual profile")
+    p.add_argument("--tolerance-km", type=float, default=3.0, help="simplification: largest shape error kept out (km)")
     p.add_argument("--flights", type=Path, default=None, help="Flights_*.csv[.gz] of the month (default: found by --day)")
     p.add_argument("--points", type=Path, default=None,
                    help="Flight_Points_Actual_*.csv[.gz] of the month (default: searched under data/raw/eurocontrol)")
@@ -292,13 +399,18 @@ def main(argv=None):
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    day = datetime.strptime(args.day, "%Y-%m-%d")
-    w0 = datetime.strptime(f"{args.day} {args.start}", "%Y-%m-%d %H:%M")
-    w1 = w0 + timedelta(hours=args.hours)
+    busiest = args.day == "busiest"
+    day = datetime.strptime(args.month + "-01", "%Y-%m-%d") if busiest else datetime.strptime(args.day, "%Y-%m-%d")
     flights_path = args.flights or month_file(FLIGHTS_DIR, "Flights", day)
     if flights_path is None:
         log.error("no Flights_%s01_*.csv[.gz] under %s", f"{day:%Y%m}", FLIGHTS_DIR)
         return 1
+    node_ids, edge_keys = load_graph(args.nodes, args.edges)
+    if busiest:
+        day, count = busiest_day(flights_path, node_ids, edge_keys)
+        log.info("busiest day of %s: %s (%d flights on graph edges by off-block date)", args.month, f"{day:%Y-%m-%d %a}", count)
+    w0 = datetime.strptime(f"{day:%Y-%m-%d} {args.start}", "%Y-%m-%d %H:%M")
+    w1 = w0 + timedelta(hours=args.hours)
     points_path = None
     if not args.no_points:
         points_path = args.points or month_file(ECTRL_DIR, "Flight_Points_Actual", day)
@@ -306,19 +418,21 @@ def main(argv=None):
         log.warning("no Flight_Points_Actual_%s01_* file: all paths are great circles "
                     "(real times, approximate route)", f"{day:%Y%m}")
 
-    node_ids, edge_keys = load_graph(args.nodes, args.edges)
     candidates = read_flights(flights_path, node_ids, edge_keys, w0, w1)
-    picked = candidates.iloc[evenly(len(candidates), args.max_flights)]
+    picked = candidates.iloc[evenly(len(candidates), args.max_flights)] if args.max_flights > 0 else candidates
     log.info("%d flights on graph edges in %s .. %s UTC; keeping %d", len(candidates), w0, w1, len(picked))
 
     profiles = read_points(points_path, set(picked["ECTRL ID"])) if points_path else {}
-    flights, sources = [], {"actual": 0, "greatCircle": 0}
+    flights, sources = [], {"actual": 0, "partial": 0, "greatCircle": 0}
     for _, row in picked.iterrows():
         points = profiles.get(row["ECTRL ID"])
         if points is not None and len(points) >= 2:
-            kind, path_ = "actual", actual_path(points, w0, args.max_points)
+            *path_, filled = fill_ends(row, w0, *actual_path(points, w0, args.max_points, args.tolerance_km))
+            kind = "partial" if filled else "actual"
         else:
-            kind, path_ = "greatCircle", great_circle_path(row, w0)
+            t, lat, lon, fl = great_circle_path(row, w0)
+            keep = simplify(t, lat, lon, fl, args.tolerance_km, args.max_points)
+            kind, path_ = "greatCircle", ([t[i] for i in keep], [lat[i] for i in keep], [lon[i] for i in keep], [fl[i] for i in keep])
         flights.append(flight_record(row, kind, *path_))
         sources[kind] += 1
 
@@ -326,7 +440,7 @@ def main(argv=None):
         source="EUROCONTROL R&D Archive",
         flightsFile=flights_path.name,
         pointsFile=points_path.name if points_path else None,
-        day=args.day,
+        day=f"{day:%Y-%m-%d}",
         startLabel=f"{w0:%Y-%m-%d %H:%M} UTC",
         startEpoch=int(w0.replace(tzinfo=timezone.utc).timestamp()),
         durationSec=int(round(args.hours * 3600)),
