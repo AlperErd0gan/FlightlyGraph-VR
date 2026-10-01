@@ -24,6 +24,7 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 | Open / close the dashboard | left menu button (≡) | — | F1 |
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
+| Map of Europe ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
@@ -56,6 +57,7 @@ the microphone is sent to Wit; the name is checked on the returned text.
 | describe · what is this | narrates the selection |
 | clear · close | clears the selection |
 | regional view · show clusters / top routes · normal view / switch view | view mode |
+| map view · show the map · put the airports on the map / 3D view · back to the network view · close the map | map of Europe / 3D layout |
 | filter cargo · only low cost · filter Turkey / reset filters · show everything | market segment or country filter |
 | open timeline · play · pause · next / previous month · show April 2020 · show 2021 · all months | timeline |
 | open / close dashboard · open insights / filters / controls / overview / find · open airports / routes / clusters page | dashboard |
@@ -87,6 +89,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 | Where | What it does |
 |---|---|
 | Sidebar: Overview … Controls | switch page |
+| Sidebar: **Map view** / **3D view** | close the dashboard and move the airports onto the map / back |
 | Sidebar: **Timeline** | close the dashboard and open the timeline |
 | Header: **Tour** | start the guided tour |
 | Header: **X** | close the dashboard |
@@ -100,6 +103,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 | Find airport: By name / country / traffic, letters, Prev / Next | sort, jump, page; a row selects the airport and turns you to it |
 | Filters: segment, country, minimum flights, **Reset filters** | show part of the network |
 | Controls: **Go to graph centre** | teleport to the graph's centre, facing its front (biggest hub); `matchEyeHeight` also sets your eyes to its height (seated) |
+| Controls: **Buttons** / **Voice** | the button table, or what to say to the voice assistant |
 
 ## Timeline (time slider)
 
@@ -123,6 +127,22 @@ dashboard lists follow it; the selection stays.
 | Close it again | select its label ("London · group") | click the label |
 | Show a hidden airport | select it anywhere (dashboard lists, routes): its city opens | — |
 
+## Map view (B / dashboard → Map view / M)
+
+The airports fly from the 3D layout onto a large, gently curved map of Europe
+in front of the graph centre; routes arc over the map. Airports beyond Europe
+(New York, Dubai, Singapore, ... 22 in all) sit on the dark band outside the
+map's blue rim, in their true direction from the map centre, with their code
+and city. Everything else works as in the 3D layout: select, info card,
+timeline, filters, regional view, city groups. **Go to graph centre** (R3) puts
+you in front of the map. Starting the guided tour switches back to 3D.
+
+| Action | Controller | Hands | Editor |
+|---|---|---|---|
+| Map ↔ 3D layout | B | dashboard → Map view / 3D view | M |
+| Closer look | walk / teleport to the map | same | fly camera |
+| Dark ↔ satellite map | `GeoMapView.style` in the Inspector (also while playing) | — | — |
+
 ## Guided tour (dashboard → Tour)
 
 | Action | Controller / hands | Editor |
@@ -135,8 +155,9 @@ city groups, teleport) is locked so the demo cannot be derailed.
 
 ## Buttons left free
 
-B is not used by the app (it usually means back / cancel). Y is push to talk
-(`VoiceAssistant.pushToTalkBinding`); the unmerged `flight-sim` branch uses B
-and Y for its playback, so merging it needs one of them moved. The view toggle
-and re-centre can be moved to other buttons with `GraphViewMode.toggleBinding`
-and `GraphRecenter.recenterBinding`.
+None of the face buttons is free any more: A / X connection, Y push to talk
+(`VoiceAssistant.pushToTalkBinding`), B map view (`GeoMapView.toggleBinding`).
+The unmerged `flight-sim` branch uses B and Y for its playback, so merging it
+needs its controls moved (e.g. to its own panel). The view toggle and re-centre
+can be moved with `GraphViewMode.toggleBinding` and
+`GraphRecenter.recenterBinding`.

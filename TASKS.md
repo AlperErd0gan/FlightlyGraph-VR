@@ -35,6 +35,7 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] V6: Data dashboard (left menu button): overview chart, top airports / routes, traffic mix, clusters, selected airport, Find list (turns you to the airport), Filters, pinned comparison; follows the user, UI sounds
 - [x] V7: Spoken narration via Meta Voice SDK / Wit.ai (NodeNarrator) and a guided tour (GuidedTour: 8 data-driven steps incl. insights and controls, input locked while it runs; caption with step titles, progress, Next / Stop)
 - [x] V10: Controls reference: docs/CONTROLS.md (every button per panel / situation) and the dashboard's Controls page (UI/ControlsHelp.cs), shown in the tour
+- [x] V11: Map view (GeoMapView, build_geomap.py): airports fly onto a gently curved map of Europe (azimuthal equidistant around the airports' smallest enclosing circle, Natural Earth, French point of view; optional NASA satellite style); routes arc over it; the 22 airports beyond Europe sit on a band outside the rim in their true direction. B / M / dashboard / voice. Coordinates checked against OurAirports (all 200 within 2.5 km).
 - [x] V8: Timeline (TimelinePanel + GraphLoader.SetPeriod): month slider over the 68 months with play / step / speed / all months; sizes, routes, selection, info panel and dashboard lists follow the month
 - [x] V9: Dashboard redesign: sidebar navigation (Explore / Tools), page titles, cards, KPI tiles, tables with clickable rows, shared UIKit look (rounded boxes, hover colours, icons)
 
