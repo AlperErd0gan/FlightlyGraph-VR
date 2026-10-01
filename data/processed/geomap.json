@@ -1,0 +1,329 @@
+{
+ "projection": "azimuthal equidistant; x east, y north, degrees of arc from the centre",
+ "source": "Natural Earth (public domain): 1:10m admin-0 countries (French point of view), 1:10m coastline, 1:50m lakes",
+ "centerLat": 44.1786,
+ "centerLon": 8.8022,
+ "radiusDeg": 28.026,
+ "textureHalfSizeDeg": 28.526,
+ "texture": "geomap_dark.png",
+ "labels": [
+  {
+   "name": "Belgium",
+   "x": -2.535,
+   "y": 6.671,
+   "rank": 2
+  },
+  {
+   "name": "Egypt",
+   "x": 18.692,
+   "y": -15.878,
+   "rank": 2
+  },
+  {
+   "name": "France",
+   "x": -4.284,
+   "y": 2.683,
+   "rank": 2
+  },
+  {
+   "name": "Germany",
+   "x": 0.553,
+   "y": 6.786,
+   "rank": 2
+  },
+  {
+   "name": "Italy",
+   "x": 1.616,
+   "y": 0.576,
+   "rank": 2
+  },
+  {
+   "name": "Portugal",
+   "x": -13.081,
+   "y": -3.241,
+   "rank": 2
+  },
+  {
+   "name": "Russia",
+   "x": 18.297,
+   "y": 18.551,
+   "rank": 2
+  },
+  {
+   "name": "Spain",
+   "x": -9.36,
+   "y": -3.404,
+   "rank": 2
+  },
+  {
+   "name": "Turkey",
+   "x": 19.603,
+   "y": -1.807,
+   "rank": 2
+  },
+  {
+   "name": "United Kingdom",
+   "x": -6.367,
+   "y": 10.674,
+   "rank": 2
+  },
+  {
+   "name": "Algeria",
+   "x": -5.395,
+   "y": -16.604,
+   "rank": 3
+  },
+  {
+   "name": "Finland",
+   "x": 8.372,
+   "y": 20.132,
+   "rank": 3
+  },
+  {
+   "name": "Greece",
+   "x": 9.946,
+   "y": -3.923,
+   "rank": 3
+  },
+  {
+   "name": "Iceland",
+   "x": -11.649,
+   "y": 22.833,
+   "rank": 3
+  },
+  {
+   "name": "Ireland",
+   "x": -9.933,
+   "y": 9.964,
+   "rank": 3
+  },
+  {
+   "name": "Libya",
+   "x": 8.349,
+   "y": -17.121,
+   "rank": 3
+  },
+  {
+   "name": "Morocco",
+   "x": -13.652,
+   "y": -11.292,
+   "rank": 3
+  },
+  {
+   "name": "Niger",
+   "x": 0.695,
+   "y": -26.73,
+   "rank": 3
+  },
+  {
+   "name": "Norway",
+   "x": 0.427,
+   "y": 17.181,
+   "rank": 3
+  },
+  {
+   "name": "Poland",
+   "x": 6.581,
+   "y": 8.261,
+   "rank": 3
+  },
+  {
+   "name": "Romania",
+   "x": 11.213,
+   "y": 2.675,
+   "rank": 3
+  },
+  {
+   "name": "Sweden",
+   "x": 4.263,
+   "y": 21.981,
+   "rank": 3
+  },
+  {
+   "name": "Syria",
+   "x": 23.801,
+   "y": -5.05,
+   "rank": 3
+  },
+  {
+   "name": "Tunisia",
+   "x": 0.172,
+   "y": -10.491,
+   "rank": 3
+  },
+  {
+   "name": "Ukraine",
+   "x": 14.886,
+   "y": 7.76,
+   "rank": 3
+  },
+  {
+   "name": "Austria",
+   "x": 3.598,
+   "y": 3.459,
+   "rank": 4
+  },
+  {
+   "name": "Belarus",
+   "x": 11.503,
+   "y": 11.109,
+   "rank": 4
+  },
+  {
+   "name": "Bulgaria",
+   "x": 11.981,
+   "y": -0.482,
+   "rank": 4
+  },
+  {
+   "name": "Denmark",
+   "x": 0.122,
+   "y": 11.789,
+   "rank": 4
+  },
+  {
+   "name": "Israel",
+   "x": 22.25,
+   "y": -9.968,
+   "rank": 4
+  },
+  {
+   "name": "Jordan",
+   "x": 23.547,
+   "y": -9.672,
+   "rank": 4
+  },
+  {
+   "name": "Switzerland",
+   "x": -0.918,
+   "y": 2.548,
+   "rank": 4
+  },
+  {
+   "name": "Bosnia and Herz.",
+   "x": 6.641,
+   "y": 0.287,
+   "rank": 5
+  },
+  {
+   "name": "Cyprus",
+   "x": 19.751,
+   "y": -6.469,
+   "rank": 5
+  },
+  {
+   "name": "Czechia",
+   "x": 4.239,
+   "y": 5.879,
+   "rank": 5
+  },
+  {
+   "name": "Georgia",
+   "x": 25.254,
+   "y": 3.152,
+   "rank": 5
+  },
+  {
+   "name": "Hungary",
+   "x": 7.23,
+   "y": 3.386,
+   "rank": 5
+  },
+  {
+   "name": "Latvia",
+   "x": 9.054,
+   "y": 13.884,
+   "rank": 5
+  },
+  {
+   "name": "Lebanon",
+   "x": 22.276,
+   "y": -6.518,
+   "rank": 5
+  },
+  {
+   "name": "Lithuania",
+   "x": 8.738,
+   "y": 11.796,
+   "rank": 5
+  },
+  {
+   "name": "Netherlands",
+   "x": -1.952,
+   "y": 8.283,
+   "rank": 5
+  },
+  {
+   "name": "Palestine",
+   "x": 22.305,
+   "y": -8.74,
+   "rank": 5
+  },
+  {
+   "name": "Serbia",
+   "x": 8.564,
+   "y": 0.638,
+   "rank": 5
+  },
+  {
+   "name": "Albania",
+   "x": 8.562,
+   "y": -2.945,
+   "rank": 6
+  },
+  {
+   "name": "Armenia",
+   "x": 26.572,
+   "y": 2.162,
+   "rank": 6
+  },
+  {
+   "name": "Croatia",
+   "x": 5.27,
+   "y": 1.873,
+   "rank": 6
+  },
+  {
+   "name": "Estonia",
+   "x": 8.873,
+   "y": 15.555,
+   "rank": 6
+  },
+  {
+   "name": "Kosovo",
+   "x": 8.847,
+   "y": -0.94,
+   "rank": 6
+  },
+  {
+   "name": "Moldova",
+   "x": 13.187,
+   "y": 4.882,
+   "rank": 6
+  },
+  {
+   "name": "Montenegro",
+   "x": 7.569,
+   "y": -0.902,
+   "rank": 6
+  },
+  {
+   "name": "North Macedonia",
+   "x": 9.51,
+   "y": -1.891,
+   "rank": 6
+  },
+  {
+   "name": "Slovakia",
+   "x": 6.747,
+   "y": 4.989,
+   "rank": 6
+  },
+  {
+   "name": "Slovenia",
+   "x": 4.239,
+   "y": 2.042,
+   "rank": 6
+  }
+ ]
+}
