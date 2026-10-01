@@ -27,6 +27,7 @@ public static class ControlsHelp
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
+        R("Map / 3D view", "B (or dashboard: Map view)", "dashboard: Map view", "M"),
         R("Go to graph centre", "R3 (right stick click)", "Controls page button", "H"),
         Section("Panels"),
         R("Press a button / row", "point + trigger", "point + pinch / poke", "click"),

@@ -41,6 +41,8 @@ public class DataDashboard : MonoBehaviour
     public CityClusters cityClusters;
     [Tooltip("Teleports the viewer to the graph centre, from the Controls page. Found in the scene if unset; added to this object if the scene has none.")]
     public GraphRecenter recenter;
+    [Tooltip("Geographic view (map of Europe), switched from the sidebar. Found in the scene if unset; added to this object if the scene has none.")]
+    public GeoMapView geoMap;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport (Find, Airports, Insights) turns you (the XR Origin) to face it.")]
@@ -97,6 +99,7 @@ public class DataDashboard : MonoBehaviour
     private TextMeshProUGUI periodChip;
     private Image periodChipBack;
     private TextMeshProUGUI datasetText;
+    private TextMeshProUGUI mapButtonLabel;
     private readonly Dictionary<Tab, NavItem> nav = new Dictionary<Tab, NavItem>();
     private Tab current = Tab.Overview;
     private GraphNode pinned;            // compared with the selected airport on the Selected page
@@ -128,6 +131,8 @@ public class DataDashboard : MonoBehaviour
         if (cityClusters == null) cityClusters = gameObject.AddComponent<CityClusters>();
         if (recenter == null) recenter = FindFirstObjectByType<GraphRecenter>();
         if (recenter == null) recenter = gameObject.AddComponent<GraphRecenter>();
+        if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
+        if (geoMap == null) geoMap = gameObject.AddComponent<GeoMapView>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
         toggleAction.AddBinding("<XRController>{LeftHand}/{MenuButton}");
@@ -240,6 +245,7 @@ public class DataDashboard : MonoBehaviour
         if (infoPanel != null) infoPanel.SetSuppressed(true);
         UISounds.Play(UISounds.Open, canvas.transform.position);
         UpdateDatasetText();
+        if (mapButtonLabel != null) mapButtonLabel.text = geoMap.IsMap ? "3D view" : "Map view";
         Show(current);
     }
 
@@ -301,8 +307,14 @@ public class DataDashboard : MonoBehaviour
         NavGroup(root, "TOOLS", ToolTabs, y + 10f);
         if (timeline != null)
         {
-            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - 52f, SideWidth - 40f, 52f,
+            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - 46f, SideWidth - 40f, 46f,
                          UIKit.ButtonStyle.Primary, UIKit.BodySize, UIIcon.Shape.Timeline);
+        }
+        if (geoMap != null)
+        {
+            Button map = UIKit.Button(root, "Map view", ToggleMap, 20f, Size.y - Pad - 100f, SideWidth - 40f, 46f,
+                                      UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Globe);
+            mapButtonLabel = map.GetComponentInChildren<TextMeshProUGUI>();
         }
 
         // Page header: title, description, timeline month, tour, close.
@@ -336,7 +348,7 @@ public class DataDashboard : MonoBehaviour
         foreach (Tab tab in tabs)
         {
             Tab t = tab;
-            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 38f,
+            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 34f,
                                          UIKit.ButtonStyle.Ghost, UIKit.BodySize);
             TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
             label.alignment = TextAlignmentOptions.Left;
@@ -348,7 +360,7 @@ public class DataDashboard : MonoBehaviour
             indicator.rectTransform.sizeDelta = new Vector2(4f, 0f);
             indicator.rectTransform.anchoredPosition = new Vector2(6f, 0f);
             nav[tab] = new NavItem { button = button, indicator = indicator, label = label };
-            y += 40f;
+            y += 36f;
         }
         return y;
     }
@@ -357,6 +369,14 @@ public class DataDashboard : MonoBehaviour
     {
         Close();
         timeline.Open();
+    }
+
+    // Closes the dashboard first: it would hide the map and the airports' flight.
+    private void ToggleMap()
+    {
+        if (!geoMap.Ready) return;
+        Close();
+        geoMap.Toggle();
     }
 
     private void UpdateDatasetText()
