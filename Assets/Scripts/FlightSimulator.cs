@@ -67,9 +67,14 @@ public class FlightSimulator : MonoBehaviour
         public FlightData data;
         public float start;
         public float end;
-        // Trajectory mode: path points in the graph's local space and the travel direction at each.
+        // In the air: from the first to the last point above the ground (taxi is not drawn).
+        public float airStart;
+        public float airEnd;
+        // Trajectory mode: path points in the graph's local space and the travel direction at each,
+        // and which points are beyond the map's rim (a segment with both ends there is not drawn).
         public Vector3[] local;
         public Vector3[] direction;
+        public bool[] offMap;
         public int cursor;
         // EdgeArc mode: the graph edge, whether the flight runs target -> source, arc lengths.
         public GraphEdge edge;
@@ -95,6 +100,7 @@ public class FlightSimulator : MonoBehaviour
     private RenderParams renderParams;
     private Matrix4x4[] matrices = new Matrix4x4[0];
     private int activeCount;
+    private int airborneCount;
 
 
     /// <summary>Aircraft are drawn (and time runs) only while visible: FlightPanel open.</summary>
@@ -108,8 +114,10 @@ public class FlightSimulator : MonoBehaviour
     /// <summary>Seconds since the window start (FlightSimData.startEpoch).</summary>
     public float SimTime => simTime;
     public int FlightCount => flights.Count;
-    /// <summary>Aircraft drawn in the last frame (between off-block and arrival).</summary>
+    /// <summary>Aircraft drawn in the last frame (in the air; on the map, over it).</summary>
     public int ActiveCount => activeCount;
+    /// <summary>Aircraft in the air in the last frame, wherever they are (also beyond the map's rim).</summary>
+    public int AirborneCount => airborneCount;
     /// <summary>Trajectory or EdgeArc once loaded (Auto resolved).</summary>
     public PathMode ActiveMode => activeMode;
     public IReadOnlyList<FlightData> Flights => data != null ? data.flights : null;
@@ -158,16 +166,24 @@ public class FlightSimulator : MonoBehaviour
         yield return ReadStreamingAsset(flightsFileName, text => json = text);
         if (json == null) yield break; // error already logged
 
-        // No yield inside try/catch: C# does not allow yield statements in catch blocks.
+        // A whole day is ~25,000 flights (~11 MB): parse off the main thread, so the headset keeps its frame rate.
         string parseError = null;
-        try
+        FlightSimData parsed = null;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var parse = System.Threading.Tasks.Task.Run(() =>
         {
-            data = JsonConvert.DeserializeObject<FlightSimData>(json);
-        }
-        catch (JsonException ex)
-        {
-            parseError = ex.Message;
-        }
+            try
+            {
+                parsed = JsonConvert.DeserializeObject<FlightSimData>(json);
+            }
+            catch (JsonException ex)
+            {
+                parseError = ex.Message;
+            }
+        });
+        while (!parse.IsCompleted) yield return null;
+        data = parsed;
+        if (parse.IsFaulted) parseError = parse.Exception?.GetBaseException().Message;
         if (parseError != null)
         {
             Debug.LogError($"FlightSimulator: JSON parse failed: {parseError}");
@@ -182,7 +198,10 @@ public class FlightSimulator : MonoBehaviour
         // Both modes need the loaded graph: its transform / scale or its edge arcs.
         while (!graph.IsLoaded) yield return null;
 
+        float parseSeconds = (float)watch.Elapsed.TotalSeconds;
+        watch.Restart();
         BuildFlights();
+        Debug.Log($"FlightSimulator: parsed in {parseSeconds:F2} s (background), paths built in {watch.Elapsed.TotalSeconds:F2} s");
         if (!CreateRenderResources()) yield break;
         playing = playOnLoad;
         ready = true;
@@ -267,7 +286,7 @@ public class FlightSimulator : MonoBehaviour
         }
     }
 
-    /// <summary>Aircraft in the air (off-block .. arrival) in `bins` equal slices of the window, for a chart.</summary>
+    /// <summary>Aircraft in the air (first .. last point above the ground) in `bins` equal slices of the window, for a chart.</summary>
     public float[] AirborneProfile(int bins)
     {
         var counts = new float[Mathf.Max(1, bins)];
@@ -275,9 +294,9 @@ public class FlightSimulator : MonoBehaviour
         float slice = (float)data.durationSec / counts.Length;
         foreach (SimFlight f in flights)
         {
-            int a = Mathf.Clamp(Mathf.FloorToInt(f.start / slice), 0, counts.Length - 1);
-            int b = Mathf.Clamp(Mathf.FloorToInt(f.end / slice), 0, counts.Length - 1);
-            if (f.end < 0f || f.start > data.durationSec) continue;
+            int a = Mathf.Clamp(Mathf.FloorToInt(f.airStart / slice), 0, counts.Length - 1);
+            int b = Mathf.Clamp(Mathf.FloorToInt(f.airEnd / slice), 0, counts.Length - 1);
+            if (f.airEnd < 0f || f.airStart > data.durationSec) continue;
             for (int i = a; i <= b; i++) counts[i]++;
         }
         return counts;
@@ -311,6 +330,7 @@ public class FlightSimulator : MonoBehaviour
             }
 
             var sim = new SimFlight { data = f, start = f.t[0], end = f.t[n - 1] };
+            AirborneSpan(f, out sim.airStart, out sim.airEnd);
             if (activeMode == PathMode.Trajectory)
             {
                 BuildTrajectory(sim);
@@ -354,10 +374,12 @@ public class FlightSimulator : MonoBehaviour
         var planar = new Vector2[n];
         int firstOnMap = -1;
         int lastOnMap = -1;
+        sim.offMap = new bool[n];
         for (int i = 0; i < n; i++)
         {
             planar[i] = proj.Project(f.lat[i], f.lon[i]);
-            if (planar[i].magnitude > radius) continue;
+            sim.offMap[i] = planar[i].magnitude > radius;
+            if (sim.offMap[i]) continue;
             if (firstOnMap < 0) firstOnMap = i;
             lastOnMap = i;
         }
@@ -536,14 +558,42 @@ public class FlightSimulator : MonoBehaviour
     private void UpdateInstances()
     {
         activeCount = 0;
-        Vector3 scale = Vector3.one * (activeMode == PathMode.Trajectory ? mapAircraftSize : aircraftSize);
-        Vector3 up = activeMode == PathMode.Trajectory ? mapUp : Vector3.up;
+        airborneCount = 0;
+        bool map = activeMode == PathMode.Trajectory;
+        Vector3 scale = Vector3.one * (map ? mapAircraftSize : aircraftSize);
+        Vector3 up = map ? mapUp : Vector3.up;
         foreach (SimFlight f in flights)
         {
-            if (simTime < f.start || simTime > f.end) continue;
+            // Only aircraft in the air: taxiing ones would pile up on the hubs.
+            if (simTime < f.airStart || simTime > f.airEnd) continue;
+            airborneCount++;
             Pose(f, out Vector3 position, out Vector3 forward);
+            // On the map, not while beyond its rim: they appear where they cross it.
+            if (map && f.offMap[f.cursor] && f.offMap[Mathf.Min(f.cursor + 1, f.offMap.Length - 1)]) continue;
             matrices[activeCount++] = Matrix4x4.TRS(position, Quaternion.LookRotation(forward, up), scale);
         }
+    }
+
+    // First and last time the flight is above the ground (flight level > 0), widened to the
+    // neighbouring ground points (take-off roll, landing); the whole flight if it never climbs.
+    private static void AirborneSpan(FlightData f, out float from, out float to)
+    {
+        int n = f.t.Length;
+        int first = -1, last = -1;
+        for (int i = 0; i < n; i++)
+        {
+            if (f.fl[i] <= 0) continue;
+            if (first < 0) first = i;
+            last = i;
+        }
+        if (first < 0)
+        {
+            from = f.t[0];
+            to = f.t[n - 1];
+            return;
+        }
+        from = f.t[Mathf.Max(0, first - 1)];
+        to = f.t[Mathf.Min(n - 1, last + 1)];
     }
 
     /// <summary>World position and travel direction of a flight at the current simulated time.</summary>

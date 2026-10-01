@@ -335,7 +335,7 @@ public class FlightPanel : MonoBehaviour
         nextTextUpdate = Time.unscaledTime + 0.25f;
         DateTime now = simulator.SimUtc;
         timeText.text = now.ToString("HH:mm", Inv) + " UTC";
-        statsText.text = now.ToString("ddd d MMM yyyy", Inv) + "  ·  " + simulator.ActiveCount.ToString("N0", Inv) + " aircraft in the air" +
+        statsText.text = now.ToString("ddd d MMM yyyy", Inv) + "  ·  " + simulator.AirborneCount.ToString("N0", Inv) + " aircraft in the air" +
                          (simulator.IsPlaying ? "" : "  ·  paused");
         float duration = Mathf.Max(1, simulator.DurationSec);
         slider.SetValueWithoutNotify(simulator.SimTime / duration);
