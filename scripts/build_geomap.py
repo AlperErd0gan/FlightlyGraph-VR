@@ -43,12 +43,13 @@ LAKES = "ne_50m_lakes"
 DEFAULT_REGION = (-32.0, 46.0, 26.0, 72.0)
 
 # Dark theme, close to the dashboard (UIKit): sea darkest, land a step lighter,
-# coastlines brightest so the shape of Europe reads first, borders between.
+# coastlines bright blue so the shape of Europe reads first, country borders
+# nearly as clear but neutral grey (a different tone, not a second coastline).
 SEA = (9, 16, 29)
 LAND = (27, 37, 52)
 GRATICULE = (24, 36, 56)
-BORDER = (70, 88, 114)
-COAST = (104, 134, 170)
+BORDER = (138, 146, 164)
+COAST = (110, 150, 196)
 
 log = logging.getLogger("build_geomap")
 
@@ -195,7 +196,7 @@ def render(countries, coastline, lakes, size, half, lat0, lon0, scale=2):
     for f in countries["features"]:
         outer, holes = rings(f["geometry"])
         for ring in outer + holes:
-            canvas.line(ring, BORDER, 1.2)
+            canvas.line(ring, BORDER, 1.6)
     for f in coastline["features"]:
         lines, _ = rings(f["geometry"])
         for line in lines:
