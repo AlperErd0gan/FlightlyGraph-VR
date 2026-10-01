@@ -37,6 +37,8 @@ public class DataDashboard : MonoBehaviour
     public GraphInfoPanel infoPanel;
     [Tooltip("Optional; adds a Tour button to the header. Found in the scene if unset.")]
     public GuidedTour tour;
+    [Tooltip("Timeline (time slider) opened from the header. Found in the scene if unset; added to this object if the scene has none.")]
+    public TimelinePanel timeline;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected tab.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport in the Find tab turns you (the XR Origin) to face it.")]
@@ -107,6 +109,8 @@ public class DataDashboard : MonoBehaviour
         if (selector == null) selector = FindFirstObjectByType<GraphSelector>();
         if (viewMode == null) viewMode = FindFirstObjectByType<GraphViewMode>();
         if (tour == null) tour = FindFirstObjectByType<GuidedTour>();
+        if (timeline == null) timeline = FindFirstObjectByType<TimelinePanel>();
+        if (timeline == null) timeline = gameObject.AddComponent<TimelinePanel>();
         if (infoPanel == null) infoPanel = FindFirstObjectByType<GraphInfoPanel>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
@@ -355,6 +359,10 @@ public class DataDashboard : MonoBehaviour
         if (tour != null)
         {
             MakeButton(rootRect, "Tour", size.x - Pad - 250, 18, 120, 46, () => { Close(); tour.StartTour(); }, tabActiveColor);
+        }
+        if (timeline != null)
+        {
+            MakeButton(rootRect, "Timeline", size.x - Pad - 410, 18, 150, 46, () => { Close(); timeline.Open(); }, tabActiveColor);
         }
         float tabWidth = (size.x - 2 * Pad - (TabNames.Length - 1) * 8f) / TabNames.Length;
         for (int i = 0; i < TabNames.Length; i++)

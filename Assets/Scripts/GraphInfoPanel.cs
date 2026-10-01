@@ -91,6 +91,8 @@ public class GraphInfoPanel : MonoBehaviour
     private bool hasSelectionPosition;
     private string lastContent;
     private Vector3 lastAnchor;
+    // Rebuilds the current selection's text (when the timeline changes the month).
+    private System.Action rebuild;
 
     private void Awake()
     {
@@ -101,6 +103,7 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void OnEnable()
     {
+        if (graph != null) graph.PeriodChanged += OnPeriodChanged;
         if (selector == null) return;
         selector.NodeSelected += ShowNode;
         selector.EdgeSelected += ShowEdge;
@@ -120,6 +123,7 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void OnDisable()
     {
+        if (graph != null) graph.PeriodChanged -= OnPeriodChanged;
         if (selector == null) return;
         selector.NodeSelected -= ShowNode;
         selector.EdgeSelected -= ShowEdge;
@@ -273,8 +277,24 @@ public class GraphInfoPanel : MonoBehaviour
         panel.gameObject.SetActive(false);
     }
 
+    private void OnPeriodChanged()
+    {
+        if (lastContent != null) rebuild?.Invoke();
+    }
+
+    /// <summary>"In 2020-04: 2,690 flights (90 / day)" while the timeline shows one month.</summary>
+    private void AppendPeriod(StringBuilder sb, int[] monthly, string unit)
+    {
+        if (!graph.HasPeriod || monthly == null || graph.Period >= monthly.Length) return;
+        int count = monthly[graph.Period];
+        sb.Append("\nIn <b>").Append(graph.PeriodName(graph.Period)).Append("</b>: <b>").Append(Num(count)).Append("</b> ")
+          .Append(unit.ToLowerInvariant()).Append(" <size=80%>(").Append(Num((float)count / Mathf.Max(1, graph.CurrentDays)))
+          .Append(" / day)</size>");
+    }
+
     private void ShowNode(GraphNode node)
     {
+        rebuild = () => ShowNode(node);
         IReadOnlyList<GraphEdge> edges = graph.EdgesOf(node.id);
         var neighbours = new List<GraphEdge>(edges);
         neighbours.Sort((x, y) => y.weight.CompareTo(x.weight));
@@ -305,6 +325,7 @@ public class GraphInfoPanel : MonoBehaviour
             AppendTop(sb, d.topOperator, d.topAcType);
             AppendSegments(sb, d.segments, node.value);
         }
+        AppendPeriod(sb, d != null ? d.monthly : null, valueLabel);
         sb.Append("\nConnections shown: <b>").Append(edges.Count).Append("</b>");
         if (graph.colorByCommunity)
         {
@@ -332,6 +353,7 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void ShowEdge(GraphEdge edge)
     {
+        rebuild = () => ShowEdge(edge);
         GraphNode a = graph.Nodes[edge.sourceId];
         GraphNode b = graph.Nodes[edge.targetId];
         float km = GreatCircleKm(a.lat, a.lon, b.lat, b.lon);
@@ -353,6 +375,7 @@ public class GraphInfoPanel : MonoBehaviour
               .Append(" · ").Append(b.ShortCode).Append(">").Append(a.ShortCode).Append(' ').Append(Num(d.backward))
               .Append(")</size>");
         }
+        AppendPeriod(sb, d != null ? d.monthly : null, weightLabel);
         sb.Append("\nDistance: <b>").Append(Num(km)).Append(" km</b>");
         if (rich)
         {
@@ -374,6 +397,7 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void ShowPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
     {
+        rebuild = () => ShowPath(nodes, edges);
         GraphNode from = nodes[0];
         GraphNode to = nodes[nodes.Count - 1];
 
@@ -498,6 +522,7 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void Hide()
     {
+        rebuild = null;
         lastContent = null;
         hasSelectionPosition = false;
         panel.gameObject.SetActive(false);

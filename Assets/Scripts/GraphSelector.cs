@@ -43,10 +43,47 @@ public class GraphSelector : MonoBehaviour
     private GraphNode selectedNode;
     private GraphEdge selectedEdge;
 
+    // What is highlighted, so RefreshSelection can draw it again after the graph is restyled.
+    private enum Highlight { None, Node, Edge, Path }
+    private Highlight highlight = Highlight.None;
+    private List<GraphNode> pathNodes = new List<GraphNode>();
+    private List<GraphEdge> pathEdges = new List<GraphEdge>();
+
     private void Awake()
     {
         if (targetCamera == null) targetCamera = Camera.main;
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
+    }
+
+    private void OnEnable()
+    {
+        if (graph != null) graph.PeriodChanged += RefreshSelection;
+    }
+
+    private void OnDisable()
+    {
+        if (graph != null) graph.PeriodChanged -= RefreshSelection;
+    }
+
+    /// <summary>
+    /// Draws the current selection again (e.g. after the timeline changed the month:
+    /// sizes, visible routes and colours were reset). Raises no selection events, so
+    /// panels and narration are not triggered again.
+    /// </summary>
+    public void RefreshSelection()
+    {
+        switch (highlight)
+        {
+            case Highlight.Node:
+                if (selectedNode != null) HighlightNode(selectedNode);
+                break;
+            case Highlight.Edge:
+                if (selectedEdge != null) HighlightEdge(selectedEdge);
+                break;
+            case Highlight.Path:
+                HighlightPath(pathNodes, pathEdges);
+                break;
+        }
     }
 
     private void Update()
@@ -192,8 +229,18 @@ public class GraphSelector : MonoBehaviour
 
     public void SelectNode(GraphNode node)
     {
+        int incidentCount = HighlightNode(node);
+        Debug.Log($"Selected node '{node.label}' — {incidentCount} connections, degree {node.value}, " +
+                  $"lat {node.lat:F3}, lon {node.lon:F3}");
+        NodeSelected?.Invoke(node);
+    }
+
+    /// <summary>Highlights a node and its edges, dims the rest; returns its edge count.</summary>
+    private int HighlightNode(GraphNode node)
+    {
         ResetVisuals();
         selectedNode = node;
+        highlight = Highlight.Node;
 
         var incident = new HashSet<GraphEdge>(graph.EdgesOf(node.id));
         // Show the node's edges even if the edge filter hides them at rest.
@@ -213,16 +260,21 @@ public class GraphSelector : MonoBehaviour
         {
             SetNodeVisual(n, n == node, neighbours.Contains(n));
         }
-
-        Debug.Log($"Selected node '{node.label}' — {incident.Count} connections, degree {node.value}, " +
-                  $"lat {node.lat:F3}, lon {node.lon:F3}");
-        NodeSelected?.Invoke(node);
+        return incident.Count;
     }
 
     public void SelectEdge(GraphEdge edge)
     {
+        HighlightEdge(edge);
+        Debug.Log($"Selected edge '{graph.Nodes[edge.sourceId].label}' <-> '{graph.Nodes[edge.targetId].label}' — weight {edge.weight}");
+        EdgeSelected?.Invoke(edge);
+    }
+
+    private void HighlightEdge(GraphEdge edge)
+    {
         ResetVisuals();
         selectedEdge = edge;
+        highlight = Highlight.Edge;
 
         GraphNode a = graph.Nodes[edge.sourceId];
         GraphNode b = graph.Nodes[edge.targetId];
@@ -237,9 +289,6 @@ public class GraphSelector : MonoBehaviour
             bool endpoint = n == a || n == b;
             SetNodeVisual(n, endpoint, endpoint);
         }
-
-        Debug.Log($"Selected edge '{a.label}' <-> '{b.label}' — weight {edge.weight}");
-        EdgeSelected?.Invoke(edge);
     }
 
     /// <summary>
@@ -250,26 +299,37 @@ public class GraphSelector : MonoBehaviour
     public void SelectPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
     {
         if (nodes == null || nodes.Count < 2) return;
+        // Copies: the caller may reuse its lists, RefreshSelection needs these later.
+        var nodeCopy = new List<GraphNode>(nodes);
+        var edgeCopy = new List<GraphEdge>(edges);
+        HighlightPath(nodeCopy, edgeCopy);
+        Debug.Log($"Connection '{nodeCopy[0].label}' -> '{nodeCopy[nodeCopy.Count - 1].label}': {edgeCopy.Count} leg(s)");
+        PathSelected?.Invoke(nodeCopy, edgeCopy);
+    }
+
+    private void HighlightPath(List<GraphNode> nodes, List<GraphEdge> edges)
+    {
+        if (nodes == null || nodes.Count < 2) return;
         ResetVisuals();
         GraphNode from = nodes[0];
         GraphNode to = nodes[nodes.Count - 1];
         selectedNode = from;
         selectedEdge = null;
+        pathNodes = nodes;
+        pathEdges = edges;
+        highlight = Highlight.Path;
 
         graph.RevealEdges(edges);
         var onPath = new HashSet<GraphEdge>(edges);
-        var pathNodes = new HashSet<GraphNode>(nodes);
+        var onPathNodes = new HashSet<GraphNode>(nodes);
         foreach (GraphEdge e in graph.Edges)
         {
             SetEdgeVisual(e, onPath.Contains(e));
         }
         foreach (GraphNode n in graph.Nodes.Values)
         {
-            SetNodeVisual(n, n == from || n == to, pathNodes.Contains(n));
+            SetNodeVisual(n, n == from || n == to, onPathNodes.Contains(n));
         }
-
-        Debug.Log($"Connection '{from.label}' -> '{to.label}': {edges.Count} leg(s)");
-        PathSelected?.Invoke(nodes, edges);
     }
 
     public void ClearSelection()
@@ -278,6 +338,7 @@ public class GraphSelector : MonoBehaviour
         graph.ResetEdgeVisibility();
         selectedNode = null;
         selectedEdge = null;
+        highlight = Highlight.None;
         SelectionCleared?.Invoke();
     }
 

@@ -129,6 +129,7 @@ public class GuidedTour : MonoBehaviour
         modeBefore = viewMode != null ? viewMode.Mode : GraphViewMode.ViewMode.TopRoutes;
         if (narrator != null) narrator.AutoNarration = false;
         if (graph.HasFilter) graph.SetFilter(null, null, 0);
+        graph.SetPeriod(-1); // the tour talks about all months together
         if (viewMode != null && viewMode.Mode != GraphViewMode.ViewMode.TopRoutes) viewMode.Apply(GraphViewMode.ViewMode.TopRoutes, false);
 
         var steps = new List<StepAction> { Intro, Hubs, TrafficOverTime, Insights, Clusters, ConnectingRoute, Outro };
