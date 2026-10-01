@@ -24,7 +24,7 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] X4: GraphSelector.cs — click node (raycast) / edge (screen-space pick); highlight incident edges, dim rest; Esc clears
 - [x] X5: Same-city clustering — done as CityClusters (IATA multi-airport cities by ICAO code, not the `city` text: CDG / MXP list municipalities); collapse / expand animated, routes follow; dashboard Clusters page or C. Original note: — collapse airports sharing a city (e.g. LHR/LGW/STN -> "London") into one cluster node; click expands to member airports, click again collapses. Needs `city` in nodes.json (build_graph.py A_CITY column), cluster edge aggregation (sum weights), and GraphSelector expand/collapse state.
 - [x] X6: Edge weight threshold — done as the dashboard's Filters tab (minimum flights per route, plus segment / country)
-- [x] X7: World-space info panel for the selection (GraphInfoPanel: follows the view, city / country, routes, clusters)
+- [x] X7: World-space info panel for the selection (GraphInfoPanel: follows the view, city / country, routes, clusters) — redesigned as a dashboard-style card (tiles, busiest routes, close X), follows the timeline month
 
 ## Part D — Immersive VR + data exploration (Unity 6, Quest / Link; C# not compiled on the dev Mac)
 - [x] V1: EUROCONTROL pipeline (build_graph_ectrl.py, 2020-2025 monthly axis) + extra layers (build_ectrl_extras.py: trajectories, FIR crossings, FIR bounds)
@@ -33,7 +33,8 @@ Legend: [ ] todo · [x] done · status notes inline.
 - [x] V4: XR input: select with trigger / pinch, hold-to-connect routes (ConnectionFinder, A / X), hand teleport, input ignored over UI
 - [x] V5: View modes (top routes / regional clusters), rank colour scale, hub labels — toggle moved from B / Y to one button, L3 (GraphViewMode.toggleBinding)
 - [x] V6: Data dashboard (left menu button): overview chart, top airports / routes, traffic mix, clusters, selected airport, Find list (turns you to the airport), Filters, pinned comparison; follows the user, UI sounds
-- [x] V7: Spoken narration via Meta Voice SDK / Wit.ai (NodeNarrator) and a guided tour (GuidedTour: 6 data-driven steps, input locked while it runs)
+- [x] V7: Spoken narration via Meta Voice SDK / Wit.ai (NodeNarrator) and a guided tour (GuidedTour: 8 data-driven steps incl. insights and controls, input locked while it runs; caption with step titles, progress, Next / Stop)
+- [x] V10: Controls reference: docs/CONTROLS.md (every button per panel / situation) and the dashboard's Controls page (UI/ControlsHelp.cs), shown in the tour
 - [x] V8: Timeline (TimelinePanel + GraphLoader.SetPeriod): month slider over the 68 months with play / step / speed / all months; sizes, routes, selection, info panel and dashboard lists follow the month
 - [x] V9: Dashboard redesign: sidebar navigation (Explore / Tools), page titles, cards, KPI tiles, tables with clickable rows, shared UIKit look (rounded boxes, hover colours, icons)
 
@@ -45,5 +46,5 @@ Legend: [ ] todo · [x] done · status notes inline.
   - D. 360° street-level panoramas from Mapillary (CC-BY-SA) shown on an inverted sphere; not every airport has one. (Google Street View is not allowed outside Google Maps.)
   - Recommendation: A if demos run as EXE over Link, C if the app must run standalone on Quest.
 - [ ] B2: Voice commands (Wit.ai speech-to-text, already configured for TTS): "show Istanbul", "filter cargo", "compare Istanbul with Frankfurt", "route from X to Y", "start tour", "open dashboard"; push-to-talk on a controller button, a dashboard button and a key in the Editor; commands matched against the loaded data so it works with any dataset. — postponed (first version removed; revisit later)
-- [ ] B3: Seated use / height calibration: one button re-centres the graph at the current head height (and in front of the user) for seated people or different heights.
+- [x] B3: Seated use / height calibration — done as GraphRecenter: R3 (right stick click), H, or the dashboard's Controls page moves the graph to the head and turns it to face you; never lower than keeps airports above the floor. Original note: one button re-centres the graph at the current head height (and in front of the user) for seated people or different heights.
 - [x] B4: Insights tab in the dashboard: facts found automatically in the data (fastest / slowest recovering airports, fastest growing route, where cargo dominates, ...); tapping a row selects the airport or route; the guided tour can reuse them.

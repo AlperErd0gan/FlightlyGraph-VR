@@ -8,7 +8,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasRenderer))]
 public class UIIcon : MaskableGraphic
 {
-    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid }
+    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter }
 
     public Shape shape = Shape.Play;
 
@@ -62,6 +62,18 @@ public class UIIcon : MaskableGraphic
                 Quad(vh, P(0.56f, 0.12f), P(0.88f, 0.44f));
                 Quad(vh, P(0.12f, 0.56f), P(0.44f, 0.88f));
                 Quad(vh, P(0.56f, 0.56f), P(0.88f, 0.88f));
+                break;
+            case Shape.Recenter:
+                // Crosshair: a square ring with a dot in the middle.
+                Quad(vh, P(0.2f, 0.2f), P(0.8f, 0.3f));
+                Quad(vh, P(0.2f, 0.7f), P(0.8f, 0.8f));
+                Quad(vh, P(0.2f, 0.3f), P(0.3f, 0.7f));
+                Quad(vh, P(0.7f, 0.3f), P(0.8f, 0.7f));
+                Quad(vh, P(0.44f, 0.44f), P(0.56f, 0.56f));
+                Quad(vh, P(0.46f, 0.02f), P(0.54f, 0.2f));
+                Quad(vh, P(0.46f, 0.8f), P(0.54f, 0.98f));
+                Quad(vh, P(0.02f, 0.46f), P(0.2f, 0.54f));
+                Quad(vh, P(0.8f, 0.46f), P(0.98f, 0.54f));
                 break;
         }
     }

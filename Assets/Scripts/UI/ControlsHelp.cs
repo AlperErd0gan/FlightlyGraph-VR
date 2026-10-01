@@ -27,6 +27,7 @@ public static class ControlsHelp
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
+        R("Re-centre (seated)", "R3 (right stick click)", "Controls page button", "H"),
         Section("Panels"),
         R("Press a button / row", "point + trigger", "point + pinch / poke", "click"),
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),

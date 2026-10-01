@@ -86,6 +86,9 @@ now "Flights"), `GuidedTour.captionCentreHeight` (was `captionHeight`).
   timeline's month, and has a close X.
 - **Tour**: 8 steps with a title, a progress bar, Next and Stop; step 7 opens
   the dashboard's Controls page.
+- **Re-centre** (TASKS B3, `GraphRecenter`, added by the dashboard like the
+  timeline): R3 / H / Controls page moves the graph to the head and turns it
+  to face you; edges are rebuilt once (about 20 ms on the dev Mac).
 - **Controls**: every button per panel / situation is in
   [CONTROLS.md](CONTROLS.md); the in-app table (dashboard → Controls) comes from
   `Assets/Scripts/UI/ControlsHelp.cs`. Keep the two in sync.

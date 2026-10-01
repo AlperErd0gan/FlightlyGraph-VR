@@ -355,7 +355,7 @@ public class GuidedTour : MonoBehaviour
         selector.ClearSelection();
         dashboard.OpenTab(DataDashboard.Tab.Controls);
         return "Here are all the controls. Point and press the trigger to select; hold it on a second airport for the route. " +
-               "You find this page any time in the dashboard, under Controls.";
+               "Seated? Click the right stick to bring the graph to your eyes. This page is in the dashboard, under Controls.";
     }
 
     private string Outro()

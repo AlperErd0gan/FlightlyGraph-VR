@@ -6,7 +6,7 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 
 - **Controller**: Meta Quest Touch controllers. *Select* is the trigger (the
   ray's select action of the XR rig); *A / X* = lower face button of the right /
-  left controller; *L3* = pressing the left thumbstick.
+  left controller; *L3* / *R3* = pressing the left / right thumbstick.
 - **Hands**: hand tracking (no controllers). *Pinch* = thumb and index together.
 - **Editor**: Unity Play mode on the PC with the XR Device Simulator / mouse and
   keyboard. With the headset on Link, the controller column applies.
@@ -24,10 +24,16 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 | Open / close the dashboard | left menu button (≡) | — | F1 |
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
+| Re-centre the graph (seated, other height) | R3 (right stick click) | dashboard → Controls → Re-centre graph | H |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
+
+Re-centring moves the graph's centre to your eyes and turns its front (the
+biggest hub) to where you look, in one jump. It goes no lower than keeps every
+airport above the floor, so very low seats get the graph slightly above eye
+height.
 
 ## Info card (an airport, route or connection selected)
 
@@ -61,6 +67,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 | Selected airport: **Pin to compare** / **Unpin** | compare two airports side by side |
 | Find airport: By name / country / traffic, letters, Prev / Next | sort, jump, page; a row selects the airport and turns you to it |
 | Filters: segment, country, minimum flights, **Reset filters** | show part of the network |
+| Controls: **Re-centre graph** | bring the graph to your eye height, facing you |
 
 ## Timeline (time slider)
 
@@ -96,5 +103,7 @@ city groups, teleport) is locked so the demo cannot be derailed.
 
 ## Buttons left free
 
-B and Y are not used by the app (they usually mean back / cancel). The view
-toggle can be moved to another button with `GraphViewMode.toggleBinding`.
+B and Y are not used by the app (they usually mean back / cancel; the unmerged
+`flight-sim` branch uses them for its playback). The view toggle and re-centre
+can be moved to other buttons with `GraphViewMode.toggleBinding` and
+`GraphRecenter.recenterBinding`.

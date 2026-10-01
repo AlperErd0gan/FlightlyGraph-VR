@@ -39,6 +39,8 @@ public class DataDashboard : MonoBehaviour
     public TimelinePanel timeline;
     [Tooltip("City grouping (several airports of one city as one node), switched on the Clusters page. Found in the scene if unset; added to this object if the scene has none.")]
     public CityClusters cityClusters;
+    [Tooltip("Re-centres the graph at the head (seated use), from the Controls page. Found in the scene if unset; added to this object if the scene has none.")]
+    public GraphRecenter recenter;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport (Find, Airports, Insights) turns you (the XR Origin) to face it.")]
@@ -124,6 +126,8 @@ public class DataDashboard : MonoBehaviour
         if (timeline == null) timeline = gameObject.AddComponent<TimelinePanel>();
         if (cityClusters == null) cityClusters = FindFirstObjectByType<CityClusters>();
         if (cityClusters == null) cityClusters = gameObject.AddComponent<CityClusters>();
+        if (recenter == null) recenter = FindFirstObjectByType<GraphRecenter>();
+        if (recenter == null) recenter = gameObject.AddComponent<GraphRecenter>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
         toggleAction.AddBinding("<XRController>{LeftHand}/{MenuButton}");
@@ -439,8 +443,14 @@ public class DataDashboard : MonoBehaviour
                 ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
                 : new[] { row.action, row.controller, row.hands, row.editor });
         }
-        Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
-              31f, 17f);
+        float y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
+                        26f, 17f);
+        if (recenter == null) return;
+        y += 12f;
+        UIKit.Button(content, "Re-centre graph", recenter.Recenter, 0f, y, 250f, 44f,
+                     UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
+        UIKit.Text(content, "Seated? Brings the graph to your eye height, facing you.", 17f,
+                   UIKit.MutedTextColor, 266f, y + 10f, W - 266f, 26f);
     }
 
     private float W => content.rect.width;
