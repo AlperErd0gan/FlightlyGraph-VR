@@ -6,7 +6,7 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 
 - **Controller**: Meta Quest Touch controllers. *Select* is the trigger (the
   ray's select action of the XR rig); *A / X* = lower face button of the right /
-  left controller; *L3* / *R3* = pressing the left / right thumbstick.
+  left controller; *Y* = upper face button of the left controller (push to talk); *L3* / *R3* = pressing the left / right thumbstick.
 - **Hands**: hand tracking (no controllers). *Pinch* = thumb and index together.
 - **Editor**: Unity Play mode on the PC with the XR Device Simulator / mouse and
   keyboard. With the headset on Link, the controller column applies.
@@ -24,16 +24,48 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 | Open / close the dashboard | left menu button (≡) | — | F1 |
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
-| Re-centre the graph (seated, other height) | R3 (right stick click) | dashboard → Controls → Re-centre graph | H |
+| Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
 
-Re-centring moves the graph's centre to your eyes and turns its front (the
-biggest hub) to where you look, in one jump. It goes no lower than keeps every
-airport above the floor, so very low seats get the graph slightly above eye
-height.
+Going to the graph centre teleports you (not the graph) to its centre and
+turns you to its front (the biggest hub), in one jump. With
+`GraphRecenter.matchEyeHeight` (on by default) your eyes also go to the
+centre's height and the teleport floors move along, for seated use or other
+heights.
+
+## Voice assistant "Rebecca"
+
+**Hold Y** (left controller; **N** in the Editor), speak, release. Only what is
+said while Y is held goes to Wit.ai (Meta Voice SDK; needs internet and an
+`AppVoiceExperience` in the scene), and no name is needed. A small caption below
+your view shows what was heard and what was done. English.
+
+`VoiceAssistant.mode = AlwaysListening` instead keeps the microphone open and
+acts only on sentences starting with **Rebecca** ("Rebecca, show Istanbul";
+just "Rebecca" waits 6 s for the command). In that mode everything said near
+the microphone is sent to Wit; the name is checked on the returned text.
+
+| Say (holding Y) | Does |
+|---|---|
+| help | lists the commands |
+| show Istanbul · find FRA · where is Munich · (just) London | selects the airport (code, name or city; a city gives its busiest airport) and turns you to it |
+| route from London to Ankara · connect Paris and Rome · how do I get from X to Y | fewest-stops route |
+| describe · what is this | narrates the selection |
+| clear · close | clears the selection |
+| regional view · show clusters / top routes · normal view / switch view | view mode |
+| filter cargo · only low cost · filter Turkey / reset filters · show everything | market segment or country filter |
+| open timeline · play · pause · next / previous month · show April 2020 · show 2021 · all months | timeline |
+| open / close dashboard · open insights / filters / controls / overview / find · open airports / routes / clusters page | dashboard |
+| group cities / ungroup cities | city groups |
+| go to the centre · recenter | same as R3 |
+| start tour · (during the tour) next · stop tour | guided tour |
+| stop · quiet | stops speech and the timeline |
+
+Editor without speech: type a sentence into `VoiceAssistant.testPhrase` and
+press F8 (or the component's context menu → Run Test Phrase).
 
 ## Info card (an airport, route or connection selected)
 
@@ -67,7 +99,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 | Selected airport: **Pin to compare** / **Unpin** | compare two airports side by side |
 | Find airport: By name / country / traffic, letters, Prev / Next | sort, jump, page; a row selects the airport and turns you to it |
 | Filters: segment, country, minimum flights, **Reset filters** | show part of the network |
-| Controls: **Re-centre graph** | bring the graph to your eye height, facing you |
+| Controls: **Go to graph centre** | teleport to the graph's centre, facing its front (biggest hub); `matchEyeHeight` also sets your eyes to its height (seated) |
 
 ## Timeline (time slider)
 
@@ -103,7 +135,8 @@ city groups, teleport) is locked so the demo cannot be derailed.
 
 ## Buttons left free
 
-B and Y are not used by the app (they usually mean back / cancel; the unmerged
-`flight-sim` branch uses them for its playback). The view toggle and re-centre
-can be moved to other buttons with `GraphViewMode.toggleBinding` and
-`GraphRecenter.recenterBinding`.
+B is not used by the app (it usually means back / cancel). Y is push to talk
+(`VoiceAssistant.pushToTalkBinding`); the unmerged `flight-sim` branch uses B
+and Y for its playback, so merging it needs one of them moved. The view toggle
+and re-centre can be moved to other buttons with `GraphViewMode.toggleBinding`
+and `GraphRecenter.recenterBinding`.

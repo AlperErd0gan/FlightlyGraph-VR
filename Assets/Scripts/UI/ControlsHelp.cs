@@ -27,12 +27,17 @@ public static class ControlsHelp
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
-        R("Re-centre (seated)", "R3 (right stick click)", "Controls page button", "H"),
+        R("Go to graph centre", "R3 (right stick click)", "Controls page button", "H"),
         Section("Panels"),
         R("Press a button / row", "point + trigger", "point + pinch / poke", "click"),
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),
         R("Open / close a city", "trigger on city / its label", "pinch on it", "click"),
         R("Close the info card", "X on the card", "same", "X / Esc"),
+        Section("Voice (hold Y and speak)"),
+        R("What can I say?", "hold Y: \"help\"", "-", "hold N; F8 = test phrase"),
+        R("Airport / route", "\"show Istanbul\", \"route from London to Ankara\"", "same", "-"),
+        R("Views and filters", "\"regional view\", \"filter cargo\", \"reset filters\"", "same", "-"),
+        R("Time, menus, tour", "\"show April 2020\", \"open dashboard\", \"start tour\"", "same", "-"),
     };
 
     private static Row Section(string title) => new Row { action = title };
