@@ -8,7 +8,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasRenderer))]
 public class UIIcon : MaskableGraphic
 {
-    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter, Globe }
+    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter, Globe, Plane }
 
     public Shape shape = Shape.Play;
 
@@ -74,6 +74,15 @@ public class UIIcon : MaskableGraphic
                 Quad(vh, P(0.46f, 0.8f), P(0.54f, 0.98f));
                 Quad(vh, P(0.02f, 0.46f), P(0.2f, 0.54f));
                 Quad(vh, P(0.8f, 0.46f), P(0.98f, 0.54f));
+                break;
+            case Shape.Plane:
+                // Top view, nose up: fuselage, swept wings, tailplane.
+                Quad(vh, P(0.45f, 0.12f), P(0.55f, 0.88f));
+                Triangle(vh, P(0.45f, 0.95f), P(0.55f, 0.95f), P(0.5f, 1f));
+                Triangle(vh, P(0.45f, 0.62f), P(0.06f, 0.4f), P(0.45f, 0.48f));
+                Triangle(vh, P(0.55f, 0.62f), P(0.55f, 0.48f), P(0.94f, 0.4f));
+                Triangle(vh, P(0.45f, 0.24f), P(0.28f, 0.1f), P(0.45f, 0.14f));
+                Triangle(vh, P(0.55f, 0.24f), P(0.55f, 0.14f), P(0.72f, 0.1f));
                 break;
             case Shape.Globe:
                 // Outline, a meridian and the equator.

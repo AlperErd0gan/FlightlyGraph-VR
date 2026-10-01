@@ -43,6 +43,8 @@ public class DataDashboard : MonoBehaviour
     public GraphRecenter recenter;
     [Tooltip("Geographic view (map of Europe), switched from the sidebar. Found in the scene if unset; added to this object if the scene has none.")]
     public GeoMapView geoMap;
+    [Tooltip("Live flights (flight simulation panel), opened from the sidebar. Found in the scene if unset; added to this object if the scene has none.")]
+    public FlightPanel flights;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport (Find, Airports, Insights) turns you (the XR Origin) to face it.")]
@@ -100,6 +102,7 @@ public class DataDashboard : MonoBehaviour
     private Image periodChipBack;
     private TextMeshProUGUI datasetText;
     private TextMeshProUGUI mapButtonLabel;
+    private Button flightsButton;
     // Controls page: the voice commands instead of the buttons.
     private bool controlsVoice;
     private readonly Dictionary<Tab, NavItem> nav = new Dictionary<Tab, NavItem>();
@@ -135,6 +138,8 @@ public class DataDashboard : MonoBehaviour
         if (recenter == null) recenter = gameObject.AddComponent<GraphRecenter>();
         if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
         if (geoMap == null) geoMap = gameObject.AddComponent<GeoMapView>();
+        if (flights == null) flights = FindFirstObjectByType<FlightPanel>();
+        if (flights == null) flights = gameObject.AddComponent<FlightPanel>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
         toggleAction.AddBinding("<XRController>{LeftHand}/{MenuButton}");
@@ -248,6 +253,7 @@ public class DataDashboard : MonoBehaviour
         UISounds.Play(UISounds.Open, canvas.transform.position);
         UpdateDatasetText();
         if (mapButtonLabel != null) mapButtonLabel.text = geoMap.IsMap ? "3D view" : "Map view";
+        if (flightsButton != null) flightsButton.interactable = flights.Available;
         Show(current);
     }
 
@@ -304,18 +310,26 @@ public class DataDashboard : MonoBehaviour
         datasetText = UIKit.Text(root, "", 17f, UIKit.MutedTextColor, Pad, Pad + 44f, SideWidth - Pad - 10f, 70f);
         datasetText.lineSpacing = -8f;
 
-        float y = 146f;
+        float y = 140f;
         y = NavGroup(root, "EXPLORE", ExploreTabs, y);
         NavGroup(root, "TOOLS", ToolTabs, y + 10f);
+        // Actions, bottom up: Timeline, Live flights, Map view.
+        const float actionHeight = 38f;
+        const float actionStep = actionHeight + 5f;
         if (timeline != null)
         {
-            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - 46f, SideWidth - 40f, 46f,
+            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - actionHeight, SideWidth - 40f, actionHeight,
                          UIKit.ButtonStyle.Primary, UIKit.BodySize, UIIcon.Shape.Timeline);
+        }
+        if (flights != null)
+        {
+            flightsButton = UIKit.Button(root, "Live flights", OpenFlights, 20f, Size.y - Pad - actionHeight - actionStep, SideWidth - 40f,
+                                         actionHeight, UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Plane);
         }
         if (geoMap != null)
         {
-            Button map = UIKit.Button(root, "Map view", ToggleMap, 20f, Size.y - Pad - 100f, SideWidth - 40f, 46f,
-                                      UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Globe);
+            Button map = UIKit.Button(root, "Map view", ToggleMap, 20f, Size.y - Pad - actionHeight - 2f * actionStep, SideWidth - 40f,
+                                      actionHeight, UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Globe);
             mapButtonLabel = map.GetComponentInChildren<TextMeshProUGUI>();
         }
 
@@ -350,7 +364,7 @@ public class DataDashboard : MonoBehaviour
         foreach (Tab tab in tabs)
         {
             Tab t = tab;
-            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 34f,
+            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 32f,
                                          UIKit.ButtonStyle.Ghost, UIKit.BodySize);
             TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
             label.alignment = TextAlignmentOptions.Left;
@@ -362,7 +376,7 @@ public class DataDashboard : MonoBehaviour
             indicator.rectTransform.sizeDelta = new Vector2(4f, 0f);
             indicator.rectTransform.anchoredPosition = new Vector2(6f, 0f);
             nav[tab] = new NavItem { button = button, indicator = indicator, label = label };
-            y += 36f;
+            y += 34f;
         }
         return y;
     }
@@ -371,6 +385,14 @@ public class DataDashboard : MonoBehaviour
     {
         Close();
         timeline.Open();
+    }
+
+    // Closes the dashboard first: it would hide the aircraft.
+    private void OpenFlights()
+    {
+        if (!flights.Available) return;
+        Close();
+        flights.Open();
     }
 
     // Closes the dashboard first: it would hide the map and the airports' flight.
@@ -474,7 +496,7 @@ public class DataDashboard : MonoBehaviour
                     : new[] { row.action, row.controller, row.hands, row.editor });
             }
             y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
-                      26f, 17f);
+                      25f, 17f);
         }
         y += 12f;
         if (recenter != null && !controlsVoice)
