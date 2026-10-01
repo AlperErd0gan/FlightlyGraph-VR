@@ -161,8 +161,10 @@ public class GraphLoader : MonoBehaviour
     public IGraphLayout Layout { get; private set; }
     /// <summary>Raised after SetLayout has restyled the graph.</summary>
     public event System.Action LayoutChanged;
-    // _Tint of the edge material before SetEdgeFade.
+    // _Tint of the edge material before SetEdgeFade / SetEdgeDimming, and those two factors.
     private Color edgeTint = Color.white;
+    private float edgeFade = 1f;
+    private float edgeDimming = 1f;
     // Size scales of the current view, set by ApplyNodeStyle (see ShownValue).
     private float periodScale = 1f;
     private float segmentScale = 1f;
@@ -621,10 +623,25 @@ public class GraphLoader : MonoBehaviour
     /// <summary>Fades every route (1 = as styled, 0 = invisible), e.g. while airports move.</summary>
     public void SetEdgeFade(float fade)
     {
+        edgeFade = Mathf.Clamp01(fade);
+        ApplyEdgeTint();
+    }
+
+    /// <summary>
+    /// Dims every route for as long as something else needs the attention (1 = normal),
+    /// e.g. the flight simulation's aircraft; kept through SetEdgeFade.
+    /// </summary>
+    public void SetEdgeDimming(float dimming)
+    {
+        edgeDimming = Mathf.Clamp01(dimming);
+        ApplyEdgeTint();
+    }
+
+    private void ApplyEdgeTint()
+    {
         if (runtimeEdgeMaterial == null || edgesObject == null) return;
-        fade = Mathf.Clamp01(fade);
-        runtimeEdgeMaterial.SetColor("_Tint", edgeTint * fade);
-        edgesObject.SetActive(fade > 0f);
+        runtimeEdgeMaterial.SetColor("_Tint", edgeTint * (edgeFade * edgeDimming));
+        edgesObject.SetActive(edgeFade * edgeDimming > 0f);
     }
 
     /// <summary>Runtime copy of the ribbon material with edgeIntensity applied to _Tint.</summary>
