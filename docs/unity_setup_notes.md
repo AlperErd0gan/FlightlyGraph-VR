@@ -95,3 +95,23 @@ now "Flights"), `GuidedTour.captionCentreHeight` (was `captionHeight`).
 - **Controls**: every button per panel / situation is in
   [CONTROLS.md](CONTROLS.md); the in-app table (dashboard → Controls) comes from
   `Assets/Scripts/UI/ControlsHelp.cs`. Keep the two in sync.
+
+## 7. Map view (geographic layout)
+
+No scene change: the dashboard adds `GeoMapView` like the timeline. It needs
+`geomap.json` and `geomap_dark.png` in StreamingAssets: they are committed under `data/processed`
+(public domain map data) and copied by `scripts/sync_streaming_assets.sh`.
+Without them the map view is unavailable and nothing else changes (Console:
+"GeoMapView: 'geomap.json' not found").
+
+- Rebuild the map (only if the airports change): `python scripts/build_geomap.py`
+  (downloads Natural Earth once).
+- `GeoMapView` fields to tune in the headset: `distance` (1.8 m), `height`
+  (-0.35 m below the graph centre), `tilt` (30°: 0 = upright wall, 90 = table),
+  `mapRadius` (1 m), `curvatureRadius` (3.5 m; > 0 globe-like, < 0 curves
+  around you, 0 flat), `nodeScale`, `edgeWidthScale`, `arcHeight`,
+  `toggleBinding` (B).
+- Builds: the map uses runtime materials (`Universal Render Pipeline/Unlit`
+  found by name). In the Editor over Link that is fine; for an EXE / APK assign
+  an Unlit material to `GeoMapView.mapMaterial` so the shader is included.
+- `HubLabels.layoutLabelScale` (0.35) shrinks the airport codes on the map.

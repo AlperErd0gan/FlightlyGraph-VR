@@ -39,6 +39,8 @@ public class CityClusters : MonoBehaviour
     public float ringWidth = 0.004f;
     [Tooltip("TextMeshPro 3D font size of the city label; 10 = 1 m line height.")]
     public float labelFontSize = 0.7f;
+    [Tooltip("Label size while another layout is shown (GeoMapView's map: closer, cities packed tighter).")]
+    public float layoutLabelScale = 0.4f;
     public Color labelColor = new Color(1f, 0.85f, 0.5f, 1f);
     [Tooltip("Optional material for the ring (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
     public Material ringMaterial;
@@ -48,7 +50,6 @@ public class CityClusters : MonoBehaviour
     {
         public string name;
         public List<GraphNode> members;   // busiest first; members[0] is the anchor
-        public Vector3[] homes;           // members' own local positions in the graph
         public List<GraphEdge> edges;     // routes touching a member
         public List<GraphEdge> inner;     // routes between two members
         public float t;                   // 0 = at home (expanded) .. 1 = gathered (collapsed)
@@ -192,7 +193,6 @@ public class CityClusters : MonoBehaviour
             {
                 name = string.IsNullOrEmpty(metro.name) ? members[0].ShortCode : metro.name,
                 members = members,
-                homes = new Vector3[members.Count],
                 edges = new List<GraphEdge>(),
                 inner = new List<GraphEdge>(),
             };
@@ -200,7 +200,6 @@ public class CityClusters : MonoBehaviour
             var edgeSet = new HashSet<GraphEdge>();
             for (int i = 0; i < members.Count; i++)
             {
-                city.homes[i] = members[i].transform.localPosition;
                 cityOf[members[i]] = city;
                 foreach (GraphEdge e in graph.EdgesOf(members[i].id))
                 {
@@ -333,12 +332,23 @@ public class CityClusters : MonoBehaviour
     /// <summary>Members between their homes (t = 0) and the anchor's home (t = 1), eased.</summary>
     private void ApplyPositions(City city)
     {
+        foreach (GraphNode m in city.members) m.transform.localPosition = Resting(city, m);
+    }
+
+    // Homes come from the graph's current layout (3D or map), so they follow a layout switch.
+    private Vector3 Resting(City city, GraphNode member)
+    {
         float s = city.t * city.t * (3f - 2f * city.t);
-        Vector3 anchorHome = city.homes[0];
-        for (int i = 0; i < city.members.Count; i++)
-        {
-            city.members[i].transform.localPosition = Vector3.Lerp(city.homes[i], anchorHome, s);
-        }
+        return Vector3.Lerp(graph.HomePosition(member), graph.HomePosition(city.Anchor), s);
+    }
+
+    /// <summary>
+    /// Where an airport rests now (local): its home in the current layout, or on the way to /
+    /// at its city's anchor while the city is (being) collapsed. Used by layout switches.
+    /// </summary>
+    public Vector3 RestingPosition(GraphNode node)
+    {
+        return cityOf.TryGetValue(node, out City city) ? Resting(city, node) : graph.HomePosition(node);
     }
 
     private void FinishIfSettled(City city)
@@ -369,7 +379,8 @@ public class CityClusters : MonoBehaviour
         if (city.label.gameObject.activeSelf != showLabel) city.label.gameObject.SetActive(showLabel);
         if (!collapsed && !showLabel) return;
 
-        Vector3 centre = graph.transform.TransformPoint(city.homes[0]);
+        // The anchor never leaves its home, so it carries the city along when the layout changes.
+        Vector3 centre = city.Anchor.transform.position;
         float size;
         if (collapsed)
         {
@@ -411,8 +422,10 @@ public class CityClusters : MonoBehaviour
                 city.labelCollider.size = new Vector3(bounds.size.x + 0.04f, bounds.size.y + 0.03f, 0.02f);
             }
             // Expanded: above the anchor airport's own hub label.
-            float lift = size * 0.5f + (collapsed ? 0.03f : 0.14f);
+            float scale = graph.Layout != null ? layoutLabelScale : 1f;
+            float lift = size * 0.5f + (collapsed ? 0.03f : 0.14f) * scale;
             Transform label = city.label.transform;
+            label.localScale = Vector3.one * scale;
             label.position = centre + Vector3.up * lift;
             // TMP text reads correctly when its +Z points away from the viewer.
             Vector3 away = label.position - head.position;

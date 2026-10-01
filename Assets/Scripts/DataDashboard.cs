@@ -41,6 +41,8 @@ public class DataDashboard : MonoBehaviour
     public CityClusters cityClusters;
     [Tooltip("Teleports the viewer to the graph centre, from the Controls page. Found in the scene if unset; added to this object if the scene has none.")]
     public GraphRecenter recenter;
+    [Tooltip("Geographic view (map of Europe), switched from the sidebar. Found in the scene if unset; added to this object if the scene has none.")]
+    public GeoMapView geoMap;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
     [Tooltip("Picking an airport (Find, Airports, Insights) turns you (the XR Origin) to face it.")]
@@ -97,6 +99,9 @@ public class DataDashboard : MonoBehaviour
     private TextMeshProUGUI periodChip;
     private Image periodChipBack;
     private TextMeshProUGUI datasetText;
+    private TextMeshProUGUI mapButtonLabel;
+    // Controls page: the voice commands instead of the buttons.
+    private bool controlsVoice;
     private readonly Dictionary<Tab, NavItem> nav = new Dictionary<Tab, NavItem>();
     private Tab current = Tab.Overview;
     private GraphNode pinned;            // compared with the selected airport on the Selected page
@@ -128,6 +133,8 @@ public class DataDashboard : MonoBehaviour
         if (cityClusters == null) cityClusters = gameObject.AddComponent<CityClusters>();
         if (recenter == null) recenter = FindFirstObjectByType<GraphRecenter>();
         if (recenter == null) recenter = gameObject.AddComponent<GraphRecenter>();
+        if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
+        if (geoMap == null) geoMap = gameObject.AddComponent<GeoMapView>();
 
         toggleAction = new InputAction("Toggle Dashboard", InputActionType.Button);
         toggleAction.AddBinding("<XRController>{LeftHand}/{MenuButton}");
@@ -240,6 +247,7 @@ public class DataDashboard : MonoBehaviour
         if (infoPanel != null) infoPanel.SetSuppressed(true);
         UISounds.Play(UISounds.Open, canvas.transform.position);
         UpdateDatasetText();
+        if (mapButtonLabel != null) mapButtonLabel.text = geoMap.IsMap ? "3D view" : "Map view";
         Show(current);
     }
 
@@ -301,8 +309,14 @@ public class DataDashboard : MonoBehaviour
         NavGroup(root, "TOOLS", ToolTabs, y + 10f);
         if (timeline != null)
         {
-            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - 52f, SideWidth - 40f, 52f,
+            UIKit.Button(root, "Timeline", OpenTimeline, 20f, Size.y - Pad - 46f, SideWidth - 40f, 46f,
                          UIKit.ButtonStyle.Primary, UIKit.BodySize, UIIcon.Shape.Timeline);
+        }
+        if (geoMap != null)
+        {
+            Button map = UIKit.Button(root, "Map view", ToggleMap, 20f, Size.y - Pad - 100f, SideWidth - 40f, 46f,
+                                      UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Globe);
+            mapButtonLabel = map.GetComponentInChildren<TextMeshProUGUI>();
         }
 
         // Page header: title, description, timeline month, tour, close.
@@ -336,7 +350,7 @@ public class DataDashboard : MonoBehaviour
         foreach (Tab tab in tabs)
         {
             Tab t = tab;
-            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 38f,
+            Button button = UIKit.Button(root, PageName(tab), () => Show(t), 14f, y, SideWidth - 28f, 34f,
                                          UIKit.ButtonStyle.Ghost, UIKit.BodySize);
             TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
             label.alignment = TextAlignmentOptions.Left;
@@ -348,7 +362,7 @@ public class DataDashboard : MonoBehaviour
             indicator.rectTransform.sizeDelta = new Vector2(4f, 0f);
             indicator.rectTransform.anchoredPosition = new Vector2(6f, 0f);
             nav[tab] = new NavItem { button = button, indicator = indicator, label = label };
-            y += 40f;
+            y += 36f;
         }
         return y;
     }
@@ -357,6 +371,14 @@ public class DataDashboard : MonoBehaviour
     {
         Close();
         timeline.Open();
+    }
+
+    // Closes the dashboard first: it would hide the map and the airports' flight.
+    private void ToggleMap()
+    {
+        if (!geoMap.Ready) return;
+        Close();
+        geoMap.Toggle();
     }
 
     private void UpdateDatasetText()
@@ -436,21 +458,32 @@ public class DataDashboard : MonoBehaviour
     private void BuildControls()
     {
         var rows = new List<string[]>();
-        string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
-        foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+        float y;
+        if (controlsVoice)
         {
-            rows.Add(row.IsSection
-                ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
-                : new[] { row.action, row.controller, row.hands, row.editor });
+            foreach ((string say, string does) in ControlsHelp.Voice) rows.Add(new[] { say, does });
+            y = Table(0f, 0f, W, new[] { "Hold Y (N in the Editor), say, release", "Does" }, new[] { 0f, 0.58f }, rows, null, 26f, 17f);
         }
-        float y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
-                        26f, 17f);
-        if (recenter == null) return;
+        else
+        {
+            string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
+            foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+            {
+                rows.Add(row.IsSection
+                    ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
+                    : new[] { row.action, row.controller, row.hands, row.editor });
+            }
+            y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
+                      26f, 17f);
+        }
         y += 12f;
-        UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
-                     UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
-        UIKit.Text(content, "Seated? Brings the graph to your eye height, facing you.", 17f,
-                   UIKit.MutedTextColor, 266f, y + 10f, W - 266f, 26f);
+        if (recenter != null && !controlsVoice)
+        {
+            UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
+                         UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
+        }
+        Toggles(new List<string> { "Buttons", "Voice" }, W - 280f, y, 280f, 44f,
+                i => (controlsVoice == (i == 1), () => { controlsVoice = i == 1; Show(Tab.Controls); }));
     }
 
     private float W => content.rect.width;

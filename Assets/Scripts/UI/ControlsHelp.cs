@@ -27,17 +27,32 @@ public static class ControlsHelp
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
+        R("Map / 3D view", "B (or dashboard: Map view)", "dashboard: Map view", "M"),
         R("Go to graph centre", "R3 (right stick click)", "Controls page button", "H"),
         Section("Panels"),
         R("Press a button / row", "point + trigger", "point + pinch / poke", "click"),
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),
         R("Open / close a city", "trigger on city / its label", "pinch on it", "click"),
         R("Close the info card", "X on the card", "same", "X / Esc"),
-        Section("Voice (hold Y and speak)"),
-        R("What can I say?", "hold Y: \"help\"", "-", "hold N; F8 = test phrase"),
-        R("Airport / route", "\"show Istanbul\", \"route from London to Ankara\"", "same", "-"),
-        R("Views and filters", "\"regional view\", \"filter cargo\", \"reset filters\"", "same", "-"),
-        R("Time, menus, tour", "\"show April 2020\", \"open dashboard\", \"start tour\"", "same", "-"),
+    };
+
+    /// <summary>Voice assistant: hold Y (N in the Editor), say it, release. Shown on the Controls page's Voice tab.</summary>
+    public static readonly (string say, string does)[] Voice =
+    {
+        ("\"help\"", "lists what you can say"),
+        ("\"show Istanbul\" · \"find FRA\" · \"London\"", "selects the airport, turns you to it"),
+        ("\"route from London to Ankara\"", "fewest-stops route"),
+        ("\"describe\" · \"what is this\"", "tells about the selection"),
+        ("\"clear\" · \"close\"", "clears the selection"),
+        ("\"regional view\" · \"top routes\"", "view mode"),
+        ("\"map view\" · \"3D view\"", "map of Europe / 3D layout"),
+        ("\"filter cargo\" · \"filter Turkey\" · \"reset filters\"", "filters"),
+        ("\"play\" · \"show April 2020\" · \"all months\"", "timeline"),
+        ("\"open dashboard\" · \"open insights\"", "dashboard and its pages"),
+        ("\"group cities\" · \"ungroup cities\"", "city groups"),
+        ("\"go to the centre\"", "same as R3"),
+        ("\"start tour\" · \"next\" · \"stop tour\"", "guided tour"),
+        ("\"stop\" · \"quiet\"", "stops speech and the timeline"),
     };
 
     private static Row Section(string title) => new Row { action = title };
