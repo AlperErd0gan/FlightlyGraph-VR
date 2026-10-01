@@ -1,12 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using Newtonsoft.Json;
-using TMPro;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Networking;
 using UnityEngine.Rendering;
 
@@ -20,9 +17,9 @@ using UnityEngine.Rendering;
 ///   arc from origin to destination, same timing.
 /// Follows the switch between the two.
 /// Aircraft are drawn with GPU instancing (one draw call per 1023), no GameObject
-/// per flight, so hundreds of them stay cheap on Quest.
-/// Controls: B (right controller) or P = play / pause; Y (left controller) or ] =
-/// faster (cycles through speedSteps); [ = slower.
+/// per flight, so thousands of them stay cheap.
+/// Shown and driven by FlightPanel (dashboard → Live flights, P in the Editor):
+/// aircraft are drawn only while Visible.
 /// </summary>
 public class FlightSimulator : MonoBehaviour
 {
@@ -39,8 +36,10 @@ public class FlightSimulator : MonoBehaviour
     [Header("Time")]
     [Tooltip("Simulated seconds per real second (60 = one minute per second).")]
     public float speed = 60f;
-    public float[] speedSteps = { 15f, 30f, 60f, 120f, 300f, 600f };
-    public bool playOnLoad = true;
+    [Tooltip("Speeds the panel's speed button steps through (simulated seconds per second).")]
+    public float[] speedSteps = { 15f, 30f, 60f, 120f, 300f, 600f, 1800f };
+    [Tooltip("Start playing as soon as the flights are loaded (they are drawn only while Visible).")]
+    public bool playOnLoad = false;
     [Tooltip("Restart from the window start when the end is reached.")]
     public bool loop = true;
 
@@ -58,16 +57,6 @@ public class FlightSimulator : MonoBehaviour
     public float mapAircraftSize = 0.024f;
     [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
     public float mapCruiseHeight = 0.04f;
-
-    [Header("Clock")]
-    [Tooltip("Floating label (time, aircraft in the air, speed) that follows the viewer.")]
-    public bool showClock = true;
-    public float clockDistance = 1.2f;
-    [Tooltip("Height relative to the eyes (negative = below).")]
-    public float clockHeight = -0.35f;
-    [Tooltip("TextMeshPro 3D font size; 10 = 1 m line height.")]
-    public float clockFontSize = 0.5f;
-    public Color clockColor = new Color(1f, 1f, 1f, 0.9f);
 
     private const int MaxInstancesPerCall = 1023;
     private const float MinStepSqr = 1e-10f;
@@ -107,13 +96,14 @@ public class FlightSimulator : MonoBehaviour
     private Matrix4x4[] matrices = new Matrix4x4[0];
     private int activeCount;
 
-    private TextMeshPro clock;
-    private float nextClockUpdate;
 
-    private InputAction playPauseButton;
-    private InputAction fasterButton;
-
+    /// <summary>Aircraft are drawn (and time runs) only while visible: FlightPanel open.</summary>
+    public bool Visible { get; set; }
     public bool IsReady => ready;
+    /// <summary>Length of the simulated window (s).</summary>
+    public int DurationSec => data != null ? data.durationSec : 0;
+    /// <summary>Seconds per second now (speed).</summary>
+    public float Speed => speed;
     public bool IsPlaying => playing;
     /// <summary>Seconds since the window start (FlightSimData.startEpoch).</summary>
     public float SimTime => simTime;
@@ -129,21 +119,15 @@ public class FlightSimulator : MonoBehaviour
     {
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
         if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
-        playPauseButton = new InputAction("Flight Sim Play/Pause", InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
-        fasterButton = new InputAction("Flight Sim Faster", InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
     }
 
     private void OnEnable()
     {
-        playPauseButton.Enable();
-        fasterButton.Enable();
         if (geoMap != null) geoMap.ModeChanged += OnMapModeChanged;
     }
 
     private void OnDisable()
     {
-        playPauseButton.Disable();
-        fasterButton.Disable();
         if (geoMap != null) geoMap.ModeChanged -= OnMapModeChanged;
     }
 
@@ -157,12 +141,9 @@ public class FlightSimulator : MonoBehaviour
 
     private void OnDestroy()
     {
-        playPauseButton.Dispose();
-        fasterButton.Dispose();
         // Runtime-created assets are not scene objects: destroy them or they leak every Play.
         if (runtimeMaterial != null) Destroy(runtimeMaterial);
         if (ownedMesh != null) Destroy(ownedMesh);
-        if (clock != null) Destroy(clock.gameObject);
     }
 
     private IEnumerator Start()
@@ -203,15 +184,13 @@ public class FlightSimulator : MonoBehaviour
 
         BuildFlights();
         if (!CreateRenderResources()) yield break;
-        if (showClock) BuildClock();
         playing = playOnLoad;
         ready = true;
     }
 
     private void Update()
     {
-        if (!ready) return;
-        HandleInput();
+        if (!ready || !Visible) return;
 
         if (playing)
         {
@@ -241,16 +220,11 @@ public class FlightSimulator : MonoBehaviour
         }
     }
 
-    private void LateUpdate()
-    {
-        if (ready && clock != null) UpdateClock();
-    }
-
     // ------------------------------------------------------------------ public controls
 
     public void Play() { playing = true; }
     public void Pause() { playing = false; }
-    public void TogglePlay() { playing = !playing; nextClockUpdate = 0f; }
+    public void TogglePlay() { playing = !playing; }
 
     /// <summary>Jumps to `seconds` from the window start.</summary>
     public void Seek(float seconds)
@@ -258,7 +232,6 @@ public class FlightSimulator : MonoBehaviour
         simTime = Mathf.Clamp(seconds, 0f, data != null ? data.durationSec : 0f);
         ResetCursors();
         lastSimTime = simTime;
-        nextClockUpdate = 0f;
     }
 
     /// <summary>Next (+1) or previous (-1) entry of speedSteps; wraps around.</summary>
@@ -272,18 +245,6 @@ public class FlightSimulator : MonoBehaviour
         }
         int next = (current + direction + speedSteps.Length) % speedSteps.Length;
         speed = speedSteps[next];
-        nextClockUpdate = 0f;
-    }
-
-    private void HandleInput()
-    {
-        if (playPauseButton.WasPressedThisFrame()) TogglePlay();
-        if (fasterButton.WasPressedThisFrame()) StepSpeed(+1);
-        Keyboard kb = Keyboard.current;
-        if (kb == null) return;
-        if (kb.pKey.wasPressedThisFrame) TogglePlay();
-        if (kb.rightBracketKey.wasPressedThisFrame) StepSpeed(+1);
-        if (kb.leftBracketKey.wasPressedThisFrame) StepSpeed(-1);
     }
 
     // ------------------------------------------------------------------ setup
@@ -298,11 +259,28 @@ public class FlightSimulator : MonoBehaviour
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"FlightSimulator: failed to read '{uri}': {request.error}");
+                Debug.LogWarning($"FlightSimulator: '{fileName}' not found in StreamingAssets ({request.error}); " +
+                                 "run scripts/build_flight_sim.py and sync it. Live flights are unavailable.");
                 yield break;
             }
             onText(request.downloadHandler.text);
         }
+    }
+
+    /// <summary>Aircraft in the air (off-block .. arrival) in `bins` equal slices of the window, for a chart.</summary>
+    public float[] AirborneProfile(int bins)
+    {
+        var counts = new float[Mathf.Max(1, bins)];
+        if (data == null || data.durationSec <= 0) return counts;
+        float slice = (float)data.durationSec / counts.Length;
+        foreach (SimFlight f in flights)
+        {
+            int a = Mathf.Clamp(Mathf.FloorToInt(f.start / slice), 0, counts.Length - 1);
+            int b = Mathf.Clamp(Mathf.FloorToInt(f.end / slice), 0, counts.Length - 1);
+            if (f.end < 0f || f.start > data.durationSec) continue;
+            for (int i = a; i <= b; i++) counts[i]++;
+        }
+        return counts;
     }
 
     private bool MapShown => geoMap != null && geoMap.Ready && geoMap.IsMap;
@@ -633,41 +611,5 @@ public class FlightSimulator : MonoBehaviour
         position = Vector3.Lerp(points[lo], points[hi], u);
         forward = points[hi] - points[lo];
         if (f.reversed) forward = -forward;
-    }
-
-    // ------------------------------------------------------------------ clock
-
-    private void BuildClock()
-    {
-        var go = new GameObject("Flight Sim Clock");
-        clock = go.AddComponent<TextMeshPro>();
-        clock.fontSize = clockFontSize;
-        clock.color = clockColor;
-        clock.alignment = TextAlignmentOptions.Center;
-        clock.textWrappingMode = TextWrappingModes.NoWrap;
-        clock.overflowMode = TextOverflowModes.Overflow;
-        clock.rectTransform.sizeDelta = new Vector2(1f, 0.2f);
-    }
-
-    private void UpdateClock()
-    {
-        Camera cam = Camera.main;
-        if (cam == null) return;
-        Transform head = cam.transform;
-
-        // Lazy follow: stays in front of the viewer at a fixed height without being head-locked.
-        Vector3 flatForward = Vector3.ProjectOnPlane(head.forward, Vector3.up);
-        if (flatForward.sqrMagnitude < 1e-4f) flatForward = Vector3.ProjectOnPlane(head.up, Vector3.up);
-        Vector3 target = head.position + flatForward.normalized * clockDistance + Vector3.up * clockHeight;
-        Transform t = clock.transform;
-        t.position = Vector3.Lerp(t.position, target, 1f - Mathf.Exp(-3f * Time.deltaTime));
-        // TMP text reads correctly when its +Z points away from the viewer.
-        Vector3 away = t.position - head.position;
-        if (away.sqrMagnitude > 1e-6f) t.rotation = Quaternion.LookRotation(away, Vector3.up);
-
-        if (Time.unscaledTime < nextClockUpdate) return;
-        nextClockUpdate = Time.unscaledTime + 0.25f;
-        clock.text = string.Format(CultureInfo.InvariantCulture, "{0:HH:mm} UTC  {0:dd MMM yyyy}\n{1} in the air  {2}",
-            SimUtc, activeCount, playing ? $"{speed:0}x" : "PAUSED");
     }
 }
