@@ -39,7 +39,7 @@ public class DataDashboard : MonoBehaviour
     public TimelinePanel timeline;
     [Tooltip("City grouping (several airports of one city as one node), switched on the Clusters page. Found in the scene if unset; added to this object if the scene has none.")]
     public CityClusters cityClusters;
-    [Tooltip("Re-centres the graph at the head (seated use), from the Controls page. Found in the scene if unset; added to this object if the scene has none.")]
+    [Tooltip("Teleports the viewer to the graph centre, from the Controls page. Found in the scene if unset; added to this object if the scene has none.")]
     public GraphRecenter recenter;
     [Tooltip("Selecting an airport while the dashboard is open switches to the Selected page.")]
     public bool followSelection = true;
@@ -447,7 +447,7 @@ public class DataDashboard : MonoBehaviour
                         26f, 17f);
         if (recenter == null) return;
         y += 12f;
-        UIKit.Button(content, "Re-centre graph", recenter.Recenter, 0f, y, 250f, 44f,
+        UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
                      UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
         UIKit.Text(content, "Seated? Brings the graph to your eye height, facing you.", 17f,
                    UIKit.MutedTextColor, 266f, y + 10f, W - 266f, 26f);

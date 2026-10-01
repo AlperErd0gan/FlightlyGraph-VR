@@ -1,27 +1,30 @@
+using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
-/// Seated use / different heights (TASKS B3): one button moves the graph's centre to the
-/// viewer's head and turns its front (+Z, the biggest hub in layout_3d.py) to where they
-/// look. Right thumbstick click (R3; recenterBinding), H in the Editor, or the button on
-/// the dashboard's Controls page.
-/// The graph snaps instead of gliding (a world sliding around you is uncomfortable in VR),
-/// and is lowered only as far as keeps every airport above the floor.
+/// Re-centre (TASKS B3): one button teleports the viewer to the graph's centre and turns
+/// them to its front (+Z, the biggest hub in layout_3d.py). The graph stays where it is;
+/// the XR Origin moves, in one snap like a teleport. Right thumbstick click (R3;
+/// recenterBinding), H in the Editor, or the button on the dashboard's Controls page.
+/// With matchEyeHeight (default; seated use / different heights) the eyes also go to the
+/// centre's height, and the floors (teleport areas / anchors) move by the same amount so
+/// the virtual floor stays where the real one is and later teleports keep that height.
+/// Off = only the horizontal position changes, like a normal teleport.
 /// </summary>
 public class GraphRecenter : MonoBehaviour
 {
     public GraphLoader graph;
-    [Tooltip("Head (camera). Defaults to Camera.main (the XR head camera).")]
-    public Transform head;
     [Tooltip("Controller button that re-centres (Input System path). Default: right thumbstick click (R3). Empty = no controller button.")]
     public string recenterBinding = "<XRController>{RightHand}/{Primary2DAxisClick}";
-    [Tooltip("Also turn the graph so its front is where you look (otherwise only its position changes).")]
-    public bool faceViewer = true;
-    [Tooltip("Lowest height (m) an airport may have after re-centring; seated eyes are lower than the layout assumes.")]
-    public float floorClearance = 0.25f;
+    [Tooltip("Also turn the viewer to face the graph's front (+Z, the biggest hub).")]
+    public bool faceGraphFront = true;
+    [Tooltip("Also put the eyes at the graph centre's height (seated use), moving the floors along. Off = only move horizontally.")]
+    public bool matchEyeHeight = true;
 
-    /// <summary>Raised after the graph has moved.</summary>
+    /// <summary>Raised after the viewer has moved.</summary>
     public event System.Action Recentered;
 
     private InputAction recenterAction;
@@ -45,34 +48,56 @@ public class GraphRecenter : MonoBehaviour
         if (recenterAction.WasPressedThisFrame() && !GuidedTour.InputLocked) Recenter();
     }
 
-    /// <summary>Moves the graph to the head (height clamped above the floor) and, with faceViewer, turns it to the gaze.</summary>
+    /// <summary>Teleports the viewer to the graph centre and, with faceGraphFront, turns them to its front.</summary>
     public void Recenter()
     {
         if (graph == null || !graph.IsLoaded) return;
-        if (head == null && Camera.main != null) head = Camera.main.transform;
-        if (head == null) return;
+        XROrigin origin = FindFirstObjectByType<XROrigin>();
+        if (origin == null || origin.Camera == null) return;
+        Transform head = origin.Camera.transform;
+        Transform centre = graph.transform;
 
-        Transform t = graph.transform;
-        // How far the lowest airport sits below the centre (turning around Y keeps heights).
-        float lowest = 0f;
-        foreach (GraphNode node in graph.Nodes.Values)
+        Vector3 target = centre.position;
+        if (!matchEyeHeight) target.y = head.position.y; // a normal teleport: keep the current eye height
+        float originHeightBefore = origin.Origin.transform.position.y;
+
+        origin.MoveCameraToWorldLocation(target);
+        if (faceGraphFront)
         {
-            lowest = Mathf.Min(lowest, node.transform.position.y - t.position.y);
-        }
-        Vector3 target = head.position;
-        target.y = Mathf.Max(target.y, floorClearance - lowest);
-        t.position = target;
-
-        if (faceViewer)
-        {
-            Vector3 forward = Vector3.ProjectOnPlane(head.forward, Vector3.up);
-            if (forward.sqrMagnitude > 1e-4f) t.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+            Vector3 look = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+            Vector3 front = Vector3.ProjectOnPlane(centre.forward, Vector3.up);
+            if (look.sqrMagnitude > 1e-6f && front.sqrMagnitude > 1e-6f)
+            {
+                origin.RotateAroundCameraUsingOriginUp(Vector3.SignedAngle(look, front, Vector3.up));
+            }
         }
 
-        // Edge arcs are world-space points around the centre: draw them again from the new airport positions.
-        graph.RebuildEdges(graph.Edges);
+        float heightChange = origin.Origin.transform.position.y - originHeightBefore;
+        int floorsMoved = matchEyeHeight && Mathf.Abs(heightChange) > 0.001f ? MoveFloors(heightChange) : 0;
+
         UISounds.Play(UISounds.Open, head.position + head.forward * 0.5f);
-        Debug.Log($"GraphRecenter: graph centre at {target.y:F2} m (head {head.position.y:F2} m)");
+        Debug.Log($"GraphRecenter: matchEyeHeight={matchEyeHeight}, graph centre y={centre.position.y:F2}, " +
+                  $"eyes now y={head.position.y:F2}, origin moved {heightChange:+0.00;-0.00} m vertically, floors moved: {floorsMoved}");
         Recentered?.Invoke();
+    }
+
+    /// <summary>Moves every teleport area / anchor (each object once, even if nested) by dy; returns how many moved.</summary>
+    private static int MoveFloors(float dy)
+    {
+        int moved = 0;
+        var floors = new HashSet<Transform>();
+        foreach (BaseTeleportationInteractable floor in FindObjectsByType<BaseTeleportationInteractable>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            floors.Add(floor.transform);
+        }
+        foreach (Transform t in floors)
+        {
+            bool nested = false;
+            for (Transform p = t.parent; p != null && !nested; p = p.parent) nested = floors.Contains(p);
+            if (nested) continue;
+            t.position += Vector3.up * dy;
+            moved++;
+        }
+        return moved;
     }
 }
