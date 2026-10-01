@@ -156,6 +156,13 @@ public class GraphLoader : MonoBehaviour
     /// <summary>Raised after SetPeriod has restyled the graph.</summary>
     public event System.Action PeriodChanged;
     public int PeriodCount => HasTimeAxis ? Meta.periods.Length : 0;
+
+    /// <summary>Layout overriding airport homes and route shapes (SetLayout), or null = the data's own positions.</summary>
+    public IGraphLayout Layout { get; private set; }
+    /// <summary>Raised after SetLayout has restyled the graph.</summary>
+    public event System.Action LayoutChanged;
+    // _Tint of the edge material before SetEdgeFade.
+    private Color edgeTint = Color.white;
     // Size scales of the current view, set by ApplyNodeStyle (see ShownValue).
     private float periodScale = 1f;
     private float segmentScale = 1f;
@@ -580,7 +587,44 @@ public class GraphLoader : MonoBehaviour
     /// <summary>Sphere diameter for a shown value (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).</summary>
     public float NodeSize(float shownValue)
     {
-        return nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0f, shownValue));
+        float size = nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0f, shownValue));
+        return Layout != null ? size * Layout.NodeScale : size;
+    }
+
+    /// <summary>An airport's position in the data's own layout (x, y, z of the nodes file), local.</summary>
+    public Vector3 DataPosition(GraphNode node)
+    {
+        if (node.data == null) return node.transform.localPosition;
+        return new Vector3(node.data.x, node.data.y * altitudeScale, node.data.z) * positionScale;
+    }
+
+    /// <summary>Where an airport rests in the current layout (local): the layout's home, else DataPosition.</summary>
+    public Vector3 HomePosition(GraphNode node)
+    {
+        return Layout != null ? Layout.Home(node) : DataPosition(node);
+    }
+
+    /// <summary>
+    /// Switches where airports rest and how routes are drawn (null = the data's own layout).
+    /// Sizes and route widths follow at once; moving the airports to HomePosition and
+    /// RebuildEdges are up to the caller, which usually animates them (GeoMapView).
+    /// </summary>
+    public void SetLayout(IGraphLayout layout)
+    {
+        Layout = layout;
+        if (!IsLoaded) return;
+        ApplyNodeStyle();
+        edgesDirty = true;
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Fades every route (1 = as styled, 0 = invisible), e.g. while airports move.</summary>
+    public void SetEdgeFade(float fade)
+    {
+        if (runtimeEdgeMaterial == null || edgesObject == null) return;
+        fade = Mathf.Clamp01(fade);
+        runtimeEdgeMaterial.SetColor("_Tint", edgeTint * fade);
+        edgesObject.SetActive(fade > 0f);
     }
 
     /// <summary>Runtime copy of the ribbon material with edgeIntensity applied to _Tint.</summary>
@@ -611,7 +655,8 @@ public class GraphLoader : MonoBehaviour
 
         runtimeEdgeMaterial.name = "Graph Edges (runtime)";
         Color tint = runtimeEdgeMaterial.GetColor("_Tint");
-        runtimeEdgeMaterial.SetColor("_Tint", new Color(tint.r * edgeIntensity, tint.g * edgeIntensity, tint.b * edgeIntensity, tint.a));
+        edgeTint = new Color(tint.r * edgeIntensity, tint.g * edgeIntensity, tint.b * edgeIntensity, tint.a);
+        runtimeEdgeMaterial.SetColor("_Tint", edgeTint);
         return runtimeEdgeMaterial;
     }
 
@@ -620,10 +665,11 @@ public class GraphLoader : MonoBehaviour
     {
         int verticesPerEdge = (builtSegments + 1) * 2;
         var hidden = new Color32(0, 0, 0, 0);
+        float widthScale = Layout != null ? Layout.EdgeWidthScale : 1f;
         foreach (GraphEdge e in edgeInstances)
         {
             Color32 color = e.visible ? (Color32)e.displayColor : hidden;
-            float width = e.visible ? e.displayWidth : 0f;
+            float width = e.visible ? e.displayWidth * widthScale : 0f;
             int start = e.index * verticesPerEdge;
             for (int v = start; v < start + verticesPerEdge; v++)
             {
@@ -644,9 +690,14 @@ public class GraphLoader : MonoBehaviour
         edgesDirty = true;
     }
 
-    /// <summary>Quadratic Bézier from a to b whose midpoint is lifted along +Y.</summary>
+    /// <summary>Quadratic Bézier from a to b whose midpoint is lifted along +Y (or the layout's shape).</summary>
     private void FillArc(Vector3 a, Vector3 b, Vector3[] points)
     {
+        if (Layout != null)
+        {
+            Layout.FillEdge(a, b, points);
+            return;
+        }
         if (edgeShape == EdgeShape.AroundCenter)
         {
             FillArcAroundCenter(a, b, points);
