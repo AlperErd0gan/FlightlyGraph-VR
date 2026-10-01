@@ -184,9 +184,12 @@ public static class UIKit
     {
         Image image = Box(parent, "Button " + label, Color.white, ButtonRadius);
         image.raycastTarget = true;
+        // Configured while inactive: on enable the Button applies its normal colour at once
+        // (added to an active object it would fade in from white, a visible flash).
+        image.gameObject.SetActive(false);
         Button button = image.gameObject.AddComponent<Button>();
         button.targetGraphic = image;
-        SetButtonColor(button, StyleColor(style));
+        SetButtonColor(button, StyleColor(style), false);
         if (onClick != null) button.onClick.AddListener(onClick);
         button.onClick.AddListener(() => UISounds.Play(UISounds.Click, image.transform.position));
 
@@ -226,6 +229,7 @@ public static class UIKit
             text.textWrappingMode = TextWrappingModes.NoWrap;
             if (icon != UIIcon.Shape.None) text.margin = new Vector4(fontSize + 20f, 0f, 10f, 0f);
         }
+        image.gameObject.SetActive(true);
         return button;
     }
 
@@ -238,8 +242,11 @@ public static class UIKit
         return button;
     }
 
-    /// <summary>Sets a button's resting colour; hover / press / disabled shades are derived from it.</summary>
-    public static void SetButtonColor(Button button, Color color)
+    /// <summary>
+    /// Sets a button's resting colour; hover / press / disabled shades are derived from it.
+    /// instant: show it right away instead of the Button's short colour fade.
+    /// </summary>
+    public static void SetButtonColor(Button button, Color color, bool instant = true)
     {
         bool transparent = color.a < 0.01f;
         ColorBlock colors = button.colors;
@@ -252,6 +259,10 @@ public static class UIKit
         colors.colorMultiplier = 1f;
         colors.fadeDuration = 0.08f;
         button.colors = colors;
+        if (instant && button.isActiveAndEnabled && button.targetGraphic != null)
+        {
+            button.targetGraphic.CrossFadeColor(button.interactable ? color : colors.disabledColor, 0f, true, true);
+        }
     }
 
     /// <summary>Changes a button's label text (first TextMeshProUGUI child).</summary>

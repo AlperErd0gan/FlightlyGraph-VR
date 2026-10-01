@@ -29,8 +29,9 @@ public class TimelinePanel : MonoBehaviour
     [Header("Placement")]
     [Tooltip("Distance in front of the eyes (m).")]
     public float distance = 0.95f;
-    [Tooltip("Height of the panel centre relative to the eyes (m); below eye level so it does not cover the graph.")]
-    public float heightOffset = -0.38f;
+    [Tooltip("Height of the panel centre relative to the eyes (m); below eye level so it does not cover the graph, " +
+             "and below the info panel.")]
+    public float heightOffset = -0.46f;
     [Tooltip("Starts following once the panel is this many degrees (horizontally) away from where you look.")]
     public float followAngle = 50f;
     [Tooltip("Beyond this (e.g. after a teleport) the panel jumps instead of gliding (m).")]
@@ -111,7 +112,7 @@ public class TimelinePanel : MonoBehaviour
             foreach (BaseRaycaster raycaster in canvas.GetComponents<BaseRaycaster>()) raycaster.enabled = !locked;
         }
         if (!locked && toggleKey.WasPressedThisFrame()) Toggle();
-        if (locked && playing) SetPlaying(false);
+        if (locked && IsOpen) Close(); // the guided tour shows all months and its own captions here
         if (!playing || !IsOpen) return;
 
         stepTimer += Time.deltaTime * CurrentSpeed;
@@ -239,11 +240,13 @@ public class TimelinePanel : MonoBehaviour
         monthText = UIKit.Text(root, "", UIKit.TitleSize, UIKit.TextColor, Pad + 196f, Pad - 2f, 360f, 50f, TextAlignmentOptions.Left);
         monthText.fontStyle = FontStyles.Bold;
         monthText.textWrappingMode = TextWrappingModes.NoWrap;
-        statsText = UIKit.Text(root, "", UIKit.SmallSize, UIKit.MutedTextColor, Pad + 198f, Pad + 44f, 400f, 26f, TextAlignmentOptions.Left);
+        // Up to the "All months" button.
+        statsText = UIKit.Text(root, "", UIKit.SmallSize, UIKit.MutedTextColor, Pad + 198f, Pad + 44f, 372f, 26f, TextAlignmentOptions.Left);
 
         float right = Size.x - Pad;
         UIKit.Button(root, "", Close, right - 52f, Pad + 6f, 52f, 52f, UIKit.ButtonStyle.Ghost, 22f, UIIcon.Shape.Close);
-        speedButton = UIKit.Button(root, "", CycleSpeed, right - 52f - 12f - 96f, Pad + 6f, 96f, 52f, UIKit.ButtonStyle.Secondary, UIKit.BodySize);
+        speedButton = UIKit.Button(root, "1 mo/s", CycleSpeed, right - 52f - 12f - 96f, Pad + 6f, 96f, 52f, UIKit.ButtonStyle.Secondary,
+                                   UIKit.SmallSize);
         allButton = UIKit.Button(root, "All months", () => { SetPlaying(false); graph.SetPeriod(-1); },
                                  right - 52f - 12f - 96f - 12f - 170f, Pad + 6f, 170f, 52f, UIKit.ButtonStyle.Secondary, UIKit.BodySize);
 
@@ -355,9 +358,9 @@ public class TimelinePanel : MonoBehaviour
             monthText.text = MonthTitle(meta.periods[p]);
             float first = perDay[0];
             string share = first > 0f
-                ? "  ·  " + (perDay[p] / first * 100f).ToString("0", Inv) + "% of " + MonthTitle(meta.periods[0])
+                ? "  ·  " + (perDay[p] / first * 100f).ToString("0", Inv) + "% of " + ShortMonth(meta.periods[0])
                 : "";
-            statsText.text = perDay[p].ToString("N0", Inv) + " flights / day in the whole network" + share;
+            statsText.text = perDay[p].ToString("N0", Inv) + " flights / day in total" + share;
             slider.SetValueWithoutNotify(p);
             slider.handleRect.gameObject.SetActive(true);
             chart.SetData(perDay, UIChart.Kind.Line, p);
@@ -366,7 +369,7 @@ public class TimelinePanel : MonoBehaviour
         else
         {
             monthText.text = "All months";
-            statsText.text = MonthTitle(meta.periods[0]) + " to " + MonthTitle(meta.periods[n - 1]) + "  ·  " + n + " months together";
+            statsText.text = ShortMonth(meta.periods[0]) + " to " + ShortMonth(meta.periods[n - 1]) + "  ·  " + n + " months together";
             slider.handleRect.gameObject.SetActive(false);
             chart.SetData(perDay, UIChart.Kind.Line, -1);
             UIKit.SetButtonColor(allButton, UIKit.AccentSoftColor);
@@ -381,5 +384,13 @@ public class TimelinePanel : MonoBehaviour
             return MonthNames[month - 1] + " " + period.Substring(0, 4);
         }
         return period;
+    }
+
+    /// <summary>"2020-04" -> "Apr 2020".</summary>
+    private static string ShortMonth(string period)
+    {
+        string title = MonthTitle(period);
+        int space = title != null ? title.IndexOf(' ') : -1;
+        return space > 3 ? title.Substring(0, 3) + title.Substring(space) : title;
     }
 }
