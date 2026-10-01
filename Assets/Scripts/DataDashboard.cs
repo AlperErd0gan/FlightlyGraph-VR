@@ -226,6 +226,9 @@ public class DataDashboard : MonoBehaviour
 
     public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
 
+    /// <summary>The dashboard panel (world-space canvas), or null before it is built; other panels place themselves beside it.</summary>
+    public RectTransform Panel => canvas != null ? (RectTransform)canvas.transform : null;
+
     public void Open()
     {
         if (graph == null || !graph.IsLoaded) return;
