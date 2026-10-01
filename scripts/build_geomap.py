@@ -213,8 +213,8 @@ def area_km2(geometry):
     return total
 
 
-def country_labels(countries, lat0, lon0, radius, max_min_label=5.0, min_area_km2=5000.0):
-    """Country names to place on the map: label point inside the disc; no dependencies or microstates."""
+def country_labels(countries, lat0, lon0, radius, max_min_label=5.0, min_area_km2=15000.0):
+    """Country names to place on the map: label point inside the disc; no dependencies or small countries (they crowd the Levant and the Balkans)."""
     labels = []
     for f in countries["features"]:
         p = f["properties"]
