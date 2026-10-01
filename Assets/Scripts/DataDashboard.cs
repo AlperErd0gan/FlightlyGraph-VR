@@ -100,6 +100,8 @@ public class DataDashboard : MonoBehaviour
     private Image periodChipBack;
     private TextMeshProUGUI datasetText;
     private TextMeshProUGUI mapButtonLabel;
+    // Controls page: the voice commands instead of the buttons.
+    private bool controlsVoice;
     private readonly Dictionary<Tab, NavItem> nav = new Dictionary<Tab, NavItem>();
     private Tab current = Tab.Overview;
     private GraphNode pinned;            // compared with the selected airport on the Selected page
@@ -456,21 +458,32 @@ public class DataDashboard : MonoBehaviour
     private void BuildControls()
     {
         var rows = new List<string[]>();
-        string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
-        foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+        float y;
+        if (controlsVoice)
         {
-            rows.Add(row.IsSection
-                ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
-                : new[] { row.action, row.controller, row.hands, row.editor });
+            foreach ((string say, string does) in ControlsHelp.Voice) rows.Add(new[] { say, does });
+            y = Table(0f, 0f, W, new[] { "Hold Y (N in the Editor), say, release", "Does" }, new[] { 0f, 0.58f }, rows, null, 26f, 17f);
         }
-        float y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
-                        26f, 17f);
-        if (recenter == null) return;
+        else
+        {
+            string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
+            foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+            {
+                rows.Add(row.IsSection
+                    ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
+                    : new[] { row.action, row.controller, row.hands, row.editor });
+            }
+            y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
+                      26f, 17f);
+        }
         y += 12f;
-        UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
-                     UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
-        UIKit.Text(content, "Seated? Brings the graph to your eye height, facing you.", 17f,
-                   UIKit.MutedTextColor, 266f, y + 10f, W - 266f, 26f);
+        if (recenter != null && !controlsVoice)
+        {
+            UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
+                         UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
+        }
+        Toggles(new List<string> { "Buttons", "Voice" }, W - 280f, y, 280f, 44f,
+                i => (controlsVoice == (i == 1), () => { controlsVoice = i == 1; Show(Tab.Controls); }));
     }
 
     private float W => content.rect.width;
