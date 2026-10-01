@@ -11,8 +11,9 @@ using UnityEngine.XR.Hands;
 /// - Regional: nodes and edges coloured by community (layout_3d.py `community`),
 ///   edges inside communities plus a few faint ones between them, labels on the
 ///   biggest airports of each community, the info panel names the cluster.
-/// Toggle: B / Y on the controllers, left palm facing up + pinch with bare hands,
-/// V in the Editor (XR Interaction Simulator: key 2 = secondary button).
+/// Toggle: left thumbstick click (L3; toggleBinding), left palm facing up + pinch with
+/// bare hands, V in the Editor. One button toggles both ways; B / Y stay free (they
+/// usually mean back / cancel).
 /// A short notice in front of the viewer shows the new mode.
 /// </summary>
 public class GraphViewMode : MonoBehaviour
@@ -24,6 +25,9 @@ public class GraphViewMode : MonoBehaviour
     [Tooltip("Optional; relabelled per mode. Found in the scene if unset.")]
     public HubLabels hubLabels;
     public ViewMode startMode = ViewMode.TopRoutes;
+    [Tooltip("Controller button that switches the view (Input System path). Default: left thumbstick click (L3); " +
+             "e.g. <XRController>{RightHand}/{Primary2DAxisClick} for R3. Empty = no controller button.")]
+    public string toggleBinding = "<XRController>{LeftHand}/{Primary2DAxisClick}";
 
     [Header("Hand gesture (left palm up + pinch)")]
     public bool handGesture = true;
@@ -53,8 +57,7 @@ public class GraphViewMode : MonoBehaviour
         if (hubLabels == null) hubLabels = FindFirstObjectByType<HubLabels>();
 
         toggleAction = new InputAction("Toggle View Mode", InputActionType.Button);
-        toggleAction.AddBinding("<XRController>{RightHand}/secondaryButton");
-        toggleAction.AddBinding("<XRController>{LeftHand}/secondaryButton");
+        if (!string.IsNullOrEmpty(toggleBinding)) toggleAction.AddBinding(toggleBinding);
         toggleAction.AddBinding("<Keyboard>/v");
 
         notice = new GameObject("ViewMode Notice").AddComponent<TextMeshPro>();

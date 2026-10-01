@@ -22,6 +22,8 @@ public class GraphLoader : MonoBehaviour
     [Header("Files (relative to Application.streamingAssetsPath)")]
     public string nodesFileName = "nodes.json";
     public string edgesFileName = "edges.json";
+    [Tooltip("Optional time axis (meta file of build_graph_ectrl.py: months, days, flights). Missing = no timeline; the graph shows all months together.")]
+    public string metaFileName = "meta_ectrl.json";
 
     [Header("Nodes")]
     [Tooltip("Optional. If unset, a sphere primitive is created per node.")]
@@ -108,8 +110,12 @@ public class GraphLoader : MonoBehaviour
     private GameObject edgesObject;
     private Mesh edgeMesh;
     private Material runtimeEdgeMaterial;
+    private Vector3[] edgeVertices;
+    private Vector3[] edgeDirections;
     private Vector2[] edgeUVs;
     private Color32[] edgeColors;
+    // Edges kept hidden whatever the filter or selection (RebuildEdges callers, e.g. inside a collapsed city).
+    private readonly HashSet<GraphEdge> suppressedEdges = new HashSet<GraphEdge>();
     private int builtSegments;
     private bool edgesDirty;
 
@@ -138,6 +144,23 @@ public class GraphLoader : MonoBehaviour
     public event System.Action FilterChanged;
     [Tooltip("Brightness of airports outside the current filter (data dashboard).")]
     [Range(0f, 1f)] public float filteredNodeBrightness = 0.2f;
+
+    // Time axis (metaFileName) and the month shown (SetPeriod, used by the timeline).
+    /// <summary>Months, days and flights per month, or null when the dataset has none (e.g. OpenFlights).</summary>
+    public MetaData Meta { get; private set; }
+    /// <summary>True when Meta is complete and the airports carry monthly counts on the same axis.</summary>
+    public bool HasTimeAxis { get; private set; }
+    /// <summary>Month shown (index into Meta.periods), or -1 = all months together.</summary>
+    public int Period { get; private set; } = -1;
+    public bool HasPeriod => Period >= 0;
+    /// <summary>Raised after SetPeriod has restyled the graph.</summary>
+    public event System.Action PeriodChanged;
+    public int PeriodCount => HasTimeAxis ? Meta.periods.Length : 0;
+    // Size scales of the current view, set by ApplyNodeStyle (see ShownValue).
+    private float periodScale = 1f;
+    private float segmentScale = 1f;
+    /// <summary>Days in the current view: the month's length, or the whole time axis (0 without one).</summary>
+    public int CurrentDays => !HasTimeAxis ? 0 : HasPeriod ? Meta.periodDays[Period] : Meta.days;
 
     public IReadOnlyList<GraphEdge> EdgesOf(string nodeId)
     {
@@ -187,6 +210,12 @@ public class GraphLoader : MonoBehaviour
             yield break;
         }
 
+        string metaJson = null;
+        if (!string.IsNullOrEmpty(metaFileName))
+        {
+            yield return ReadStreamingAsset(metaFileName, text => metaJson = text, optional: true);
+        }
+
         // No yield inside try/catch: C# does not allow yield statements in catch blocks.
         List<NodeData> nodes = null;
         List<EdgeData> edges = null;
@@ -214,18 +243,55 @@ public class GraphLoader : MonoBehaviour
 
         BuildNodes(nodes);
         BuildEdges(edges);
+        LoadTimeAxis(metaJson);
         ApplyEdgeFilter();
         IsLoaded = true;
 
         Debug.Log($"GraphLoader: loaded {nodeInstances.Count} nodes, {edgeInstances.Count} edges " +
-                  $"({nodes.Count} nodes / {edges.Count} edges in files).");
+                  $"({nodes.Count} nodes / {edges.Count} edges in files)" +
+                  (HasTimeAxis ? $", time axis {Meta.periods[0]} .. {Meta.periods[Meta.periods.Length - 1]} ({Meta.periods.Length} months)." : ", no time axis."));
+    }
+
+    /// <summary>Parses the optional meta file; the time axis is used only if the airports' monthly counts match it.</summary>
+    private void LoadTimeAxis(string metaJson)
+    {
+        Meta = null;
+        HasTimeAxis = false;
+        if (string.IsNullOrEmpty(metaJson)) return;
+        try
+        {
+            Meta = JsonConvert.DeserializeObject<MetaData>(metaJson);
+        }
+        catch (JsonException ex)
+        {
+            Debug.LogWarning($"GraphLoader: could not read {metaFileName}: {ex.Message}");
+            return;
+        }
+        if (Meta == null || Meta.periods == null || Meta.periods.Length == 0 || Meta.periodDays == null ||
+            Meta.periodFlights == null || Meta.periodDays.Length != Meta.periods.Length ||
+            Meta.periodFlights.Length != Meta.periods.Length || Meta.days <= 0)
+        {
+            Debug.LogWarning($"GraphLoader: {metaFileName} has no complete time axis; timeline disabled.");
+            return;
+        }
+        foreach (GraphNode node in nodeInstances.Values)
+        {
+            if (node.data == null || node.data.monthly == null || node.data.monthly.Length != Meta.periods.Length)
+            {
+                Debug.LogWarning($"GraphLoader: airport {node.id} has no monthly counts for the {Meta.periods.Length} months " +
+                                 $"of {metaFileName} (different builds?); timeline disabled.");
+                return;
+            }
+        }
+        HasTimeAxis = true;
     }
 
     /// <summary>
     /// Reads a file under StreamingAssets via UnityWebRequest. On success invokes
-    /// onText with the file contents; on failure logs an error and leaves it uncalled.
+    /// onText with the file contents; on failure logs an error (a note if optional)
+    /// and leaves it uncalled.
     /// </summary>
-    private IEnumerator ReadStreamingAsset(string fileName, System.Action<string> onText)
+    private IEnumerator ReadStreamingAsset(string fileName, System.Action<string> onText, bool optional = false)
     {
         string path = Path.Combine(Application.streamingAssetsPath, fileName);
         // On desktop/Editor streamingAssetsPath is a bare filesystem path; UnityWebRequest
@@ -238,7 +304,8 @@ public class GraphLoader : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError($"GraphLoader: failed to read '{uri}': {request.error}");
+                if (optional) Debug.Log($"GraphLoader: optional '{fileName}' not found ({request.error}).");
+                else Debug.LogError($"GraphLoader: failed to read '{uri}': {request.error}");
                 yield break;
             }
 
@@ -392,27 +459,20 @@ public class GraphLoader : MonoBehaviour
         int verticesPerEdge = pointsPerEdge * 2;
         int vertexCount = edgeInstances.Count * verticesPerEdge;
 
-        var vertices = new Vector3[vertexCount];
-        var directions = new Vector3[vertexCount];
+        edgeVertices = new Vector3[vertexCount];
+        edgeDirections = new Vector3[vertexCount];
         var indices = new int[edgeInstances.Count * builtSegments * 6];
         edgeUVs = new Vector2[vertexCount];
         edgeColors = new Color32[vertexCount];
 
-        int vi = 0;
         int ii = 0;
         foreach (GraphEdge e in edgeInstances)
         {
-            int first = vi;
-            for (int p = 0; p < pointsPerEdge; p++)
+            int first = e.index * verticesPerEdge;
+            WriteEdgeGeometry(e);
+            for (int v = first; v < first + verticesPerEdge; v++)
             {
-                Vector3 direction = e.points[Mathf.Min(p + 1, pointsPerEdge - 1)] - e.points[Mathf.Max(p - 1, 0)];
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    vertices[vi] = e.points[p];
-                    directions[vi] = direction;
-                    edgeUVs[vi] = new Vector2(side, 0f);
-                    vi++;
-                }
+                edgeUVs[v] = new Vector2((v - first) % 2 == 0 ? -1f : 1f, 0f);
             }
             for (int seg = 0; seg < builtSegments; seg++)
             {
@@ -430,16 +490,12 @@ public class GraphLoader : MonoBehaviour
         edgeMesh = new Mesh { name = "Graph Edges" };
         edgeMesh.indexFormat = vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
         edgeMesh.MarkDynamic();
-        edgeMesh.vertices = vertices;
-        edgeMesh.normals = directions;
+        edgeMesh.vertices = edgeVertices;
+        edgeMesh.normals = edgeDirections;
         edgeMesh.SetUVs(0, edgeUVs);
         edgeMesh.colors32 = edgeColors;
         edgeMesh.SetIndices(indices, MeshTopology.Triangles, 0);
-        edgeMesh.RecalculateBounds();
-        // Ribbons are widened in the shader, beyond the centre-line bounds.
-        Bounds bounds = edgeMesh.bounds;
-        bounds.Expand(1f);
-        edgeMesh.bounds = bounds;
+        UpdateEdgeBounds();
 
         edgesObject = new GameObject("Edges (GraphLoader)");
         edgesObject.AddComponent<MeshFilter>().sharedMesh = edgeMesh;
@@ -451,6 +507,80 @@ public class GraphLoader : MonoBehaviour
         meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 
         edgesDirty = true;
+    }
+
+    /// <summary>Writes an edge's centre-line points and directions into the mesh arrays (2 vertices per point).</summary>
+    private void WriteEdgeGeometry(GraphEdge e)
+    {
+        int pointsPerEdge = builtSegments + 1;
+        int vi = e.index * pointsPerEdge * 2;
+        for (int p = 0; p < pointsPerEdge; p++)
+        {
+            Vector3 direction = e.points[Mathf.Min(p + 1, pointsPerEdge - 1)] - e.points[Mathf.Max(p - 1, 0)];
+            edgeVertices[vi] = edgeVertices[vi + 1] = e.points[p];
+            edgeDirections[vi] = edgeDirections[vi + 1] = direction;
+            vi += 2;
+        }
+    }
+
+    private void UpdateEdgeBounds()
+    {
+        edgeMesh.RecalculateBounds();
+        // Ribbons are widened in the shader, beyond the centre-line bounds.
+        Bounds bounds = edgeMesh.bounds;
+        bounds.Expand(1f);
+        edgeMesh.bounds = bounds;
+    }
+
+    /// <summary>
+    /// Recomputes the arcs of `edges` from their airports' current positions and updates
+    /// the mesh: call it after moving airports at runtime (e.g. CityClusters gathering a
+    /// city's airports in one spot). GraphEdge.points follow, so picking stays right.
+    /// </summary>
+    public void RebuildEdges(IEnumerable<GraphEdge> edges)
+    {
+        if (edgeMesh == null) return;
+        bool any = false;
+        foreach (GraphEdge e in edges)
+        {
+            FillArc(nodeInstances[e.sourceId].transform.position, nodeInstances[e.targetId].transform.position, e.points);
+            for (int i = 0; i < e.points.Length; i++)
+            {
+                if (e.points[i].y < minEdgeHeight) e.points[i].y = minEdgeHeight;
+            }
+            WriteEdgeGeometry(e);
+            any = true;
+        }
+        if (!any) return;
+        edgeMesh.vertices = edgeVertices;
+        edgeMesh.normals = edgeDirections;
+        UpdateEdgeBounds();
+    }
+
+    /// <summary>
+    /// Keeps edges hidden whatever the filter or the selection (e.g. routes inside a
+    /// collapsed city, whose airports sit in one spot), or shows them again.
+    /// </summary>
+    public void SetEdgesSuppressed(IEnumerable<GraphEdge> edges, bool suppressed)
+    {
+        foreach (GraphEdge e in edges)
+        {
+            if (suppressed) suppressedEdges.Add(e);
+            else suppressedEdges.Remove(e);
+        }
+        ApplyEdgeFilter();
+    }
+
+    /// <summary>Traffic that sets an airport's size in the current view (month, segment), on the all-months scale.</summary>
+    public float ShownValue(GraphNode node)
+    {
+        return DisplayValue(node) * periodScale * segmentScale;
+    }
+
+    /// <summary>Sphere diameter for a shown value (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).</summary>
+    public float NodeSize(float shownValue)
+    {
+        return nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0f, shownValue));
     }
 
     /// <summary>Runtime copy of the ribbon material with edgeIntensity applied to _Tint.</summary>
@@ -683,34 +813,100 @@ public class GraphLoader : MonoBehaviour
         FilterChanged?.Invoke();
     }
 
-    /// <summary>Flights on the edge that count under the current segment filter.</summary>
-    public int FilteredWeight(GraphEdge edge)
+    /// <summary>
+    /// Shows one month (index into Meta.periods) or, with -1, all months together.
+    /// Airport sizes, focus and the visible routes follow that month's traffic, combined
+    /// with SetFilter; colours keep the all-months ranking, so an airport keeps its colour
+    /// while time runs. GraphSelector re-applies the current selection afterwards.
+    /// </summary>
+    public void SetPeriod(int period)
     {
-        if (FilterSegment == null) return edge.weight;
-        return edge.data != null && edge.data.segments != null && edge.data.segments.TryGetValue(FilterSegment, out int v) ? v : 0;
+        period = HasTimeAxis ? Mathf.Clamp(period, -1, Meta.periods.Length - 1) : -1;
+        if (period == Period) return;
+        Period = period;
+        ApplyNodeStyle();
+        ApplyEdgeFilter();
+        PeriodChanged?.Invoke();
     }
 
-    /// <summary>Airport traffic that counts under the current segment filter.</summary>
+    /// <summary>Month label ("2020-04") of a period index, or null.</summary>
+    public string PeriodName(int period)
+    {
+        return HasTimeAxis && period >= 0 && period < Meta.periods.Length ? Meta.periods[period] : null;
+    }
+
+    /// <summary>
+    /// Flights on the edge in the current view: one month or all months, one market
+    /// segment or all. Segments have no monthly split, so a segment within one month
+    /// is estimated from the edge's segment shares over all months.
+    /// </summary>
+    public int FilteredWeight(GraphEdge edge)
+    {
+        EdgeData d = edge.data;
+        if (HasPeriod)
+        {
+            int month = MonthCount(d != null ? d.monthly : null);
+            return FilterSegment == null ? month : Mathf.RoundToInt(month * SegmentShare(d != null ? d.segments : null));
+        }
+        return FilterSegment == null ? edge.weight : SegmentCount(d != null ? d.segments : null);
+    }
+
+    /// <summary>Airport traffic in the current view (month / segment), like FilteredWeight.</summary>
     public int DisplayValue(GraphNode node)
     {
-        if (FilterSegment == null) return node.value;
-        return node.data != null && node.data.segments != null && node.data.segments.TryGetValue(FilterSegment, out int v) ? v : 0;
+        NodeData d = node.data;
+        if (HasPeriod)
+        {
+            int month = MonthCount(d != null ? d.monthly : null);
+            return FilterSegment == null ? month : Mathf.RoundToInt(month * SegmentShare(d != null ? d.segments : null));
+        }
+        return FilterSegment == null ? node.value : SegmentCount(d != null ? d.segments : null);
+    }
+
+    private int MonthCount(int[] monthly)
+    {
+        return monthly != null && Period < monthly.Length ? monthly[Period] : 0;
+    }
+
+    private int SegmentCount(Dictionary<string, int> segments)
+    {
+        return segments != null && FilterSegment != null && segments.TryGetValue(FilterSegment, out int v) ? v : 0;
+    }
+
+    private float SegmentShare(Dictionary<string, int> segments)
+    {
+        if (segments == null) return 0f;
+        long known = 0;
+        foreach (int v in segments.Values) known += v;
+        return known > 0 ? (float)SegmentCount(segments) / known : 0f;
     }
 
     public bool PassesFilter(GraphEdge edge)
     {
-        if (!HasFilter) return true;
+        if (suppressedEdges.Count > 0 && suppressedEdges.Contains(edge)) return false;
+        if (!HasFilter && !HasPeriod) return true;
         int weight = FilteredWeight(edge);
-        if (weight <= 0 || weight < FilterMinWeight) return false;
+        if (weight <= 0 || !AtLeast(weight, FilterMinWeight)) return false;
         if (FilterCountry != null && CountryOf(nodeInstances[edge.sourceId]) != FilterCountry &&
             CountryOf(nodeInstances[edge.targetId]) != FilterCountry) return false;
         return true;
     }
 
-    /// <summary>False for airports the filter leaves out (no traffic in the segment, other country).</summary>
+    /// <summary>
+    /// weight (flights in the current view) reaches minWeight (flights over all months),
+    /// compared per day, so one threshold means the same for a single month and for all.
+    /// </summary>
+    private bool AtLeast(int weight, int minWeight)
+    {
+        if (minWeight <= 0) return true;
+        if (!HasPeriod) return weight >= minWeight;
+        return (double)weight / Mathf.Max(1, Meta.periodDays[Period]) >= (double)minWeight / Meta.days;
+    }
+
+    /// <summary>False for airports the filter / month leaves out (no traffic in the segment or month, other country).</summary>
     public bool NodeInFocus(GraphNode node)
     {
-        if (FilterSegment != null && DisplayValue(node) <= 0) return false;
+        if ((FilterSegment != null || HasPeriod) && DisplayValue(node) <= 0) return false;
         if (FilterCountry != null && CountryOf(node) != FilterCountry) return false;
         return true;
     }
@@ -720,16 +916,27 @@ public class GraphLoader : MonoBehaviour
         return node.data != null ? node.data.country : null;
     }
 
-    /// <summary>Node colours (view mode + filter dimming) and, with a segment filter, sizes.</summary>
+    /// <summary>Node colours (view mode + filter / month dimming) and sizes (segment, month).</summary>
     private void ApplyNodeStyle()
     {
-        int maxDisplay = 1;
-        foreach (GraphNode node in nodeInstances.Values) maxDisplay = Mathf.Max(maxDisplay, DisplayValue(node));
+        // One month is scaled to the whole time axis (flights per day x all days), so an
+        // airport at its average level is as big as in the all-months view and the COVID
+        // months visibly shrink.
+        periodScale = HasPeriod ? (float)Meta.days / Mathf.Max(1, Meta.periodDays[Period]) : 1f;
+        // With a segment, its biggest airport (all months) is as big as the biggest overall.
+        segmentScale = 1f;
+        if (FilterSegment != null)
+        {
+            int maxSegment = 1;
+            foreach (GraphNode node in nodeInstances.Values)
+            {
+                maxSegment = Mathf.Max(maxSegment, SegmentCount(node.data != null ? node.data.segments : null));
+            }
+            segmentScale = (float)maxNodeValue / maxSegment;
+        }
         foreach (GraphNode node in nodeInstances.Values)
         {
-            // Scale segment traffic up to the full range so the biggest airport of the segment is as big as the biggest overall.
-            float shown = FilterSegment == null ? node.value : (float)DisplayValue(node) * maxNodeValue / maxDisplay;
-            node.transform.localScale = Vector3.one * (nodeBaseSize + nodeSizePerSqrtValue * Mathf.Sqrt(shown));
+            node.transform.localScale = Vector3.one * NodeSize(ShownValue(node));
 
             Color color = NodeColor(node.value, node.community);
             if (!NodeInFocus(node))
