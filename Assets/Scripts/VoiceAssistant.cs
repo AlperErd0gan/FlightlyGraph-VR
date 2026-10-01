@@ -43,6 +43,7 @@ public class VoiceAssistant : MonoBehaviour
     public CityClusters cityClusters;
     public GraphRecenter recenter;
     public GeoMapView geoMap;
+    public FlightPanel flightPanel;
     [Tooltip("AppVoiceExperience component (Meta Voice SDK) with the Wit configuration. Found in the scene by type name if unset.")]
     public Component voice;
 
@@ -452,7 +453,7 @@ public class VoiceAssistant : MonoBehaviour
         if (Is(c, @"^(help|what can i say|what can you do|commands|show commands)$"))
         {
             reply = "Try: show Istanbul · route from London to Ankara · filter cargo · reset filters · " +
-                    "regional view · top routes · map view · 3D view · play timeline · show April 2020 · group cities · " +
+                    "regional view · top routes · map view · 3D view · live flights · play timeline · show April 2020 · group cities · " +
                     "open dashboard · open insights · start tour · go to centre · clear · stop.";
             Say("You can say: show an airport, route from one city to another, filter cargo, regional view, " +
                 "play timeline, open dashboard or start tour.");
@@ -490,6 +491,7 @@ public class VoiceAssistant : MonoBehaviour
         {
             if (narrator != null) narrator.Stop();
             if (Timeline != null && Timeline.IsPlaying) Timeline.SetPlaying(false);
+            if (Flights != null && Flights.IsOpen) Flights.SetPlaying(false);
             reply = "OK.";
             return true;
         }
@@ -597,6 +599,31 @@ public class VoiceAssistant : MonoBehaviour
             reply = "Cities separated.";
             Say(reply);
             return true;
+        }
+
+        // Live flights (FlightPanel): open / close, speed; play / pause while it is open.
+        if (Is(c, @"^((show|open|start|play|watch)( the)? (live flights|flights live|flight simulation|simulation|planes|aircraft|air traffic)|live flights|simulate( the)? flights)$"))
+        {
+            if (Flights == null || !Flights.Available) return NotAvailable("live flights", out reply);
+            if (dashboard != null && dashboard.IsOpen) dashboard.Close();
+            Flights.Open();
+            reply = "Live flights: " + Flights.simulator.SimUtc.ToString("ddd d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " UTC.";
+            Say("Live flights.");
+            return true;
+        }
+        if (Is(c, @"^((close|hide|stop|end)( the)? (live flights|flights|flight simulation|simulation|planes|aircraft))$"))
+        {
+            if (Flights == null || !Flights.IsOpen) return NotAvailable("live flights", out reply);
+            Flights.Close();
+            reply = "Live flights closed.";
+            return true;
+        }
+        if (Flights != null && Flights.IsOpen)
+        {
+            if (Is(c, @"^(faster|speed up|go faster|quicker)$")) { Flights.ChangeSpeed(+1); reply = "Faster: " + FlightPanel.SpeedLabel(Flights.simulator.Speed) + "."; return true; }
+            if (Is(c, @"^(slower|slow down|go slower)$")) { Flights.ChangeSpeed(-1); reply = "Slower: " + FlightPanel.SpeedLabel(Flights.simulator.Speed) + "."; return true; }
+            if (Is(c, @"^(play|resume|continue|go)( the)?( flights)?$")) { Flights.SetPlaying(true); reply = "Playing."; return true; }
+            if (Is(c, @"^(pause|freeze|wait)( the)?( flights)?$")) { Flights.SetPlaying(false); reply = "Paused."; return true; }
         }
 
         // Timeline.
@@ -983,6 +1010,15 @@ public class VoiceAssistant : MonoBehaviour
     }
 
     // ---- Helpers ---------------------------------------------------------------------
+
+    private FlightPanel Flights
+    {
+        get
+        {
+            if (flightPanel == null) flightPanel = dashboard != null && dashboard.flights != null ? dashboard.flights : FindFirstObjectByType<FlightPanel>();
+            return flightPanel;
+        }
+    }
 
     private TimelinePanel Timeline
     {
