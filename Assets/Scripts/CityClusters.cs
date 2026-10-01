@@ -39,6 +39,8 @@ public class CityClusters : MonoBehaviour
     public float ringWidth = 0.004f;
     [Tooltip("TextMeshPro 3D font size of the city label; 10 = 1 m line height.")]
     public float labelFontSize = 0.7f;
+    [Tooltip("Label size while another layout is shown (GeoMapView's map: closer, cities packed tighter).")]
+    public float layoutLabelScale = 0.4f;
     public Color labelColor = new Color(1f, 0.85f, 0.5f, 1f);
     [Tooltip("Optional material for the ring (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
     public Material ringMaterial;
@@ -420,8 +422,10 @@ public class CityClusters : MonoBehaviour
                 city.labelCollider.size = new Vector3(bounds.size.x + 0.04f, bounds.size.y + 0.03f, 0.02f);
             }
             // Expanded: above the anchor airport's own hub label.
-            float lift = size * 0.5f + (collapsed ? 0.03f : 0.14f);
+            float scale = graph.Layout != null ? layoutLabelScale : 1f;
+            float lift = size * 0.5f + (collapsed ? 0.03f : 0.14f) * scale;
             Transform label = city.label.transform;
+            label.localScale = Vector3.one * scale;
             label.position = centre + Vector3.up * lift;
             // TMP text reads correctly when its +Z points away from the viewer.
             Vector3 away = label.position - head.position;
