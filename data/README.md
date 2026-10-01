@@ -225,3 +225,29 @@ downloaded from https://github.com/nvkelso/natural-earth-vector.
 **License:** public domain; no attribution required (credit is welcome). The
 map files contain no EUROCONTROL figures, only the map centre fitted to the
 airports' positions, so they are committed.
+
+## Flight simulation (live flights)
+
+`scripts/build_flight_sim.py` writes `flights_ectrl.json` (gitignored: derived
+from EUROCONTROL data), read by Unity's `FlightSimulator` / `FlightPanel`.
+
+```
+python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD]
+    [--start 00:00] [--hours 24] [--max-flights 0] [--max-points 30] [--tolerance-km 3]
+    [--points PATH | --no-points]
+```
+
+- Default: every flight between two graph airports along a graph edge whose
+  off-block .. arrival overlaps the busiest day of `--month` (most flights on
+  graph edges by off-block date; Aug 2025: Fri 29 Aug, 24,848 flights).
+- Tracks: `Flight_Points_Actual_<YYYYMM>01_*.csv.gz` of that month, anywhere
+  under `data/raw/eurocontrol/` (e.g. `other/202508/`); read in chunks, only
+  the picked flights kept. `path` per flight: `actual` (the track), `partial`
+  (the track covers only the EUROCONTROL area; the ends to / from the airport
+  are filled along the great circle with the real times), `greatCircle` (no
+  track: great circle, real times, taxi / climb / descent model).
+- Every path is simplified with Douglas-Peucker on the time-synchronised
+  distance (`--tolerance-km`, at most `--max-points`): turns, climbs /
+  descents and stops keep their points. A whole day is ~11 MB.
+- `t`, `dep`, `arr`: seconds from `startEpoch` (Unix time, UTC); `fl`: flight
+  level (100 ft); `hdg`: course to the next point (degrees from true north).

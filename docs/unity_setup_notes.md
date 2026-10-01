@@ -115,3 +115,20 @@ Without them the map view is unavailable and nothing else changes (Console:
   found by name). In the Editor over Link that is fine; for an EXE / APK assign
   an Unlit material to `GeoMapView.mapMaterial` so the shader is included.
 - `HubLabels.layoutLabelScale` (0.35) shrinks the airport codes on the map.
+
+## 8. Live flights (flight simulation)
+
+No scene change: the dashboard adds `FlightPanel`, which adds a
+`FlightSimulator`. It needs `flights_ectrl.json` in StreamingAssets
+(`python scripts/build_flight_sim.py`, then the sync script; EUROCONTROL-derived,
+so it is shared outside git like the graph files). Without it the Live flights
+button is disabled (Console: a warning, not an error).
+
+- Assign a material with **Enable GPU Instancing** (e.g. URP / Unlit) to
+  `FlightSimulator.aircraftMaterial`: the aircraft are drawn instanced, and in a
+  build the shader must be referenced. In the Editor over Link the fallback
+  (URP / Unlit found by name) works if instancing is enabled on it.
+- Tune: `mapAircraftSize` (2.4 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
+  (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
+- Rendering fix on this branch: the route mesh renders before the other
+  transparent objects (it was drawn over the dashboard and the info card).
