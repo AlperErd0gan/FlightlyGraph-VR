@@ -95,3 +95,28 @@ now "Flights"), `GuidedTour.captionCentreHeight` (was `captionHeight`).
 - **Controls**: every button per panel / situation is in
   [CONTROLS.md](CONTROLS.md); the in-app table (dashboard → Controls) comes from
   `Assets/Scripts/UI/ControlsHelp.cs`. Keep the two in sync.
+
+## 7. Real-time voice with Gemini (TASKS B5, branch b5-realtime-voice)
+
+`GeminiLiveAssistant` talks to the Gemini Live API over one WebSocket, straight
+from Unity: hold Y (N in the Editor), talk, release; the answer is spoken in a
+Gemini voice and can be interrupted with Y. Tools let the model run
+`VoiceAssistant` commands and read figures from the loaded graph. While it is
+connected, VoiceAssistant (Wit) only runs its commands and the Wit narrator
+stops describing selections; without a connection both work as before.
+
+1. API key from aistudio.google.com → Get API key. Put only the key in
+   `gemini_key.txt` in `Application.persistentDataPath` (Windows:
+   `%USERPROFILE%\AppData\LocalLow\<Company Name>\<Product Name>`; the exact
+   path is logged on Play), or set `GEMINI_API_KEY`. Never inside the project.
+2. Add `GeminiLiveAssistant` to the `VoiceInput` object (next to
+   `VoiceAssistant`). Defaults: model `gemini-3.8-live`, voice Charon, helmet
+   effect on. Change Voice in Play mode to compare (it reconnects).
+3. EUROCONTROL scenes (`*_ectrl` files) stay on the Wit commands unless
+   `allowLicensedData` is ticked — only when the data licence allows sending
+   figures to Google.
+4. Quest APK: Player Settings → Android → Internet Access = Require; copy the
+   key file with `adb push gemini_key.txt /sdcard/Android/data/<package>/files/`.
+
+The key is in memory while the app runs: fine for development and demos; a
+shared build needs ephemeral tokens from a small server.
