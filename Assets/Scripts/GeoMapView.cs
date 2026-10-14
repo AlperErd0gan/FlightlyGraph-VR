@@ -41,8 +41,11 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public float curvatureRadius = 3.5f;
 
     [Header("Airports and routes on the map")]
-    [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer).")]
+    [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer). Upper bound: see maxNodeDiameter.")]
     public float nodeScale = 0.45f;
+    [Tooltip("Diameter (m) of the biggest airport on the map; all airports shrink by the same factor when it would be bigger, " +
+             "whatever the 3D sizes of this scene. 0 = only nodeScale. Live in Play mode.")]
+    public float maxNodeDiameter = 0.03f;
     [Tooltip("Route width multiplier on the map (highlighted routes too: an airport's ~170 routes must not cover it).")]
     public float edgeWidthScale = 0.35f;
     [Tooltip("Route arc height as a fraction of its length on the map.")]
@@ -87,7 +90,35 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public bool IsOutside(GraphNode node) => outside.Contains(node);
 
     // IGraphLayout
-    public float NodeScale => nodeScale;
+    public float NodeScale
+    {
+        get
+        {
+            if (maxNodeDiameter <= 0f || graph == null || !graph.IsLoaded) return nodeScale;
+            if (scaleFrame != Time.frameCount)
+            {
+                // Size of the biggest airport without a layout (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).
+                float biggest = 0f;
+                foreach (GraphNode node in graph.Nodes.Values)
+                {
+                    biggest = Mathf.Max(biggest, graph.nodeBaseSize + graph.nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0, node.value)));
+                }
+                cachedScale = biggest > 1e-6f ? Mathf.Min(nodeScale, maxNodeDiameter / biggest) : nodeScale;
+                scaleFrame = Time.frameCount;
+            }
+            return cachedScale;
+        }
+    }
+
+    private int scaleFrame = -1;
+    private float cachedScale = 1f;
+
+    private void OnValidate()
+    {
+        // Size changes in the Inspector apply at once while the map is shown.
+        scaleFrame = -1;
+        if (Application.isPlaying && IsMap && graph != null && graph.IsLoaded && ReferenceEquals(graph.Layout, this)) graph.SetLayout(this);
+    }
     public float EdgeWidthScale => edgeWidthScale;
 
     private class MapFile
