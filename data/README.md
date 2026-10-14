@@ -13,6 +13,7 @@ data/
                            (FIR and point profile files: input of build_ectrl_extras.py)
     ourairports/           airports.csv, countries.csv (downloaded by build_graph_ectrl.py)
     openflights/           airports.dat, routes.dat (downloaded by build_graph.py)
+    naturalearth/          country / coastline / lake GeoJSON (downloaded by build_geomap.py)
   processed/               JSON for Unity (*_ectrl.json gitignored)
 ```
 
@@ -212,3 +213,15 @@ extras_meta_ectrl.json:  { source, files, graph, flightsOnEdges, edgesWithFlight
   per layer (`minFL` / `maxFL`, flight levels, 999 = unlimited).
 - Unity does not read these files yet; they are data for later features
   (e.g. drawing a selected edge's real routes, an airspace layer).
+
+## Source: Natural Earth (geographic view)
+
+`data/processed/geomap.json` and `geomap_dark.png` (scripts/build_geomap.py) are
+drawn from [Natural Earth](https://www.naturalearthdata.com/) 1:10m admin-0
+countries (French point of view: borders as France recognises them, e.g.
+Crimea in Ukraine, Cyprus undivided), 1:10m coastline and 1:50m lakes,
+downloaded from https://github.com/nvkelso/natural-earth-vector.
+
+**License:** public domain; no attribution required (credit is welcome). The
+map files contain no EUROCONTROL figures, only the map centre fitted to the
+airports' positions, so they are committed.

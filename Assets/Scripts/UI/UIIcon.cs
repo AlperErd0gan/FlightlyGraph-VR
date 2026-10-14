@@ -8,7 +8,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasRenderer))]
 public class UIIcon : MaskableGraphic
 {
-    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter }
+    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter, Globe }
 
     public Shape shape = Shape.Play;
 
@@ -75,6 +75,25 @@ public class UIIcon : MaskableGraphic
                 Quad(vh, P(0.02f, 0.46f), P(0.2f, 0.54f));
                 Quad(vh, P(0.8f, 0.46f), P(0.98f, 0.54f));
                 break;
+            case Shape.Globe:
+                // Outline, a meridian and the equator.
+                Ellipse(vh, P(0.5f, 0.5f), s * 0.4f, s * 0.4f, line * 0.8f);
+                Ellipse(vh, P(0.5f, 0.5f), s * 0.17f, s * 0.4f, line * 0.7f);
+                Line(vh, P(0.1f, 0.5f), P(0.9f, 0.5f), line * 0.7f);
+                break;
+        }
+    }
+
+    private void Ellipse(VertexHelper vh, Vector2 centre, float rx, float ry, float width)
+    {
+        const int segments = 28;
+        Vector2 previous = centre + new Vector2(rx, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float a = 2f * Mathf.PI * i / segments;
+            Vector2 next = centre + new Vector2(Mathf.Cos(a) * rx, Mathf.Sin(a) * ry);
+            Line(vh, previous, next, width);
+            previous = next;
         }
     }
 
