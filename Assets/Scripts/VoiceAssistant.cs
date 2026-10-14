@@ -379,6 +379,16 @@ public class VoiceAssistant : MonoBehaviour
             PlaySound(UISounds.Open);
             return;
         }
+        // Easter egg: The Hitchhiker's Guide to the Galaxy.
+        if ((pushed || wake >= 0 || mode == ListenMode.AlwaysListening) &&
+            Regex.IsMatch(norm, @"\b(?:what s|whats|what is) the (?:meaning|answer|purpose) (?:of|to) (?:life|life the universe and everything|the universe|everything)\b"))
+        {
+            Debug.Log($"VoiceAssistant: heard \"{text}\" -> easter egg 42");
+            Show("<b>42.</b>\n<color=#9AA6BA>Though you may want to check the question.</color>", captionSeconds + 2f);
+            Say("Forty-two. Though you may want to check the question.", force: true);
+            PlaySound(UISounds.Open);
+            return;
+        }
         string command;
         if (wake >= 0) command = string.Join(" ", words, wake + 1, words.Length - wake - 1);
         else if (pushed || Time.time < awakeUntil) command = norm;

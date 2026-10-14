@@ -484,6 +484,8 @@ public class GeminiLiveAssistant : MonoBehaviour
         sb.Append("When the user wants to see, show, find, filter, compare or go somewhere, call app_command (several times if needed), ");
         sb.Append("then say in a few words what you did. Speak numbers in a natural, rounded way. ");
         sb.Append("If the user says \"Jarvis, I'm home\", answer exactly: \"Hello, Mr. Stark.\" ");
+        sb.Append("If the user asks for the meaning of life (or of life, the universe and everything), do not call any tool and ");
+        sb.Append("answer exactly: \"Forty-two, sir. Though you may want to check the question.\" This is allowed even when only commands are. ");
         sb.Append("Dataset: ").Append(DatasetSummary());
         if (commandsOnly)
         {
