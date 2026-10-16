@@ -6,7 +6,7 @@ project: there is no ProjectSettings/ and no scene here.
 
 ## Hard rules
 
-- **EUROCONTROL data is research-licensed.** Never commit raw or derived data
+- **EUROCONTROL data is research-licensed.** Never commit raw or derived 1data
   (`Flights_*.csv*`, `*_ectrl.json`, `*_ectrl*.zip`, `data/processed/eurocontrol/` ...;
   see `.gitignore`). Check `git status` before every commit.
 - **Secrets never go in git**: the Wit.ai token and the Gemini API key (`gemini_key.txt`
