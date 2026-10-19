@@ -16,6 +16,9 @@ using UnityEngine.Networking;
 /// Switch: B (right controller; toggleBinding), M in the Editor, the dashboard or voice.
 /// Selection, info card, timeline, filters, view modes and city groups work the same on
 /// the map. The guided tour runs in the 3D layout (starting it switches back).
+/// The map never goes into the floor: when its lowest part (the band and the names
+/// beyond it) would come closer than floorClearance to GraphLoader.FloorY, the whole
+/// map is raised, also later when the floor or the graph moves.
 /// </summary>
 public class GeoMapView : MonoBehaviour, IGraphLayout
 {
@@ -39,6 +42,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public float mapRadius = 1.0f;
     [Tooltip("Curvature (m): > 0 bulges towards you like part of a globe, < 0 curves around you, 0 = flat.")]
     public float curvatureRadius = 3.5f;
+    [Tooltip("Lowest part of the map (band and the names beyond it) stays this far above the floor (m); the map is raised when it would reach lower.")]
+    public float floorClearance = 0.1f;
 
     [Header("Airports and routes on the map")]
     [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer). Upper bound: see maxNodeDiameter.")]
@@ -148,6 +153,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private Transform visual;
     private InputAction toggleAction;
     private Coroutine transition;
+    private float placedFloorY;
+    private float placedGraphY;
 
     private void Awake()
     {
@@ -209,6 +216,12 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private void Update()
     {
         if (!Ready) return;
+        // The floor moves with GraphRecenter.matchEyeHeight (seated use): keep the map above it.
+        if (!Switching && (Mathf.Abs(graph.FloorY - placedFloorY) > 0.005f ||
+                           Mathf.Abs(graph.transform.position.y - placedGraphY) > 0.005f))
+        {
+            Replace();
+        }
         if (GuidedTour.InputLocked)
         {
             // The tour's steps are written for the 3D layout.
@@ -309,6 +322,48 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         projection.curvatureRadius = curvatureRadius;
         float a = tilt * Mathf.Deg2Rad;
         projection.Place(new Vector3(0f, height, distance), new Vector3(0f, Mathf.Sin(a), -Mathf.Cos(a)), Vector3.up);
+
+        // Tilted back and bent, the map's near rim hangs about a metre below its centre:
+        // with the eyes at the graph centre (seated) that is under the floor.
+        Transform t = graph.transform;
+        float lowest = LowestPointY();
+        float deficit = graph.FloorY + floorClearance - lowest;
+        if (deficit > 0f)
+        {
+            projection.center += t.InverseTransformVector(Vector3.up * deficit);
+            Debug.Log($"GeoMapView: map raised {deficit:F2} m to stay {floorClearance:F2} m above the floor (y = {graph.FloorY:F2}).");
+        }
+        placedFloorY = graph.FloorY;
+        placedGraphY = t.position.y;
+    }
+
+    /// <summary>World height of the map's lowest point: the outer edge of the band, plus room for the names beyond it.</summary>
+    private float LowestPointY()
+    {
+        float outer = map.radiusDeg + MetersToDegrees(bandGap + bandWidth + 0.06f);
+        float lowest = float.MaxValue;
+        for (int j = 0; j < 72; j++)
+        {
+            float a = 2f * Mathf.PI * j / 72;
+            Vector2 p = new Vector2(Mathf.Sin(a), Mathf.Cos(a)) * outer;
+            lowest = Mathf.Min(lowest, graph.transform.TransformPoint(projection.Surface(p)).y);
+        }
+        return lowest;
+    }
+
+    /// <summary>Places the map again (floor or graph moved) and, when it moved, the airports and routes on it.</summary>
+    private void Replace()
+    {
+        Vector3 before = projection.center;
+        Place();
+        if ((projection.center - before).sqrMagnitude < 1e-8f) return;
+        visual.localPosition = projection.center;
+        if (!IsMap) return;
+        foreach (GraphNode node in graph.Nodes.Values)
+        {
+            node.transform.localPosition = cities != null ? cities.RestingPosition(node) : graph.HomePosition(node);
+        }
+        graph.RebuildEdges(graph.Edges);
     }
 
     private float BandMiddle => map.radiusDeg + MetersToDegrees(bandGap + bandWidth * 0.5f);

@@ -110,7 +110,8 @@ Without them the map view is unavailable and nothing else changes (Console:
   (-0.35 m below the graph centre), `tilt` (30°: 0 = upright wall, 90 = table),
   `mapRadius` (1 m), `curvatureRadius` (3.5 m; > 0 globe-like, < 0 curves
   around you, 0 flat), `nodeScale`, `edgeWidthScale`, `arcHeight`,
-  `toggleBinding` (B).
+  `toggleBinding` (B), `floorClearance` (0.1 m: the map is raised so its lowest
+  part stays this far above the floor; the Console logs how much).
 - Builds: the map uses runtime materials (`Universal Render Pipeline/Unlit`
   found by name). In the Editor over Link that is fine; for an EXE / APK assign
   an Unlit material to `GeoMapView.mapMaterial` so the shader is included.
