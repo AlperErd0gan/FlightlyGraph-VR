@@ -31,6 +31,13 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
 
+The scene's floor is a room (`MovementBounds`, adds itself to the scene):
+see-through grid walls (3 m high) stand on the edges of the floor
+(`GraphLoader.floor`, else the largest teleport area). Teleports, thumbstick
+and walking through a wall put you back inside; a wall shows only
+when you come within 1.5 m of it. The graph's centre is kept inside too:
+0.5 m from the walls, between 0.3 m above the floor and the walls' top.
+
 Going to the graph centre teleports you (not the graph) to its centre and
 turns you to its front (the biggest hub), in one jump. With
 `GraphRecenter.matchEyeHeight` (on by default) your eyes also go to the

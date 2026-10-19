@@ -76,6 +76,16 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public Color rimColor = new Color(0.30f, 0.75f, 1f, 1f);
     public Color bandColor = new Color(0.075f, 0.09f, 0.13f, 1f);
     public Color outsideNameColor = new Color(1f, 0.82f, 0.55f, 0.95f);
+    [Tooltip("Size of the country names (1 = the original size).")]
+    public float countryNameScale = 0.8f;
+    [Tooltip("Font size of the names beyond the map (\"DXB · Dubai\").")]
+    public float outsideNameSize = 0.22f;
+    [Tooltip("Beyond the map, only the busiest airport of each city gets a name.")]
+    public bool onePerCity = true;
+    [Tooltip("Leave out a name that would overlap one already placed (countries by importance, then airports by traffic).")]
+    public bool hideOverlappingNames = true;
+    [Tooltip("Space kept around each name (m).")]
+    public float nameGap = 0.004f;
 
     [Header("Switch")]
     [Tooltip("Controller button that switches 3D layout <-> map (Input System path). Default: B. Empty = no controller button.")]
@@ -153,6 +163,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private Transform visual;
     private InputAction toggleAction;
     private Coroutine transition;
+    private readonly List<Rect> nameBoxes = new List<Rect>();
     private float placedFloorY;
     private float placedGraphY;
 
@@ -454,28 +465,71 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         AddMesh("Band", Annulus(bandFrom, bandTo, 160, 0f), ColorMaterial(bandColor));
         AddMesh("Band Edge", Annulus(bandTo, bandTo + rim * 0.5f, 160, 0.001f), ColorMaterial(rimColor * 0.5f));
 
+        nameBoxes.Clear();
+        int hidden = 0;
         if (showCountryNames && map.labels != null)
         {
-            foreach (Label label in map.labels)
+            // Most important countries first, so they keep their names.
+            var countries = new List<Label>(map.labels);
+            countries.Sort((a, b) => a.rank.CompareTo(b.rank));
+            foreach (Label label in countries)
             {
-                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank));
-                TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, new Vector2(label.x, label.y), 0.003f);
+                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank)) * countryNameScale;
+                Vector2 at = new Vector2(label.x, label.y);
+                TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, at, 0.003f);
                 text.characterSpacing = 6f;
+                if (!KeepName(text, at)) hidden++;
             }
         }
-        foreach (GraphNode node in outside)
+        // Busiest airports first; with onePerCity a city's other airports get no name.
+        var beyond = new List<GraphNode>(outside);
+        beyond.Sort((a, b) => b.value.CompareTo(a.value));
+        var named = new HashSet<string>();
+        foreach (GraphNode node in beyond)
         {
+            string city = node.data != null && !string.IsNullOrEmpty(node.data.city) ? node.data.city : node.label;
+            if (onePerCity && !named.Add(city.ToLowerInvariant()))
+            {
+                hidden++;
+                continue;
+            }
             Vector2 dir = PlanarOf(node).normalized;
             Vector2 at = dir * (bandTo + MetersToDegrees(0.015f));
-            string city = node.data != null && !string.IsNullOrEmpty(node.data.city) ? node.data.city : node.label;
-            TextMeshPro text = NewText(node.ShortCode + " · " + city, 0.3f, outsideNameColor, at, 0.003f);
+            TextMeshPro text = NewText(node.ShortCode + " · " + city, outsideNameSize, outsideNameColor, at, 0.003f);
             // Anchor the text on its side nearest the map, so it reads outwards from the band.
             Vector2 pivot = new Vector2(dir.x > 0.35f ? 0f : dir.x < -0.35f ? 1f : 0.5f,
                                         Mathf.Abs(dir.x) > 0.35f ? 0.5f : dir.y > 0f ? 0f : 1f);
             text.rectTransform.pivot = pivot;
             text.alignment = pivot.x == 0f ? TextAlignmentOptions.Left : pivot.x == 1f ? TextAlignmentOptions.Right : TextAlignmentOptions.Center;
+            if (!KeepName(text, at)) hidden++;
         }
+        if (hidden > 0) Debug.Log($"GeoMapView: {hidden} names left out so that the names on the map do not overlap.");
         visual.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Keeps the name unless (with hideOverlappingNames) its box on the map overlaps a name
+    /// already kept; then it is removed. Boxes are in metres on the map (x east, y north).
+    /// </summary>
+    private bool KeepName(TextMeshPro text, Vector2 at)
+    {
+        if (!hideOverlappingNames) return true;
+        Vector2 size = text.GetPreferredValues(text.text);
+        Vector2 pivot = text.rectTransform.pivot;
+        float boxHeight = text.rectTransform.sizeDelta.y;
+        Vector2 c = at * projection.metersPerDegree;
+        // The text is aligned to the pivot's side horizontally and centred vertically in its rect.
+        float left = c.x - pivot.x * size.x;
+        float middle = c.y + (0.5f - pivot.y) * boxHeight;
+        var box = new Rect(left - nameGap, middle - size.y * 0.5f - nameGap, size.x + 2f * nameGap, size.y + 2f * nameGap);
+        foreach (Rect kept in nameBoxes)
+        {
+            if (!kept.Overlaps(box)) continue;
+            Destroy(text.gameObject);
+            return false;
+        }
+        nameBoxes.Add(box);
+        return true;
     }
 
     private TextMeshPro NewText(string content, float fontSize, Color color, Vector2 at, float lift)
