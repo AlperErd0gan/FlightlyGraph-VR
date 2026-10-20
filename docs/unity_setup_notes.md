@@ -112,6 +112,10 @@ Without them the map view is unavailable and nothing else changes (Console:
   around you, 0 flat), `nodeScale`, `edgeWidthScale`, `arcHeight`,
   `toggleBinding` (B), `floorClearance` (0.1 m: the map is raised so its lowest
   part stays this far above the floor; the Console logs how much).
+- Map names: `countryNameScale` (0.8), `outsideNameSize` (0.22), `onePerCity`
+  (only the busiest airport of a city beyond the map is named) and
+  `hideOverlappingNames` (a name that would overlap one already placed is left
+  out; the Console says how many).
 - Builds: the map uses runtime materials (`Universal Render Pipeline/Unlit`
   found by name). In the Editor over Link that is fine; for an EXE / APK assign
   an Unlit material to `GeoMapView.mapMaterial` so the shader is included.

@@ -517,7 +517,7 @@ public class GeminiLiveAssistant : MonoBehaviour
     {
         JObject appCommand = Tool("app_command",
                  "Changes what the user sees in the VR app. One short English command, one of: 'show <airport, city or code>', " +
-                 "'help', 'route from <A> to <B>', 'clear', " + (commandsOnly ? "" : "'describe', ") + "'regional view', 'top routes', 'filter <market segment or country>', " +
+                 "'help', 'route from <A> to <B>', 'clear', " + (commandsOnly ? "" : "'describe', ") + "'regional view', 'top routes', 'map view', '3D view', 'filter <market segment or country>', " +
                  "'reset filters', 'open timeline', 'play', 'pause', 'show <month> <year>', 'show <year>', 'all months', 'next month', " +
                  "'previous month', 'open dashboard', 'close dashboard', 'open insights', 'open filters', 'open controls', " +
                  "'open overview', 'group cities', 'ungroup cities', 'go to the centre', 'start tour', 'stop tour'. " +

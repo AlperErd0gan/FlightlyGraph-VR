@@ -570,7 +570,7 @@ public class VoiceAssistant : MonoBehaviour
         }
 
         // Map of Europe (GeoMapView) and back to the 3D layout.
-        if (Is(c, @"^((show|open|switch to|go to|change to)( the)? (map|map view|geographic view)|map( view)?|(show|put)( the)? (airports|them|it) on (the|a) map)$"))
+        if (Is(c, @"^((show|open|switch to|go to|change to)( me)?( the)? (map|map view|geographic view|map of europe|europe map)|(the )?map( view| of europe)?|(show|put)( the)? (airports|them|it) on (the|a) map)$"))
         {
             if (GeoMap == null || !GeoMap.Ready) return NotAvailable("map view", out reply);
             if (dashboard != null && dashboard.IsOpen) dashboard.Close();
