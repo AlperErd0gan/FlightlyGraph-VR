@@ -131,18 +131,34 @@ public class FlightSimulator : MonoBehaviour
 
     private void OnEnable()
     {
-        if (geoMap != null) geoMap.ModeChanged += OnMapModeChanged;
+        if (geoMap != null)
+        {
+            geoMap.ModeChanged += OnMapModeChanged;
+            geoMap.Moved += OnMapMoved;
+        }
     }
 
     private void OnDisable()
     {
-        if (geoMap != null) geoMap.ModeChanged -= OnMapModeChanged;
+        if (geoMap != null)
+        {
+            geoMap.ModeChanged -= OnMapModeChanged;
+            geoMap.Moved -= OnMapMoved;
+        }
     }
 
     // Map <-> 3D: paths are rebuilt for the new layout (real positions or route arcs).
     private void OnMapModeChanged(bool onMap)
     {
         if (!ready) return;
+        BuildFlights();
+        ResetCursors();
+    }
+
+    // The map was raised above a moved floor (GraphRecenter seated use): the paths on it move along.
+    private void OnMapMoved()
+    {
+        if (!ready || activeMode != PathMode.Trajectory) return;
         BuildFlights();
         ResetCursors();
     }
