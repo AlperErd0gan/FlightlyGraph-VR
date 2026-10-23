@@ -56,7 +56,8 @@ public class FlightPanel : MonoBehaviour
     private InputAction slowerKey;
 
     public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
-    public bool Available => simulator != null && simulator.IsReady && simulator.FlightCount > 0;
+    /// <summary>Flights loaded and the panel built (one frame after the simulator is ready), so Open works.</summary>
+    public bool Available => canvas != null && simulator != null && simulator.IsReady && simulator.FlightCount > 0;
 
     private void Awake()
     {
