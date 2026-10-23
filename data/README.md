@@ -218,10 +218,38 @@ extras_meta_ectrl.json:  { source, files, graph, flightsOnEdges, edgesWithFlight
 
 `data/processed/geomap.json` and `geomap_dark.png` (scripts/build_geomap.py) are
 drawn from [Natural Earth](https://www.naturalearthdata.com/) 1:10m admin-0
-countries (French point of view: borders as France recognises them, e.g.
-Crimea in Ukraine, Cyprus undivided), 1:10m coastline and 1:50m lakes,
-downloaded from https://github.com/nvkelso/natural-earth-vector.
+countries, Turkish point of view as chosen for the project (Crimea in Ukraine;
+Northern Cyprus and Kosovo shown; the Golan Heights in Syria), with the
+Morocco / Western Sahara line at 27°40′N added (that view draws them as one;
+`SPLIT_LINES` in the script), 1:10m coastline and 1:50m lakes, downloaded from
+https://github.com/nvkelso/natural-earth-vector.
 
 **License:** public domain; no attribution required (credit is welcome). The
 map files contain no EUROCONTROL figures, only the map centre fitted to the
 airports' positions, so they are committed.
+
+## Flight simulation (live flights)
+
+`scripts/build_flight_sim.py` writes `flights_ectrl.json` (gitignored: derived
+from EUROCONTROL data), read by Unity's `FlightSimulator` / `FlightPanel`.
+
+```
+python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD]
+    [--start 00:00] [--hours 24] [--max-flights 0] [--max-points 30] [--tolerance-km 3]
+    [--points PATH | --no-points]
+```
+
+- Default: every flight between two graph airports along a graph edge whose
+  off-block .. arrival overlaps the busiest day of `--month` (most flights on
+  graph edges by off-block date; Aug 2025: Fri 29 Aug, 24,848 flights).
+- Tracks: `Flight_Points_Actual_<YYYYMM>01_*.csv.gz` of that month, anywhere
+  under `data/raw/eurocontrol/` (e.g. `other/202508/`); read in chunks, only
+  the picked flights kept. `path` per flight: `actual` (the track), `partial`
+  (the track covers only the EUROCONTROL area; the ends to / from the airport
+  are filled along the great circle with the real times), `greatCircle` (no
+  track: great circle, real times, taxi / climb / descent model).
+- Every path is simplified with Douglas-Peucker on the time-synchronised
+  distance (`--tolerance-km`, at most `--max-points`): turns, climbs /
+  descents and stops keep their points. A whole day is ~11 MB.
+- `t`, `dep`, `arr`: seconds from `startEpoch` (Unix time, UTC); `fl`: flight
+  level (100 ft); `hdg`: course to the next point (degrees from true north).

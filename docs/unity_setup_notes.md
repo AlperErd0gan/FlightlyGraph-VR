@@ -144,3 +144,20 @@ stops describing selections; without a connection both work as before.
 
 The key is in memory while the app runs: fine for development and demos; a
 shared build needs ephemeral tokens from a small server.
+
+## 9. Live flights (flight simulation)
+
+No scene change: the dashboard adds `FlightPanel`, which adds a
+`FlightSimulator`. It needs `flights_ectrl.json` in StreamingAssets
+(`python scripts/build_flight_sim.py`, then the sync script; EUROCONTROL-derived,
+so it is shared outside git like the graph files). Without it the Live flights
+button is disabled (Console: a warning, not an error).
+
+- Assign a material with **Enable GPU Instancing** (e.g. URP / Unlit) to
+  `FlightSimulator.aircraftMaterial`: the aircraft are drawn instanced, and in a
+  build the shader must be referenced. In the Editor over Link the fallback
+  (URP / Unlit found by name) works if instancing is enabled on it.
+- Tune: `mapAircraftSize` (2 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
+  (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
+- The route mesh renders before the other transparent objects (it used to be
+  drawn over the dashboard and the info card).

@@ -100,7 +100,11 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public bool Switching => transition != null;
     /// <summary>Raised when a switch has finished (true = map).</summary>
     public event System.Action<bool> ModeChanged;
+    /// <summary>Raised after the map was placed again (raised above a moved floor): positions on it changed.</summary>
+    public event System.Action Moved;
     public GeoMapProjection Projection => projection;
+    /// <summary>Radius of the map of Europe in degrees of arc (beyond it: the outer band).</summary>
+    public float MapRadiusDegrees => map != null ? map.radiusDeg : 0f;
     public int OutsideCount => outside.Count;
     public bool IsOutside(GraphNode node) => outside.Contains(node);
 
@@ -369,6 +373,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         Place();
         if ((projection.center - before).sqrMagnitude < 1e-8f) return;
         visual.localPosition = projection.center;
+        Moved?.Invoke();
         if (!IsMap) return;
         foreach (GraphNode node in graph.Nodes.Values)
         {

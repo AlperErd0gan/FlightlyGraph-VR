@@ -39,6 +39,8 @@ python scripts/build_graph_ectrl.py      # EUROCONTROL (licensed, local only)
 python scripts/build_ectrl_extras.py
 python scripts/layout_3d.py              # nodes_3d*.json (force-directed shell)
 python scripts/build_geomap.py           # geomap.json + geomap_dark.png for the map view
+python scripts/build_flight_sim.py       # flights_ectrl.json: live flights, busiest day of --month
+                                         # (real tracks from Flight_Points_Actual_* under data/raw/eurocontrol/)
 scripts/sync_streaming_assets.sh [UNITY_PROJECT_DIR]   # copy outputs into StreamingAssets
 
 # C# compile check on the Mac (after copying scripts to ~/Documents/FlighlyVR/Assets/Scripts)
@@ -66,7 +68,10 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
 - `GeoMapView` (+ `GeoMapProjection`): map layout of Europe; `maxNodeDiameter` caps node
   size on the map.
 - `DataDashboard`: the menu; at runtime it adds `TimelinePanel`, `CityClusters`,
-  `GraphRecenter`, `GeoMapView` when the scene has none.
+  `GraphRecenter`, `GeoMapView`, `FlightPanel` when the scene has none.
+- Live flights: `FlightPanel` (panel; dashboard, P, voice) drives `FlightSimulator`
+  (GPU-instanced aircraft from `flights_ectrl.json`; real positions on the map via
+  `GeoMapView`, route arcs in 3D; paths rebuilt on `GeoMapView.ModeChanged` / `Moved`).
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
 - XR: `XRGraphInput`, `HandTeleport`, `GraphRecenter` (teleports the user to the graph,

@@ -38,6 +38,7 @@ panel back; the graph stays where it is.
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
 | Map of Europe ↔ 3D layout | B | dashboard → Map view / 3D view | M |
+| Live flights (flight simulation) | dashboard → Live flights | same | P |
 | Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
 | Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | Home |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
@@ -79,6 +80,8 @@ the microphone is sent to Wit; the name is checked on the returned text.
 | clear · close | clears the selection |
 | regional view · show clusters / top routes · normal view / switch view | view mode |
 | map view · show the map · put the airports on the map / 3D view · back to the network view · close the map | map of Europe / 3D layout |
+| live flights · show the planes · start the simulation / stop the flights | live flights panel |
+| (live flights open) faster · slower · play · pause | its speed / playback |
 | filter cargo · only low cost · filter Turkey / reset filters · show everything | market segment or country filter |
 | open timeline · play · pause · next / previous month · show April 2020 · show 2021 · all months | timeline |
 | open / close dashboard · open insights / filters / controls / overview / find · open airports / routes / clusters page | dashboard |
@@ -111,6 +114,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 |---|---|
 | Sidebar: Overview … Controls | switch page |
 | Sidebar: **Map view** / **3D view** | close the dashboard and move the airports onto the map / back |
+| Sidebar: **Live flights** | close the dashboard and open the live flights panel |
 | Sidebar: **Timeline** | close the dashboard and open the timeline |
 | Header: **Tour** | start the guided tour |
 | Header: **X** | close the dashboard |
@@ -162,6 +166,24 @@ you in front of the map. Starting the guided tour switches back to 3D.
 |---|---|---|---|
 | Map ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Closer look | walk / teleport to the map | same | fly camera |
+
+## Live flights (dashboard → Live flights / P)
+
+Every flight of one day on the graph's routes (the busiest day of August 2025,
+Fri 29 Aug: ~25,000), each a small aircraft moving in accelerated time. On the
+map they fly at their real positions (EUROCONTROL tracks where present, else
+the great circle with the real times) and appear / disappear where they cross
+the map's rim; in the 3D layout they fly along the route arcs. Only aircraft in
+the air are drawn. While the panel is open the routes are dimmed and the graph
+shows that month (sizes, routes); closing restores both.
+
+| Action | Controller / hands | Editor |
+|---|---|---|
+| Play / pause | ▶ on the panel | click, or P |
+| 15 minutes back / forward | ◀ / ▶ | click |
+| Pick a time of day | drag the slider over the chart | drag / click |
+| Speed (15 s/s … 30 min/s) | speed button | click, or [ / ] |
+| Close | **X** | click |
 
 ## Guided tour (dashboard → Tour)
 

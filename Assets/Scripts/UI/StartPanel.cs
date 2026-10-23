@@ -31,6 +31,8 @@ public class StartPanel : MonoBehaviour
     public GuidedTour tour;
     public DataDashboard dashboard;
     public TimelinePanel timeline;
+    [Tooltip("Live flights panel, kept closed while this panel is open like the timeline. Found at runtime if unset.")]
+    public FlightPanel flights;
     [Tooltip("Show the panel (and hide the graph) when the app opens.")]
     public bool showOnStart = true;
     [Tooltip("Key that opens the panel (Input System path), e.g. for testing in the Editor. Empty = none.")]
@@ -182,6 +184,7 @@ public class StartPanel : MonoBehaviour
         FindPanels();
         if (dashboard != null && dashboard.IsOpen) dashboard.Close();
         if (timeline != null && timeline.IsOpen) timeline.Close();
+        if (flights != null && flights.IsOpen) flights.Close();
         canvas.gameObject.SetActive(true);
         KeepInView(true);
         openedAt = Time.time;
@@ -195,7 +198,8 @@ public class StartPanel : MonoBehaviour
     private void KeepOthersClosed()
     {
         FindPanels();
-        bool other = (dashboard != null && dashboard.IsOpen) || (timeline != null && timeline.IsOpen);
+        bool other = (dashboard != null && dashboard.IsOpen) || (timeline != null && timeline.IsOpen) ||
+                     (flights != null && flights.IsOpen);
         if (!other) return;
         if (started)
         {
@@ -204,13 +208,15 @@ public class StartPanel : MonoBehaviour
         }
         if (dashboard != null && dashboard.IsOpen) dashboard.Close();
         if (timeline != null && timeline.IsOpen) timeline.Close();
+        if (flights != null && flights.IsOpen) flights.Close();
     }
 
     private void FindPanels()
     {
-        // Both are added at runtime (DataDashboard adds the TimelinePanel), so look again until found.
+        // Added at runtime (DataDashboard adds the TimelinePanel and the FlightPanel), so look again until found.
         if (dashboard == null) dashboard = FindFirstObjectByType<DataDashboard>();
         if (timeline == null) timeline = FindFirstObjectByType<TimelinePanel>();
+        if (flights == null) flights = FindFirstObjectByType<FlightPanel>();
     }
 
     private void Begin(bool withTour)

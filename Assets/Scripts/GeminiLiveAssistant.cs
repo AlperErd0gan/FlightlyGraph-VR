@@ -520,7 +520,8 @@ public class GeminiLiveAssistant : MonoBehaviour
                  "'help', 'route from <A> to <B>', 'clear', " + (commandsOnly ? "" : "'describe', ") + "'regional view', 'top routes', 'map view', '3D view', 'filter <market segment or country>', " +
                  "'reset filters', 'open timeline', 'play', 'pause', 'show <month> <year>', 'show <year>', 'all months', 'next month', " +
                  "'previous month', 'open dashboard', 'close dashboard', 'open insights', 'open filters', 'open controls', " +
-                 "'open overview', 'group cities', 'ungroup cities', 'go to the centre', 'start tour', 'stop tour'. " +
+                 "'open overview', 'group cities', 'ungroup cities', 'go to the centre', 'start tour', 'stop tour', " +
+                 "'live flights', 'stop the flights', and while live flights is open 'faster', 'slower', 'play', 'pause'. " +
                  "Returns what happened.",
                  Param("command", "STRING", "The command.", true));
         if (commandsOnly) return new JArray { appCommand };

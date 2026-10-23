@@ -12,7 +12,7 @@ DEST="$PROJECT/Assets/StreamingAssets"
 mkdir -p "$DEST"
 cp "$ROOT/data/processed/nodes.json" "$ROOT/data/processed/edges.json" "$DEST/"
 echo "synced nodes.json + edges.json -> $DEST"
-for f in nodes_ectrl.json edges_ectrl.json meta_ectrl.json nodes_3d.json nodes_3d_ectrl.json geomap.json geomap_dark.png; do
+for f in nodes_ectrl.json edges_ectrl.json meta_ectrl.json nodes_3d.json nodes_3d_ectrl.json flights_ectrl.json geomap.json geomap_dark.png; do
   if [ -f "$ROOT/data/processed/$f" ]; then
     cp "$ROOT/data/processed/$f" "$DEST/"
     echo "synced $f -> $DEST"
