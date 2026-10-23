@@ -87,5 +87,5 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
 
 C# matches the existing files: Inspector fields with short `[Tooltip]`s, components
 that add their own helpers at runtime instead of requiring scene changes, Console logs
-prefixed with the class name (`GraphLoader: ...`). The user writes in Turkish; answer
-in Turkish.
+prefixed with the class name (`GraphLoader: ...`). Answer in English (the user may still
+write in Turkish).
