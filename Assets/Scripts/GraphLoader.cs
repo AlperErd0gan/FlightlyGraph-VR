@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Rendering;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
 /// Loads nodes.json / edges.json from StreamingAssets and renders the graph:
@@ -71,13 +72,22 @@ public class GraphLoader : MonoBehaviour
 
     public enum EdgeShape { LiftedArc, AroundCenter }
 
-    [Tooltip("AroundCenter only. GreatCircle: natural arcs over / under the viewer (arcs that would reach the floor are lifted smoothly so they just touch minEdgeHeight). Horizontal: arcs go round the viewer at the endpoints' heights.")]
+    [Tooltip("AroundCenter only. GreatCircle: natural arcs over / under the viewer (arcs that would reach the floor are lifted smoothly so they just touch minEdgeHeight above it). Horizontal: arcs go round the viewer at the endpoints' heights.")]
     public AroundCenterPath aroundCenterPath = AroundCenterPath.GreatCircle;
 
     public enum AroundCenterPath { GreatCircle, Horizontal }
 
-    [Tooltip("Lowest world height (m) any edge point may have; keeps edges above the floor (floor at y = 0).")]
+    [Tooltip("Lowest height (m) of any edge point above the floor's top surface.")]
     public float minEdgeHeight = 0.05f;
+    [Tooltip("Floor the edges stay above (the top of its collider). Empty = the largest teleport area in the scene, else y = 0. " +
+             "When the floor moves (e.g. Go to graph centre with Match Eye Height) the edges are rebuilt.")]
+    public Transform floor;
+
+    /// <summary>World height of the floor's top surface that edges keep minEdgeHeight above.</summary>
+    public float FloorY { get; private set; }
+    private float MinEdgeY => FloorY + minEdgeHeight;
+    private Collider floorCollider;
+    private bool floorResolved;
 
     [Header("Edge filtering / community colours")]
     [Tooltip("-1 = all edges. 0 = none at rest: edges appear only for the selection. N = the N most important edges (weight, then the smaller endpoint value, so hub-to-hub links win ties).")]
@@ -183,6 +193,17 @@ public class GraphLoader : MonoBehaviour
 
     private void LateUpdate()
     {
+        // The floor can move at runtime (GraphRecenter.matchEyeHeight moves the teleport floors): keep edges above it.
+        if (floorResolved && edgeMesh != null)
+        {
+            float y = ReadFloorY();
+            if (Mathf.Abs(y - FloorY) > 0.005f)
+            {
+                Debug.Log($"GraphLoader: floor moved from {FloorY:F2} m to {y:F2} m; edges rebuilt above it.");
+                FloorY = y;
+                RebuildEdges(edgeInstances);
+            }
+        }
         if (edgesDirty && edgeMesh != null)
         {
             UploadEdgeDisplay();
@@ -406,6 +427,7 @@ public class GraphLoader : MonoBehaviour
         System.Array.Sort(sortedEdgeWeights);
 
         builtSegments = edgeSegments;
+        ResolveFloor();
         // Guard against duplicate pairs in either direction: one edge per airport pair.
         var seenPairs = new HashSet<(string, string)>();
 
@@ -445,7 +467,7 @@ public class GraphLoader : MonoBehaviour
             for (int i = 0; i < ge.points.Length; i++)
             {
                 // Safety net: never draw an edge below the floor.
-                if (ge.points[i].y < minEdgeHeight) ge.points[i].y = minEdgeHeight;
+                if (ge.points[i].y < MinEdgeY) ge.points[i].y = MinEdgeY;
             }
 
             edgeInstances.Add(ge);
@@ -555,7 +577,7 @@ public class GraphLoader : MonoBehaviour
             FillArc(nodeInstances[e.sourceId].transform.position, nodeInstances[e.targetId].transform.position, e.points);
             for (int i = 0; i < e.points.Length; i++)
             {
-                if (e.points[i].y < minEdgeHeight) e.points[i].y = minEdgeHeight;
+                if (e.points[i].y < MinEdgeY) e.points[i].y = MinEdgeY;
             }
             WriteEdgeGeometry(e);
             any = true;
@@ -710,6 +732,43 @@ public class GraphLoader : MonoBehaviour
         edgesDirty = true;
     }
 
+    /// <summary>
+    /// Finds the floor once: the assigned one, else the teleport area with the largest
+    /// horizontal footprint (the walkable floor), else none (y = 0).
+    /// </summary>
+    private void ResolveFloor()
+    {
+        if (!floorResolved)
+        {
+            floorResolved = true;
+            if (floor == null)
+            {
+                float bestArea = 0f;
+                foreach (BaseTeleportationInteractable area in FindObjectsByType<BaseTeleportationInteractable>(FindObjectsSortMode.None))
+                {
+                    Collider c = area.GetComponentInChildren<Collider>();
+                    if (c == null || !c.enabled) continue;
+                    float footprint = c.bounds.size.x * c.bounds.size.z;
+                    if (footprint > bestArea)
+                    {
+                        bestArea = footprint;
+                        floor = c.transform;
+                    }
+                }
+            }
+            if (floor != null) floorCollider = floor.GetComponentInChildren<Collider>();
+            Debug.Log($"GraphLoader: edges stay {minEdgeHeight:F2} m above " +
+                      (floor != null ? $"the floor '{floor.name}'" : "y = 0 (no floor found)"));
+        }
+        FloorY = ReadFloorY();
+    }
+
+    private float ReadFloorY()
+    {
+        if (floorCollider != null && floorCollider.enabled && floorCollider.gameObject.activeInHierarchy) return floorCollider.bounds.max.y;
+        return floor != null ? floor.position.y : 0f;
+    }
+
     /// <summary>Quadratic Bézier from a to b whose midpoint is lifted along +Y (or the layout's shape).</summary>
     private void FillArc(Vector3 a, Vector3 b, Vector3[] points)
     {
@@ -764,7 +823,8 @@ public class GraphLoader : MonoBehaviour
         {
             Vector3 ua = da / ra;
             Vector3 ub = db / rb;
-            if (FillGreatCircle(center, ua, ub, ra, rb, 0f, points) < minEdgeHeight)
+            float minY = MinEdgeY;
+            if (FillGreatCircle(center, ua, ub, ra, rb, 0f, points) < minY)
             {
                 // Smallest lift (binary search) that keeps the whole arc at or above minEdgeHeight:
                 // the lowest point then just touches it.
@@ -773,7 +833,7 @@ public class GraphLoader : MonoBehaviour
                 for (int iteration = 0; iteration < 20; iteration++)
                 {
                     float mid = (low + high) * 0.5f;
-                    if (FillGreatCircle(center, ua, ub, ra, rb, mid, points) >= minEdgeHeight) high = mid;
+                    if (FillGreatCircle(center, ua, ub, ra, rb, mid, points) >= minY) high = mid;
                     else low = mid;
                 }
                 FillGreatCircle(center, ua, ub, ra, rb, high, points);

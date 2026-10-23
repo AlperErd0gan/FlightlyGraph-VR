@@ -110,13 +110,42 @@ Without them the map view is unavailable and nothing else changes (Console:
   (-0.35 m below the graph centre), `tilt` (30°: 0 = upright wall, 90 = table),
   `mapRadius` (1 m), `curvatureRadius` (3.5 m; > 0 globe-like, < 0 curves
   around you, 0 flat), `nodeScale`, `edgeWidthScale`, `arcHeight`,
-  `toggleBinding` (B).
+  `toggleBinding` (B), `floorClearance` (0.1 m: the map is raised so its lowest
+  part stays this far above the floor; the Console logs how much).
+- Map names: `countryNameScale` (0.8), `outsideNameSize` (0.22), `onePerCity`
+  (only the busiest airport of a city beyond the map is named) and
+  `hideOverlappingNames` (a name that would overlap one already placed is left
+  out; the Console says how many).
 - Builds: the map uses runtime materials (`Universal Render Pipeline/Unlit`
   found by name). In the Editor over Link that is fine; for an EXE / APK assign
   an Unlit material to `GeoMapView.mapMaterial` so the shader is included.
 - `HubLabels.layoutLabelScale` (0.35) shrinks the airport codes on the map.
+## 8. Real-time voice with Gemini (TASKS B5, branch b5-realtime-voice)
 
-## 8. Live flights (flight simulation)
+`GeminiLiveAssistant` talks to the Gemini Live API over one WebSocket, straight
+from Unity: hold Y (N in the Editor), talk, release; the answer is spoken in a
+Gemini voice and can be interrupted with Y. Tools let the model run
+`VoiceAssistant` commands and read figures from the loaded graph. While it is
+connected, VoiceAssistant (Wit) only runs its commands and the Wit narrator
+stops describing selections; without a connection both work as before.
+
+1. API key from aistudio.google.com → Get API key. Put only the key in
+   `gemini_key.txt` in `Application.persistentDataPath` (Windows:
+   `%USERPROFILE%\AppData\LocalLow\<Company Name>\<Product Name>`; the exact
+   path is logged on Play), or set `GEMINI_API_KEY`. Never inside the project.
+2. Add `GeminiLiveAssistant` to the `VoiceInput` object (next to
+   `VoiceAssistant`). Defaults: model `gemini-3.8-live`, voice Charon, helmet
+   effect on. Change Voice in Play mode to compare (it reconnects).
+3. EUROCONTROL scenes (`*_ectrl` files) stay on the Wit commands unless
+   `allowLicensedData` is ticked — only when the data licence allows sending
+   figures to Google.
+4. Quest APK: Player Settings → Android → Internet Access = Require; copy the
+   key file with `adb push gemini_key.txt /sdcard/Android/data/<package>/files/`.
+
+The key is in memory while the app runs: fine for development and demos; a
+shared build needs ephemeral tokens from a small server.
+
+## 9. Live flights (flight simulation)
 
 No scene change: the dashboard adds `FlightPanel`, which adds a
 `FlightSimulator`. It needs `flights_ectrl.json` in StreamingAssets
@@ -128,7 +157,7 @@ button is disabled (Console: a warning, not an error).
   `FlightSimulator.aircraftMaterial`: the aircraft are drawn instanced, and in a
   build the shader must be referenced. In the Editor over Link the fallback
   (URP / Unlit found by name) works if instancing is enabled on it.
-- Tune: `mapAircraftSize` (2.4 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
+- Tune: `mapAircraftSize` (2 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
-- Rendering fix on this branch: the route mesh renders before the other
-  transparent objects (it was drawn over the dashboard and the info card).
+- The route mesh renders before the other transparent objects (it used to be
+  drawn over the dashboard and the info card).

@@ -77,6 +77,9 @@ public class VoiceAssistant : MonoBehaviour
     public float captionHeight = -0.24f;
     [Tooltip("Seconds a result stays on the caption.")]
     public float captionSeconds = 4f;
+    [Tooltip("While the dashboard is open the caption sits to its right, this far from its edge (m), turned this much towards you (degrees).")]
+    public float besideDashboardGap = 0.05f;
+    public float besideDashboardTurn = 20f;
 
     [Header("Testing")]
     [Tooltip("Sentence run by F8 / the context menu, as if it had been heard.")]
@@ -84,6 +87,14 @@ public class VoiceAssistant : MonoBehaviour
 
     /// <summary>True while the assistant keeps the microphone open for her name.</summary>
     public bool Listening { get; private set; }
+
+    /// <summary>
+    /// While true, push to talk is left to another assistant (GeminiLiveAssistant when it is
+    /// connected); commands can still be run through RunCommand.
+    /// </summary>
+    public bool Suspended { get; set; }
+
+    private bool muteReplies;
 
     // Voice SDK by reflection.
     private MethodInfo activateMethod;
@@ -165,7 +176,7 @@ public class VoiceAssistant : MonoBehaviour
         if (testAction.WasPressedThisFrame()) RunTestPhrase();
         if (mode == ListenMode.PushToTalk)
         {
-            if (talkAction.WasPressedThisFrame()) StartTalking();
+            if (talkAction.WasPressedThisFrame() && !Suspended) StartTalking();
             if (holding && talkAction.WasReleasedThisFrame()) StopTalking();
         }
         else if (voiceReady && Listening && !VoiceBusy() && Time.time >= nextActivation) Activate();
@@ -369,6 +380,16 @@ public class VoiceAssistant : MonoBehaviour
             PlaySound(UISounds.Open);
             return;
         }
+        // Easter egg: The Hitchhiker's Guide to the Galaxy.
+        if ((pushed || wake >= 0 || mode == ListenMode.AlwaysListening) &&
+            Regex.IsMatch(norm, @"\b(?:what s|whats|what is) the (?:meaning|answer|purpose) (?:of|to) (?:life|life the universe and everything|the universe|everything)\b"))
+        {
+            Debug.Log($"VoiceAssistant: heard \"{text}\" -> easter egg 42");
+            Show("<b>42.</b>\n<color=#9AA6BA>Though you may want to check the question.</color>", captionSeconds + 2f);
+            Say("Forty-two. Though you may want to check the question.", force: true);
+            PlaySound(UISounds.Open);
+            return;
+        }
         string command;
         if (wake >= 0) command = string.Join(" ", words, wake + 1, words.Length - wake - 1);
         else if (pushed || Time.time < awakeUntil) command = norm;
@@ -551,7 +572,7 @@ public class VoiceAssistant : MonoBehaviour
         }
 
         // Map of Europe (GeoMapView) and back to the 3D layout.
-        if (Is(c, @"^((show|open|switch to|go to|change to)( the)? (map|map view|geographic view)|map( view)?|(show|put)( the)? (airports|them|it) on (the|a) map)$"))
+        if (Is(c, @"^((show|open|switch to|go to|change to)( me)?( the)? (map|map view|geographic view|map of europe|europe map)|(the )?map( view| of europe)?|(show|put)( the)? (airports|them|it) on (the|a) map)$"))
         {
             if (GeoMap == null || !GeoMap.Ready) return NotAvailable("map view", out reply);
             if (dashboard != null && dashboard.IsOpen) dashboard.Close();
@@ -839,6 +860,39 @@ public class VoiceAssistant : MonoBehaviour
     /// Best airport for spoken words: code ("IST", "i s t", "LTFM"), airport name, or city
     /// (the city's busiest airport); small misrecognitions are tolerated.
     /// </summary>
+    /// <summary>
+    /// Runs one English command ("show istanbul", "filter cargo", ...) for another assistant,
+    /// without the narrator's spoken reply (the caller speaks). Returns whether it was understood.
+    /// </summary>
+    public bool RunCommand(string command, out string reply)
+    {
+        string c = StripFillers(Normalize(command));
+        muteReplies = true;
+        try
+        {
+            bool understood = Execute(c, out reply);
+            if (!understood && string.IsNullOrEmpty(reply)) reply = $"Unknown command \"{c}\".";
+            Debug.Log($"VoiceAssistant: command \"{c}\" -> {(understood ? "ok" : "not done")}: {reply}");
+            return understood;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"VoiceAssistant: command \"{c}\" failed: {ex}");
+            reply = "That command failed.";
+            return false;
+        }
+        finally
+        {
+            muteReplies = false;
+        }
+    }
+
+    /// <summary>Best airport for a spoken name, city or code, or null.</summary>
+    public GraphNode FindAirport(string spoken) => ResolveAirport(spoken);
+
+    /// <summary>Shows text on the assistant's caption for some seconds.</summary>
+    public void ShowCaption(string text, float seconds) => Show(text, seconds);
+
     private GraphNode ResolveAirport(string spoken)
     {
         if (graph == null || !graph.IsLoaded) return null;
@@ -1058,7 +1112,7 @@ public class VoiceAssistant : MonoBehaviour
 
     private void Say(string text, bool force = false)
     {
-        if ((!speakReplies && !force) || narrator == null || Camera.main == null) return;
+        if ((!speakReplies && !force) || muteReplies || narrator == null || Camera.main == null) return;
         Transform head = Camera.main.transform;
         narrator.SpeakText(text, head.position + head.forward * 0.5f);
     }
@@ -1152,8 +1206,25 @@ public class VoiceAssistant : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null) return;
         Transform head = cam.transform;
-        Vector3 target = head.position + UIKit.FlatForward(head) * captionDistance + Vector3.up * captionHeight;
         Transform t = captionCanvas.transform;
+        RectTransform panel = dashboard != null && dashboard.IsOpen ? dashboard.Panel : null;
+        if (panel != null)
+        {
+            // Beside the dashboard (right of it, top edges level), so the two never overlap.
+            var caption = (RectTransform)t;
+            float panelWidth = panel.rect.width * panel.lossyScale.x;
+            float panelHeight = panel.rect.height * panel.lossyScale.y;
+            float captionWidth = caption.rect.width * caption.lossyScale.x;
+            float captionHeightWorld = caption.rect.height * caption.lossyScale.y;
+            Vector3 besideTarget = panel.position
+                                 + panel.right * (panelWidth * 0.5f + besideDashboardGap + captionWidth * 0.5f)
+                                 + panel.up * (panelHeight * 0.5f - captionHeightWorld * 0.5f);
+            t.position = captionPlaced ? Vector3.Lerp(t.position, besideTarget, 1f - Mathf.Exp(-8f * Time.deltaTime)) : besideTarget;
+            t.rotation = panel.rotation * Quaternion.Euler(0f, besideDashboardTurn, 0f);
+            captionPlaced = true;
+            return;
+        }
+        Vector3 target = head.position + UIKit.FlatForward(head) * captionDistance + Vector3.up * captionHeight;
         t.position = captionPlaced ? Vector3.Lerp(t.position, target, 1f - Mathf.Exp(-4f * Time.deltaTime)) : target;
         captionPlaced = true;
         Vector3 away = t.position - head.position;

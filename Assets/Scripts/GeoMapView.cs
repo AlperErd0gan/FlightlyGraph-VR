@@ -16,6 +16,9 @@ using UnityEngine.Networking;
 /// Switch: B (right controller; toggleBinding), M in the Editor, the dashboard or voice.
 /// Selection, info card, timeline, filters, view modes and city groups work the same on
 /// the map. The guided tour runs in the 3D layout (starting it switches back).
+/// The map never goes into the floor: when its lowest part (the band and the names
+/// beyond it) would come closer than floorClearance to GraphLoader.FloorY, the whole
+/// map is raised, also later when the floor or the graph moves.
 /// </summary>
 public class GeoMapView : MonoBehaviour, IGraphLayout
 {
@@ -39,10 +42,15 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public float mapRadius = 1.0f;
     [Tooltip("Curvature (m): > 0 bulges towards you like part of a globe, < 0 curves around you, 0 = flat.")]
     public float curvatureRadius = 3.5f;
+    [Tooltip("Lowest part of the map (band and the names beyond it) stays this far above the floor (m); the map is raised when it would reach lower.")]
+    public float floorClearance = 0.1f;
 
     [Header("Airports and routes on the map")]
-    [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer).")]
+    [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer). Upper bound: see maxNodeDiameter.")]
     public float nodeScale = 0.45f;
+    [Tooltip("Diameter (m) of the biggest airport on the map; all airports shrink by the same factor when it would be bigger, " +
+             "whatever the 3D sizes of this scene. 0 = only nodeScale. Live in Play mode.")]
+    public float maxNodeDiameter = 0.03f;
     [Tooltip("Route width multiplier on the map (highlighted routes too: an airport's ~170 routes must not cover it).")]
     public float edgeWidthScale = 0.35f;
     [Tooltip("Route arc height as a fraction of its length on the map.")]
@@ -68,6 +76,16 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public Color rimColor = new Color(0.30f, 0.75f, 1f, 1f);
     public Color bandColor = new Color(0.075f, 0.09f, 0.13f, 1f);
     public Color outsideNameColor = new Color(1f, 0.82f, 0.55f, 0.95f);
+    [Tooltip("Size of the country names (1 = the original size).")]
+    public float countryNameScale = 0.8f;
+    [Tooltip("Font size of the names beyond the map (\"DXB · Dubai\").")]
+    public float outsideNameSize = 0.22f;
+    [Tooltip("Beyond the map, only the busiest airport of each city gets a name.")]
+    public bool onePerCity = true;
+    [Tooltip("Leave out a name that would overlap one already placed (countries by importance, then airports by traffic).")]
+    public bool hideOverlappingNames = true;
+    [Tooltip("Space kept around each name (m).")]
+    public float nameGap = 0.004f;
 
     [Header("Switch")]
     [Tooltip("Controller button that switches 3D layout <-> map (Input System path). Default: B. Empty = no controller button.")]
@@ -89,7 +107,35 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public bool IsOutside(GraphNode node) => outside.Contains(node);
 
     // IGraphLayout
-    public float NodeScale => nodeScale;
+    public float NodeScale
+    {
+        get
+        {
+            if (maxNodeDiameter <= 0f || graph == null || !graph.IsLoaded) return nodeScale;
+            if (scaleFrame != Time.frameCount)
+            {
+                // Size of the biggest airport without a layout (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).
+                float biggest = 0f;
+                foreach (GraphNode node in graph.Nodes.Values)
+                {
+                    biggest = Mathf.Max(biggest, graph.nodeBaseSize + graph.nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0, node.value)));
+                }
+                cachedScale = biggest > 1e-6f ? Mathf.Min(nodeScale, maxNodeDiameter / biggest) : nodeScale;
+                scaleFrame = Time.frameCount;
+            }
+            return cachedScale;
+        }
+    }
+
+    private int scaleFrame = -1;
+    private float cachedScale = 1f;
+
+    private void OnValidate()
+    {
+        // Size changes in the Inspector apply at once while the map is shown.
+        scaleFrame = -1;
+        if (Application.isPlaying && IsMap && graph != null && graph.IsLoaded && ReferenceEquals(graph.Layout, this)) graph.SetLayout(this);
+    }
     public float EdgeWidthScale => edgeWidthScale;
 
     private class MapFile
@@ -119,6 +165,9 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private Transform visual;
     private InputAction toggleAction;
     private Coroutine transition;
+    private readonly List<Rect> nameBoxes = new List<Rect>();
+    private float placedFloorY;
+    private float placedGraphY;
 
     private void Awake()
     {
@@ -180,6 +229,12 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private void Update()
     {
         if (!Ready) return;
+        // The floor moves with GraphRecenter.matchEyeHeight (seated use): keep the map above it.
+        if (!Switching && (Mathf.Abs(graph.FloorY - placedFloorY) > 0.005f ||
+                           Mathf.Abs(graph.transform.position.y - placedGraphY) > 0.005f))
+        {
+            Replace();
+        }
         if (GuidedTour.InputLocked)
         {
             // The tour's steps are written for the 3D layout.
@@ -280,6 +335,48 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         projection.curvatureRadius = curvatureRadius;
         float a = tilt * Mathf.Deg2Rad;
         projection.Place(new Vector3(0f, height, distance), new Vector3(0f, Mathf.Sin(a), -Mathf.Cos(a)), Vector3.up);
+
+        // Tilted back and bent, the map's near rim hangs about a metre below its centre:
+        // with the eyes at the graph centre (seated) that is under the floor.
+        Transform t = graph.transform;
+        float lowest = LowestPointY();
+        float deficit = graph.FloorY + floorClearance - lowest;
+        if (deficit > 0f)
+        {
+            projection.center += t.InverseTransformVector(Vector3.up * deficit);
+            Debug.Log($"GeoMapView: map raised {deficit:F2} m to stay {floorClearance:F2} m above the floor (y = {graph.FloorY:F2}).");
+        }
+        placedFloorY = graph.FloorY;
+        placedGraphY = t.position.y;
+    }
+
+    /// <summary>World height of the map's lowest point: the outer edge of the band, plus room for the names beyond it.</summary>
+    private float LowestPointY()
+    {
+        float outer = map.radiusDeg + MetersToDegrees(bandGap + bandWidth + 0.06f);
+        float lowest = float.MaxValue;
+        for (int j = 0; j < 72; j++)
+        {
+            float a = 2f * Mathf.PI * j / 72;
+            Vector2 p = new Vector2(Mathf.Sin(a), Mathf.Cos(a)) * outer;
+            lowest = Mathf.Min(lowest, graph.transform.TransformPoint(projection.Surface(p)).y);
+        }
+        return lowest;
+    }
+
+    /// <summary>Places the map again (floor or graph moved) and, when it moved, the airports and routes on it.</summary>
+    private void Replace()
+    {
+        Vector3 before = projection.center;
+        Place();
+        if ((projection.center - before).sqrMagnitude < 1e-8f) return;
+        visual.localPosition = projection.center;
+        if (!IsMap) return;
+        foreach (GraphNode node in graph.Nodes.Values)
+        {
+            node.transform.localPosition = cities != null ? cities.RestingPosition(node) : graph.HomePosition(node);
+        }
+        graph.RebuildEdges(graph.Edges);
     }
 
     private float BandMiddle => map.radiusDeg + MetersToDegrees(bandGap + bandWidth * 0.5f);
@@ -370,28 +467,71 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         AddMesh("Band", Annulus(bandFrom, bandTo, 160, 0f), ColorMaterial(bandColor));
         AddMesh("Band Edge", Annulus(bandTo, bandTo + rim * 0.5f, 160, 0.001f), ColorMaterial(rimColor * 0.5f));
 
+        nameBoxes.Clear();
+        int hidden = 0;
         if (showCountryNames && map.labels != null)
         {
-            foreach (Label label in map.labels)
+            // Most important countries first, so they keep their names.
+            var countries = new List<Label>(map.labels);
+            countries.Sort((a, b) => a.rank.CompareTo(b.rank));
+            foreach (Label label in countries)
             {
-                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank));
-                TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, new Vector2(label.x, label.y), 0.003f);
+                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank)) * countryNameScale;
+                Vector2 at = new Vector2(label.x, label.y);
+                TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, at, 0.003f);
                 text.characterSpacing = 6f;
+                if (!KeepName(text, at)) hidden++;
             }
         }
-        foreach (GraphNode node in outside)
+        // Busiest airports first; with onePerCity a city's other airports get no name.
+        var beyond = new List<GraphNode>(outside);
+        beyond.Sort((a, b) => b.value.CompareTo(a.value));
+        var named = new HashSet<string>();
+        foreach (GraphNode node in beyond)
         {
+            string city = node.data != null && !string.IsNullOrEmpty(node.data.city) ? node.data.city : node.label;
+            if (onePerCity && !named.Add(city.ToLowerInvariant()))
+            {
+                hidden++;
+                continue;
+            }
             Vector2 dir = PlanarOf(node).normalized;
             Vector2 at = dir * (bandTo + MetersToDegrees(0.015f));
-            string city = node.data != null && !string.IsNullOrEmpty(node.data.city) ? node.data.city : node.label;
-            TextMeshPro text = NewText(node.ShortCode + " · " + city, 0.3f, outsideNameColor, at, 0.003f);
+            TextMeshPro text = NewText(node.ShortCode + " · " + city, outsideNameSize, outsideNameColor, at, 0.003f);
             // Anchor the text on its side nearest the map, so it reads outwards from the band.
             Vector2 pivot = new Vector2(dir.x > 0.35f ? 0f : dir.x < -0.35f ? 1f : 0.5f,
                                         Mathf.Abs(dir.x) > 0.35f ? 0.5f : dir.y > 0f ? 0f : 1f);
             text.rectTransform.pivot = pivot;
             text.alignment = pivot.x == 0f ? TextAlignmentOptions.Left : pivot.x == 1f ? TextAlignmentOptions.Right : TextAlignmentOptions.Center;
+            if (!KeepName(text, at)) hidden++;
         }
+        if (hidden > 0) Debug.Log($"GeoMapView: {hidden} names left out so that the names on the map do not overlap.");
         visual.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Keeps the name unless (with hideOverlappingNames) its box on the map overlaps a name
+    /// already kept; then it is removed. Boxes are in metres on the map (x east, y north).
+    /// </summary>
+    private bool KeepName(TextMeshPro text, Vector2 at)
+    {
+        if (!hideOverlappingNames) return true;
+        Vector2 size = text.GetPreferredValues(text.text);
+        Vector2 pivot = text.rectTransform.pivot;
+        float boxHeight = text.rectTransform.sizeDelta.y;
+        Vector2 c = at * projection.metersPerDegree;
+        // The text is aligned to the pivot's side horizontally and centred vertically in its rect.
+        float left = c.x - pivot.x * size.x;
+        float middle = c.y + (0.5f - pivot.y) * boxHeight;
+        var box = new Rect(left - nameGap, middle - size.y * 0.5f - nameGap, size.x + 2f * nameGap, size.y + 2f * nameGap);
+        foreach (Rect kept in nameBoxes)
+        {
+            if (!kept.Overlaps(box)) continue;
+            Destroy(text.gameObject);
+            return false;
+        }
+        nameBoxes.Add(box);
+        return true;
     }
 
     private TextMeshPro NewText(string content, float fontSize, Color color, Vector2 at, float lift)

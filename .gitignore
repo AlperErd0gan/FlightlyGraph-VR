@@ -16,3 +16,6 @@ AIRAC_*.csv.gz
 *_ectrl.json
 *_ectrl.json.meta
 *_ectrl*.zip
+
+# Gemini API key (normally outside the project, in Application.persistentDataPath)
+gemini_key.txt
