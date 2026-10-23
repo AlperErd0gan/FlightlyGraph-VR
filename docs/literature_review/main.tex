@@ -12,6 +12,8 @@
 \usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{pdflscape}
 \usepackage{array}
 \usepackage{amssymb}
 \usepackage{xcolor}
@@ -486,29 +488,132 @@ Figure~\ref{fig:prisma}.
 \section{Comparison}
 \label{sec:comparison}
 
-\begin{table}[h]
+Table~\ref{tab:detail} compares the 22 primary studies of
+Sections~\ref{sec:networks}--\ref{sec:voice} on data, display, encoding, interaction,
+evaluation and main finding; Table~\ref{tab:features} summarises which aspects each covers
+next to \system{}; Table~\ref{tab:surveys} compares the five surveys of
+Section~\ref{sec:surveys}. The methods and instruments of Section~\ref{sec:instruments} are
+not compared. $N$ = participants; ``?'' = not given in the abstract.
+\todo{Fill every ``?'' from the papers' method sections.}
+
+\begin{landscape}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{>{\raggedright\arraybackslash}p{2.9cm}
+                  >{\raggedright\arraybackslash}p{2.3cm}
+                  >{\raggedright\arraybackslash}p{2.0cm}
+                  >{\raggedright\arraybackslash}p{3.0cm}
+                  >{\raggedright\arraybackslash}p{2.4cm}
+                  >{\raggedright\arraybackslash}p{2.6cm}
+                  >{\raggedright\arraybackslash}p{6.4cm}}
+\caption{Detailed comparison of the primary studies.}\label{tab:detail}\\
+\toprule
+Work & Data & Display & Layout / encoding & Interaction & Evaluation ($N$) & Main finding \\
+\midrule
+\endfirsthead
+\multicolumn{7}{l}{\textit{Table~\ref{tab:detail} continued}}\\
+\toprule
+Work & Data & Display & Layout / encoding & Interaction & Evaluation ($N$) & Main finding \\
+\midrule
+\endhead
+\midrule
+\multicolumn{7}{r}{\textit{continued on next page}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\multicolumn{7}{l}{\textbf{Immersive network visualization}}\\
+Kwon et al.~\cite{kwon2016study} 2016 & Abstract graphs & HMD vs.\ 2D desktop & Spherical layout, viewer at centre; edge bundling & Head tracking, controller & Controlled study (?) & Faster, fewer interactions in VR on hard tasks; more correct on large graphs \\
+Cordeil et al.~\cite{cordeil2017cave} 2017 & Abstract networks & HMD vs.\ CAVE2 & 3D node-link & Collaborative, physical movement & Controlled study, pairs (?) & HMD faster; CAVE2 asymmetric movement; same accuracy and communication \\
+Kotlarek et al.~\cite{kotlarek2020mental} 2020 & Abstract networks & HMD vs.\ 2D desktop & 3D vs.\ 2D node-link & Not specified & Controlled study (?) & VR better for structure (large networks); desktop better for spatial memory \\
+Sorger et al.~\cite{sorger2021egocentric} 2021 & Abstract networks & HMD & Egocentric view, Ego-Bubble & Egocentric navigation & Controlled study (?) & Egocentric interface improves search and navigation, no extra cybersickness \\
+Bauer et al.~\cite{bauer2024multilayout} 2024 & Hierarchical networks & VR HMD & Multiple switchable layouts & Layout switching & Controlled study vs.\ baseline (?) & Beats baseline for focused and whole-network tasks \\
+Takahira et al.~\cite{takahira2026surrounded} 2026 & Egocentric networks & Immersive HMD & Cube, cylindrical, radial, spherical & Not specified & Controlled study (24) & Cube best for tie strength; spherical best for topology, least occlusion \\
+B\"uschel et al.~\cite{buschel2019ar} 2019 & 3D node-link & AR & Six edge styles & Not specified & Controlled study (?) & ? (results not in abstract) \\
+Huang et al.~\cite{huang2023embodied} 2023 & Networks & Desktop (mouse, trackball) to VR & 2D vs.\ 3D & Four levels of embodiment & Controlled study (20) & VR least demanding, most preferred; side-by-side comparison hard in VR \\
+Bozgeyikli et al.~\cite{bozgeyikli2016teleport} 2016 & -- (locomotion) & HMD & -- & Point \& Teleport vs.\ walk-in-place vs.\ joystick & Two experiments (16) & Teleport fun and easy; adding direction choice made it worse \\
+Zhang et al.~\cite{zhang2025gd} 2025 & Graphs & VR HMD, eye tracking & 3D node-link & Gaze (measured) & User study (18, unverified) & Structural properties linked to gaze (to verify) \\
+\midrule
+\multicolumn{7}{l}{\textbf{Geographic flows and air traffic}}\\
+Yang et al.~\cite{yang2018maps} 2018 & World maps & VR HMD & Exocentric globe, flat map, egocentric globe, curved map & Controller (move centre), walking & Controlled study (?) & Exocentric globe best for distance and direction; curved beats flat; egocentric globe worst \\
+Yang et al.~\cite{yang2019flowmaps} 2019 & Global OD flows & VR HMD & 2D/3D flows on flat maps, globes, MapsLink & Controller, walking & Three controlled studies (?) & Globe with raised flows fastest, most accurate, preferred; raised flows help on flat maps \\
+Hurter et al.~\cite{hurter2019fiberclay} 2019 & 3D trajectories (air traffic, brain fibres) & VR HMD & Massive 3D lines (GPU) & 3D query composition with controllers and body position & Expert feedback (?) & Analysts select and compare trajectory sets; insights with air traffic controllers \\
+Guimer\`a et al.~\cite{guimera2005worldwide} 2005 & Worldwide air transport network & -- & -- & -- & Network analysis & Scale-free small world; hubs not always central; communities not only geographic \\
+\midrule
+\multicolumn{7}{l}{\textbf{Time-varying networks}}\\
+Sorger et al.~\cite{sorger2019dynamic} 2019 & Large dynamic network & VR HMD (web-based) & Overview + immersive detail & Multiple input modalities, time navigation & Performance test, expert case study & Scales to large dynamic graphs; no controlled study \\
+Filipov et al.~\cite{filipov2022time} 2023 & Dynamic graphs & Desktop & Node-link vs.\ matrix; animation vs.\ juxtaposition & With / without interaction & Controlled study (?) & Node-link with auto animation fastest and most accurate; playback control preferred \\
+\midrule
+\multicolumn{7}{l}{\textbf{Speech, natural language and LLM interaction}}\\
+Bolt~\cite{bolt1980put} 1980 & Graphical objects & Wall display (Media Room) & -- & Speech + pointing & Demonstration & Deictic words resolved by pointing; voice and gesture complement \\
+Srinivasan, Stasko~\cite{srinivasan2018orko} 2018 & Networks & Touch display & Node-link & Natural language + touch & Initial user study (?) & NL and direct manipulation complement each other \\
+Badam et al.~\cite{badam2017affordances} 2017 & Visual data & Immersive (various) & -- & Touch, speech, gesture, gaze & Analysis (workshop paper) & ? (to add) \\
+Song et al.~\cite{song2025embodied} 2025 & Visual analytics data & Immersive & -- & Speech (Wizard of Oz) & Wizard-of-Oz study (15) & Five speech patterns; embodied cues (``this'', ``here'') add uncertainty \\
+De La Torre et al.~\cite{delatorre2024llmr} 2024 & MR scenes & MR (Unity) & -- & Text prompts to an LLM & Task benchmark + usability (11) & 4$\times$ lower error than GPT-4; positive usability \\
+Lee et al.~\cite{lee2026voice} 2026 & Social networks & VR HMD & Node-link & LLM voice vs.\ controller & User study (?) & Voice raises perceived usability, lowers effort of forming commands \\
+\midrule
+\textbf{\system{}} & Air traffic network, 68 months (EUROCONTROL), OpenFlights & Quest HMD & 3D shell (force-directed, Louvain) $\leftrightarrow$ curved map of Europe & Controllers, teleport, push-to-talk voice (Wit, Gemini Live with tool calls) & Planned & -- \\
+\end{longtable}
+\end{landscape}
+
+\begin{table}[p]
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabularx}{\linewidth}{Ycccccc}
+\begin{tabularx}{\linewidth}{Yccccccc}
 \toprule
-Work & Network & Geographic & Time & Voice/NL & LLM & User study \\
+Work & Network & Geographic & Time & Speech/NL & LLM & Immersive & Controlled study \\
 \midrule
-Kwon et al.~\cite{kwon2016study}            & \yes & \no  & \no  & \no  & \no  & \yes \\
-Sorger et al.~\cite{sorger2019dynamic}      & \yes & \no  & \yes & \no  & \no  & \partly \\
-Yang et al.~\cite{yang2019flowmaps}         & \partly & \yes & \no & \no  & \no  & \yes \\
-Hurter et al.~\cite{hurter2019fiberclay}    & \no  & \yes & \partly & \no & \no  & \partly \\
-Bauer et al.~\cite{bauer2024multilayout}    & \yes & \no  & \no  & \no  & \no  & \yes \\
-Srinivasan, Stasko~\cite{srinivasan2018orko} & \yes & \no & \no  & \yes & \no  & \yes \\
-Lee et al.~\cite{lee2026voice}              & \yes & \no  & \no  & \yes & \yes & \yes \\
+Kwon et al.~\cite{kwon2016study}               & \yes & \no & \no & \no & \no & \yes & \yes \\
+Cordeil et al.~\cite{cordeil2017cave}          & \yes & \no & \no & \no & \no & \yes & \yes \\
+Kotlarek et al.~\cite{kotlarek2020mental}      & \yes & \no & \partly & \no & \no & \yes & \yes \\
+Sorger et al.~\cite{sorger2021egocentric}      & \yes & \no & \no & \no & \no & \yes & \yes \\
+Bauer et al.~\cite{bauer2024multilayout}       & \yes & \no & \no & \no & \no & \yes & \yes \\
+Takahira et al.~\cite{takahira2026surrounded}  & \yes & \no & \no & \no & \no & \yes & \yes \\
+B\"uschel et al.~\cite{buschel2019ar}          & \yes & \no & \no & \no & \no & \yes & \yes \\
+Huang et al.~\cite{huang2023embodied}          & \yes & \no & \no & \no & \no & \yes & \yes \\
+Bozgeyikli et al.~\cite{bozgeyikli2016teleport} & \no & \no & \no & \no & \no & \yes & \yes \\
+Zhang et al.~\cite{zhang2025gd}                & \yes & \no & \no & \no & \no & \yes & \yes \\
+Yang et al.~\cite{yang2018maps}                & \no & \yes & \no & \no & \no & \yes & \yes \\
+Yang et al.~\cite{yang2019flowmaps}            & \partly & \yes & \no & \no & \no & \yes & \yes \\
+Hurter et al.~\cite{hurter2019fiberclay}       & \no & \yes & \partly & \no & \no & \yes & \no \\
+Guimer\`a et al.~\cite{guimera2005worldwide}   & \yes & \partly & \no & \no & \no & \no & \no \\
+Sorger et al.~\cite{sorger2019dynamic}         & \yes & \no & \yes & \no & \no & \yes & \no \\
+Filipov et al.~\cite{filipov2022time}          & \yes & \no & \yes & \no & \no & \no & \yes \\
+Bolt~\cite{bolt1980put}                        & \no & \no & \no & \yes & \no & \partly & \no \\
+Srinivasan, Stasko~\cite{srinivasan2018orko}   & \yes & \no & \no & \yes & \no & \no & \partly \\
+Badam et al.~\cite{badam2017affordances}       & \no & \no & \no & \yes & \no & \yes & \no \\
+Song et al.~\cite{song2025embodied}            & \no & \no & \no & \yes & \no & \yes & \partly \\
+De La Torre et al.~\cite{delatorre2024llmr}    & \no & \no & \no & \yes & \yes & \yes & \partly \\
+Lee et al.~\cite{lee2026voice}                 & \yes & \no & \no & \yes & \yes & \yes & \yes \\
 \midrule
-\system{}                                  & \yes & \yes & \yes & \yes & \yes & \textbf{?} \\
+\system{}                                     & \yes & \yes & \yes & \yes & \yes & \yes & \textbf{?} \\
 \bottomrule
 \end{tabularx}
-\caption{Features of the closest works (\yes{} yes, \partly{} partly, \no{} no).}
-\todo{Check every cell against the papers; add rows from the coding.}
-\label{tab:comparison}
+\caption{Aspects covered by each primary study (\yes{} yes, \partly{} partly, \no{} no).
+``Controlled study'': a user study comparing conditions; \partly{} = initial, usability or
+Wizard-of-Oz study without a comparison.}
+\label{tab:features}
 \end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm}YYY}
+\toprule
+Survey & Scope & Corpus / method & Output \\
+\midrule
+Marriott et al.~\cite{marriott2018immersive} 2018 & Immersive analytics (field) & Edited book, expert chapters & Definition and research agenda \\
+Fonnet, Pri\'e~\cite{fonnet2021survey} 2021 & Immersive analytics systems, 1990s--2019 & Systematic survey & Rendering, data, mapping, interaction, evaluation; gaps \\
+Kraus et al.~\cite{kraus2022survey} 2022 & Abstract 3D data in immersive environments & EuroVis STAR & Characterization scheme; trends and gaps \\
+Ens et al.~\cite{ens2021grand} 2021 & Immersive analytics (field) & 24 experts, CHI 2020 workshop & 17 grand challenges \\
+Joos et al.~\cite{joos2025survey} 2025 & Immersive network analysis & 138 papers (87 applications, 59 evaluations) & Design space, evidence synthesis, online resource \\
+\bottomrule
+\end{tabularx}
+\caption{Comparison of the surveys.}
+\label{tab:surveys}
+\end{table}
+\clearpage
 
 % ---------------------------------------------------------------------------
 \section{Research Gaps and Positioning}

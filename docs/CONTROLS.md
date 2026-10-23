@@ -11,6 +11,19 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 - **Editor**: Unity Play mode on the PC with the XR Device Simulator / mouse and
   keyboard. With the headset on Link, the controller column applies.
 
+## Start screen
+
+When the app opens the graph is hidden and one panel floats in front of you
+(`StartPanel`, adds itself to the scene): **Start exploring** shows the graph
+with its intro animation, **Guided tour** does the same and then starts the
+tour, **Controls** shows the controller controls (Back returns). Above it a
+small hologram of the network (all airports, the 300 busiest routes) turns
+slowly and now and then morphs onto a small map of Europe and back. Only one panel at a time: opening the dashboard or the timeline
+closes the start panel and the other way round. Point and
+pull the trigger (pinch with hands) to choose. Later, a small **Home** button
+on the left wrist (shown when the inside of the wrist faces you) brings the
+panel back; the graph stays where it is.
+
 ## Graph (nothing open)
 
 | Action | Controller | Hands | Editor |
@@ -26,6 +39,7 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
 | Map of Europe ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
+| Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | Home |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a

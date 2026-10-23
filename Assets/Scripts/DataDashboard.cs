@@ -465,7 +465,9 @@ public class DataDashboard : MonoBehaviour
         if (controlsVoice)
         {
             foreach ((string say, string does) in ControlsHelp.Voice) rows.Add(new[] { say, does });
-            y = Table(0f, 0f, W, new[] { "Hold Y (N in the Editor), say, release", "Does" }, new[] { 0f, 0.58f }, rows, null, 26f, 17f);
+            FitRows(rows.Count, out float voiceRow, out float voiceFont);
+            y = Table(0f, 0f, W, new[] { "Hold Y (N in the Editor), say, release", "Does" }, new[] { 0f, 0.58f }, rows, null,
+                      voiceRow, voiceFont);
         }
         else
         {
@@ -476,8 +478,9 @@ public class DataDashboard : MonoBehaviour
                     ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "", "", "" }
                     : new[] { row.action, row.controller, row.hands, row.editor });
             }
+            FitRows(rows.Count, out float rowHeight, out float fontSize);
             y = Table(0f, 0f, W, new[] { "Action", "Controller", "Hands", "Editor" }, new[] { 0f, 0.26f, 0.6f, 0.85f }, rows, null,
-                      26f, 17f);
+                      rowHeight, fontSize);
         }
         y += 12f;
         if (recenter != null && !controlsVoice)
@@ -487,6 +490,14 @@ public class DataDashboard : MonoBehaviour
         }
         Toggles(new List<string> { "Buttons", "Voice" }, W - 280f, y, 280f, 44f,
                 i => (controlsVoice == (i == 1), () => { controlsVoice = i == 1; Show(Tab.Controls); }));
+    }
+
+    /// <summary>Row height / font size so a Controls table plus the buttons below it fit the page (26 / 17 at most).</summary>
+    private void FitRows(int count, out float rowHeight, out float fontSize)
+    {
+        const float chrome = 34f + 10f + 12f + 44f; // table header + bottom padding, gap, button row
+        rowHeight = Mathf.Min(26f, (H - chrome) / Mathf.Max(1, count));
+        fontSize = Mathf.Min(17f, rowHeight * 0.66f);
     }
 
     private float W => content.rect.width;
