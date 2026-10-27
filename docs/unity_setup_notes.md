@@ -181,5 +181,4 @@ Over Link the numbers are the PC's frame times, not the Quest's own. For "runs a
 N FPS on Quest 3" in a paper, measure in a standalone APK build (or with OVR Metrics
 Tool). The headset has no F3, so for an APK add the `PerfMonitor` component to any
 object in the scene and tick **Show On Start** before building (it then does not add a
-second one). The CSV is in the app's `Android/data/<package>/files/` folder on the
-headset: copy it with `adb pull` or Meta Quest Developer Hub's file browser.
+second one).
