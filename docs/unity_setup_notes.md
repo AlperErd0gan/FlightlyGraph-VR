@@ -164,7 +164,7 @@ button is disabled (Console: a warning, not an error).
   `FlightSimulator.aircraftMaterial`: the aircraft are drawn instanced, and in a
   build the shader must be referenced. In the Editor over Link the fallback
   (URP / Unlit found by name) works if instancing is enabled on it.
-- Tune: `mapAircraftSize` (2 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
+- Tune: `mapAircraftSize` (2.7 cm), `aircraftSize` (3D, 8 cm), `mapCruiseHeight`
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
 - Flight phase colours: `colorByPhase`, `climbColor`, `descendColor` (cruising =
   `aircraftColor`), `levelChangeFtPerMin` (300). Selected aircraft: `pickAngle`
