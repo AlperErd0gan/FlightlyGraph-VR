@@ -37,9 +37,9 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Tooltip("Height of the map centre relative to the graph centre (m).")]
     public float height = -0.35f;
     [Tooltip("How far the map leans back (deg): 0 = upright like a wall, 90 = flat like a table.")]
-    [Range(0f, 90f)] public float tilt = 30f;
+    [Range(0f, 90f)] public float tilt = 20f;
     [Tooltip("Radius of the map of Europe on the surface (m).")]
-    public float mapRadius = 1.0f;
+    public float mapRadius = 1.3f;
     [Tooltip("Curvature (m): > 0 bulges towards you like part of a globe, < 0 curves around you, 0 = flat.")]
     public float curvatureRadius = 3.5f;
     [Tooltip("Lowest part of the map (band and the names beyond it) stays this far above the floor (m); the map is raised when it would reach lower.")]
@@ -47,10 +47,10 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
 
     [Header("Airports and routes on the map")]
     [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer). Upper bound: see maxNodeDiameter.")]
-    public float nodeScale = 0.45f;
+    public float nodeScale = 0.6f;
     [Tooltip("Diameter (m) of the biggest airport on the map; all airports shrink by the same factor when it would be bigger, " +
              "whatever the 3D sizes of this scene. 0 = only nodeScale. Live in Play mode.")]
-    public float maxNodeDiameter = 0.03f;
+    public float maxNodeDiameter = 0.04f;
     [Tooltip("Route width multiplier on the map (highlighted routes too: an airport's ~170 routes must not cover it).")]
     public float edgeWidthScale = 0.35f;
     [Tooltip("Route arc height as a fraction of its length on the map.")]
