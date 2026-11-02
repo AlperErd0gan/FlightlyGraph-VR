@@ -75,6 +75,10 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   `GeoMapView`, route arcs in 3D; paths rebuilt on `GeoMapView.ModeChanged` / `Moved`;
   coloured by flight phase; a tap on an aircraft — `GraphSelector.RayClicked`, offered
   before the routes — selects it: `GraphInfoPanel.ShowFlight` card, path line, airports lit).
+- Real connections (B7): while live flights are shown, `ConnectionFinder.Connect` (route
+  gesture, voice) searches that day's passenger flights with `ConnectionSearch`
+  (≤ 3 flights, 45 min – 6 h at each change, optional same airline): card via
+  `GraphInfoPanel.ShowConnection`, flights marked by `FlightSimulator.ShowItinerary`.
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
 - XR: `XRGraphInput`, `HandTeleport`, `GraphRecenter` (teleports the user to the graph,
