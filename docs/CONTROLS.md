@@ -22,7 +22,8 @@ slowly and now and then morphs onto a small map of Europe and back. Only one pan
 closes the start panel and the other way round. Point and
 pull the trigger (pinch with hands) to choose. Later, a small **Home** button
 on the left wrist (shown when the inside of the wrist faces you) brings the
-panel back; the graph stays where it is. The Gemini voice assistant stays off (not connected,
+panel back; the graph stays where it is. While the panel is open the assistants' caption ("… is listening",
+answers) is hidden. The Gemini voice assistant stays off (not connected,
 Y ignored, no orb; the Wit assistant waits too) until Start exploring / Guided
 tour and the graph's opening animation after it have ended (`StartPanel.geminiAfterStart`), only once: Home later leaves it on. StartPanel is
 added at runtime, so to turn this off add a `StartPanel` component to the scene and untick
