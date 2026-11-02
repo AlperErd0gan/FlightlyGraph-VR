@@ -805,6 +805,25 @@ public class VoiceAssistant : MonoBehaviour
             return false;
         }
         if (connections == null || selector == null) return NotAvailable("routes", out reply);
+        if (connections.LiveFlightsShown)
+        {
+            // Live flights shown: a real connection of that day (TASKS B7), as the controller gesture gives.
+            if (dashboard != null && dashboard.IsOpen) dashboard.Close();
+            connections.ShowRealConnection(from, to);
+            ConnectionSearch.Itinerary it = connections.Current?.Current;
+            TurnToward(to.transform.position);
+            if (it == null)
+            {
+                reply = $"No connection from {from.ShortCode} to {to.ShortCode} this day.";
+                return true;
+            }
+            var stops = new List<string> { from.ShortCode };
+            foreach (FlightData leg in it.legs) stops.Add(graph.Nodes.TryGetValue(leg.destination, out GraphNode n) ? n.ShortCode : leg.destination);
+            string leaves = Flights != null ? Flights.simulator.UtcAt(it.Departure).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "";
+            reply = (it.Transfers == 0 ? "Direct" : $"{it.Transfers} change{(it.Transfers == 1 ? "" : "s")}") +
+                    $": {string.Join(" > ", stops)}, leaves {leaves} UTC.";
+            return true;
+        }
         var nodes = new List<GraphNode>();
         var edges = new List<GraphEdge>();
         if (!connections.TryFindPath(from, to, nodes, edges))
