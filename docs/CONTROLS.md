@@ -33,6 +33,7 @@ it before Play.
 | Action | Controller | Hands | Editor |
 |---|---|---|---|
 | Select an airport | point at it, trigger | point, pinch | click |
+| See an airport's name | point at it, no trigger (`HoverLabel`) | point at it | hover the mouse |
 | Select a route (arc) | point at the arc, short trigger on empty space | short pinch | click the arc |
 | Route between two airports | with one selected: hold the trigger on a second airport (it grows; release when shown), or point at it and press A / X | hold pinch on the second airport | Shift + click the second airport |
 | Clear the selection | short trigger on empty space (no arc nearby) | short pinch on empty space | Esc, or click empty space |
@@ -205,8 +206,25 @@ the map's rim; in the 3D layout they fly along the route arcs. Only aircraft in
 the air are drawn. While the panel is open the routes are dimmed and the graph
 shows that month (sizes, routes); closing restores both.
 
+Colours give the flight phase, from the recorded flight levels: **green**
+climbing, **pale blue** cruising, **lavender** descending (more than 300 ft/min
+up or down counts as climbing / descending); the legend under the panel's chart
+shows how many are in each phase now (`FlightSimulator.colorByPhase` turns it
+off).
+
+**Selecting an aircraft** (TASKS B24): it turns yellow and larger, its whole
+path is drawn, both airports light up and a FLIGHT card shows the route,
+flight level, ground speed, climb / descent rate, off-block and arrival times
+(UTC), how much is flown, operator (ICAO code; "anonymised" where the data
+hides it), aircraft type and whether the path is recorded or approximate. The
+card follows the aircraft and updates twice a second. Airports still take a
+tap first; while the live flights are shown, a tap near the map's busy areas
+usually finds an aircraft rather than a route.
+
 | Action | Controller / hands | Editor |
 |---|---|---|
+| Select an aircraft | point at it, trigger / pinch | click it |
+| Deselect | X on its card, trigger on empty space, or select an airport / route | X / Esc |
 | Play / pause | ▶ on the panel | click, or P |
 | 15 minutes back / forward | ◀ / ▶ | click |
 | Pick a time of day | drag the slider over the chart | drag / click |
