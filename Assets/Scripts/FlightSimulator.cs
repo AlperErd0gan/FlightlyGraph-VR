@@ -789,7 +789,7 @@ public class FlightSimulator : MonoBehaviour
             phaseAirborne[p] = 0;
         }
         bool map = activeMode == PathMode.Trajectory;
-        Vector3 scale = Vector3.one * (map ? mapAircraftSize : aircraftSize);
+        Vector3 scale = Vector3.one * (map ? mapAircraftSize * geoMap.ViewScale : aircraftSize); // bigger on the dome
         Vector3 up = map ? mapUp : Vector3.up;
         foreach (SimFlight f in flights)
         {

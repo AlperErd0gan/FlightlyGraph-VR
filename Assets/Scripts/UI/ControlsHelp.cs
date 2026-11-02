@@ -29,6 +29,7 @@ public static class ControlsHelp
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
         R("Map / 3D view", "B (or dashboard: Map view)", "dashboard: Map view", "M"),
+        R("Map: flat / dome", "Dome button (on the map)", "same", "G"),
         R("Live flights", "dashboard: Live flights", "same", "P, [ / ] speed"),
         R("Go to graph centre", "R3 (right stick click)", "Controls page button", "H"),
         R("Start screen (Home)", "Home on left wrist (turn it to you)", "same", "Home"),
