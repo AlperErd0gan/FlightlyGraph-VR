@@ -166,6 +166,10 @@ button is disabled (Console: a warning, not an error).
   (URP / Unlit found by name) works if instancing is enabled on it.
 - Tune: `mapAircraftSize` (2 cm), `aircraftSize` (3D, 6 cm), `mapCruiseHeight`
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
+- Flight phase colours: `colorByPhase`, `climbColor`, `descendColor` (cruising =
+  `aircraftColor`), `levelChangeFtPerMin` (300). Selected aircraft: `pickAngle`
+  (1°), `selectedColor`, `selectedScale`, `pathWidth` (4 mm), optional `pathMaterial`
+  (vertex colours; Sprites/Default is created otherwise — assign one for builds).
 - The route mesh renders before the other transparent objects (it used to be
   drawn over the dashboard and the info card).
 

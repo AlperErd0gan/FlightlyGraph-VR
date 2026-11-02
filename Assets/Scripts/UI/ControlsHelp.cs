@@ -18,6 +18,7 @@ public static class ControlsHelp
     {
         Section("Graph"),
         R("Select airport / route", "point + trigger", "point + pinch", "click"),
+        R("Airport name", "point at it (no trigger)", "point at it", "hover the mouse"),
         R("Route to a 2nd airport", "hold trigger on it", "hold pinch on it", "Shift + click"),
         R("  ...or", "point at it, press A / X", "-", "-"),
         R("Clear the selection", "trigger on empty space", "pinch on empty space", "Esc"),
@@ -36,6 +37,8 @@ public static class ControlsHelp
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),
         R("Open / close a city", "trigger on city / its label", "pinch on it", "click"),
         R("Close the info card", "X on the card", "same", "X / Esc"),
+        R("Graph search (BFS / DFS)", "bar under an airport's card", "same", "click"),
+        R("Aircraft details (live flights)", "point + trigger on it", "point + pinch", "click"),
     };
 
     /// <summary>Voice assistant: hold Y (N in the Editor), say it, release. Shown on the Controls page's Voice tab.</summary>

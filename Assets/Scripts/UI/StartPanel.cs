@@ -369,23 +369,30 @@ public class StartPanel : MonoBehaviour
         float w = Size.x - 2f * Pad;
         UIKit.Text(page, "Controls", UIKit.TitleSize, UIKit.TextColor, Pad, 36f, w, 50f);
         float y = 100f;
-        const float rowHeight = 27f;
+        // Rows (27 high at most) shrink so the table and the voice line end above the Back button.
+        const float sectionGap = 6f;
+        const float voiceLine = 8f + 27f;
+        float backTop = Size.y - Pad - 56f - 10f;
+        int sections = 0;
+        foreach (ControlsHelp.Row row in ControlsHelp.Rows) if (row.IsSection) sections++;
+        float rowHeight = Mathf.Min(27f, (backTop - y - voiceLine - sections * sectionGap) / Mathf.Max(1, ControlsHelp.Rows.Length));
+        float fontSize = Mathf.Min(UIKit.SmallSize, rowHeight * 0.68f);
         foreach (ControlsHelp.Row row in ControlsHelp.Rows)
         {
             if (row.IsSection)
             {
-                y += 6f;
-                UIKit.Text(page, row.action, UIKit.SmallSize, UIKit.AccentColor, Pad, y, w, rowHeight);
+                y += sectionGap;
+                UIKit.Text(page, row.action, fontSize, UIKit.AccentColor, Pad, y, w, rowHeight);
             }
             else
             {
-                UIKit.Text(page, row.action, UIKit.SmallSize, UIKit.TextColor, Pad, y, w * 0.48f, rowHeight);
-                UIKit.Text(page, row.controller, UIKit.SmallSize, UIKit.MutedTextColor, Pad + w * 0.5f, y, w * 0.5f, rowHeight);
+                UIKit.Text(page, row.action, fontSize, UIKit.TextColor, Pad, y, w * 0.48f, rowHeight);
+                UIKit.Text(page, row.controller, fontSize, UIKit.MutedTextColor, Pad + w * 0.5f, y, w * 0.5f, rowHeight);
             }
             y += rowHeight;
         }
-        UIKit.Text(page, "Voice: hold Y, speak, release. Say \"help\" for the list.", UIKit.SmallSize,
-                   UIKit.MutedTextColor, Pad, y + 8f, w, rowHeight);
+        UIKit.Text(page, "Voice: hold Y, speak, release. Say \"help\" for the list.", fontSize,
+                   UIKit.MutedTextColor, Pad, y + 8f, w, 27f);
         UIKit.Button(page, "Back", () => ShowPage(false), Pad, Size.y - Pad - 56f, 200f, 56f,
                      UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Previous);
     }

@@ -48,6 +48,9 @@ public class GraphInfoPanel : MonoBehaviour
     public float viewDownOffset = 0.25f;
     [Tooltip("InView: sideways offset of the card's centre from the gaze line (m); positive = right, negative = left, 0 = centred.")]
     public float viewSideOffset = 0.2f;
+    [Tooltip("Aircraft cards (live flights): this far below eye height (m), placed from the level gaze, so they stay " +
+             "above the live flights panel while you look down at the map.")]
+    public float flightCardDownOffset = 0.1f;
     [Tooltip("InView: the panel starts following once it is this many degrees away from where you look.")]
     public float followAngle = 30f;
     [Tooltip("InView: the panel also starts following once its target spot is this far away (walking) (m).")]
@@ -100,6 +103,11 @@ public class GraphInfoPanel : MonoBehaviour
     private string currentKey;
     private System.Action<float> build;
     private System.Func<Vector3> anchor;
+    // Cards whose values change while shown (a moving aircraft) are rebuilt this often (s); 0 = never.
+    private float refreshEvery;
+    private float nextRefresh;
+    // The card shown is an aircraft's (placed level, higher: flightCardDownOffset).
+    private bool aircraftCard;
     private float y; // layout cursor while building
 
     public bool IsShowing => canvas != null && canvas.gameObject.activeSelf;
@@ -149,6 +157,12 @@ public class GraphInfoPanel : MonoBehaviour
     private void LateUpdate()
     {
         if (!IsShowing || !ResolveViewer()) return;
+        if (refreshEvery > 0f && Time.unscaledTime >= nextRefresh)
+        {
+            nextRefresh = Time.unscaledTime + refreshEvery;
+            Render(); // calls LateUpdate again, which now skips this
+            return;
+        }
         Transform panel = canvas.transform;
 
         // Walked / teleported away since selecting: drop it (Hide runs via SelectionCleared). Measured from
@@ -186,6 +200,11 @@ public class GraphInfoPanel : MonoBehaviour
     private Vector3 ViewTarget()
     {
         Vector3 right = Vector3.ProjectOnPlane(viewer.right, Vector3.up).normalized;
+        if (aircraftCard)
+        {
+            Vector3 level = Vector3.ProjectOnPlane(viewer.forward, Vector3.up).normalized;
+            return viewer.position + level * viewDistance + right * viewSideOffset - Vector3.up * flightCardDownOffset;
+        }
         return viewer.position + viewer.forward * viewDistance + right * viewSideOffset - Vector3.up * viewDownOffset;
     }
 
@@ -291,13 +310,15 @@ public class GraphInfoPanel : MonoBehaviour
         currentKey = null;
         build = null;
         anchor = null;
+        refreshEvery = 0f;
         hasSelectionPosition = false;
         canvas.gameObject.SetActive(false);
     }
 
     /// <summary>Shows a selection: a new one (other key) restarts the walk-away check.</summary>
-    private void Present(string key, System.Action<float> builder, System.Func<Vector3> anchorPoint)
+    private void Present(string key, System.Action<float> builder, System.Func<Vector3> anchorPoint, bool aircraft = false)
     {
+        aircraftCard = aircraft;
         if (key != currentKey && ResolveViewer())
         {
             selectionViewerPosition = viewer.position;
@@ -306,6 +327,7 @@ public class GraphInfoPanel : MonoBehaviour
         currentKey = key;
         build = builder;
         anchor = anchorPoint;
+        refreshEvery = 0f;
         if (!suppressed) Render();
     }
 
@@ -349,6 +371,66 @@ public class GraphInfoPanel : MonoBehaviour
         foreach (GraphNode n in nodes) key.Append(':').Append(n.id);
         GraphNode to = nodes[nodes.Count - 1];
         Present(key.ToString(), w => BuildPath(nodes, edges, w), () => to.transform.position + Vector3.up * to.transform.lossyScale.y * 0.5f);
+    }
+
+    /// <summary>
+    /// Card of a selected aircraft (FlightSimulator, TASKS B24): route, flight level, speeds,
+    /// phase, times, operator and type; rebuilt twice a second while the aircraft moves.
+    /// </summary>
+    public void ShowFlight(FlightSimulator sim, FlightData flight)
+    {
+        Present("flight:" + flight.id, w => BuildFlight(sim, flight, w), () =>
+        {
+            if (sim.TryGetPose(flight.id, out Vector3 position, out _)) return position;
+            return flight.destination != null && graph.Nodes.TryGetValue(flight.destination, out GraphNode to) ? to.transform.position : transform.position;
+        }, true);
+        refreshEvery = 0.5f;
+        nextRefresh = Time.unscaledTime + refreshEvery;
+    }
+
+    private void BuildFlight(FlightSimulator sim, FlightData f, float w)
+    {
+        graph.Nodes.TryGetValue(f.origin ?? "", out GraphNode a);
+        graph.Nodes.TryGetValue(f.destination ?? "", out GraphNode b);
+        Header("FLIGHT", (a != null ? a.ShortCode : f.origin) + "  >  " + (b != null ? b.ShortCode : f.destination),
+               (a != null ? Trim(City(a), 22) : "") + "  -  " + (b != null ? Trim(City(b), 22) : ""), w);
+
+        sim.TryGetState(f.id, out FlightSimulator.FlightState s);
+        var tiles = new List<(string, string, Color)>();
+        if (s.airborne)
+        {
+            float feet = Mathf.Round(s.flightLevel) * 100f;
+            tiles.Add(("FL" + Mathf.RoundToInt(s.flightLevel).ToString("000", Inv), Num(feet) + " ft", UIKit.TextColor));
+            tiles.Add((Num(s.groundSpeedKmh) + " km/h", Num(s.groundSpeedKmh / 1.852f) + " kn ground speed", UIKit.TextColor));
+            string rate = Mathf.Abs(s.verticalFtPerMin) < 50f ? "level" : (s.verticalFtPerMin > 0f ? "+" : "-") + Num(Mathf.Abs(s.verticalFtPerMin)) + " ft/min";
+            tiles.Add((s.phase.ToString(), rate, sim.PhaseColor(s.phase)));
+        }
+        else
+        {
+            tiles.Add((s.landed ? "Landed" : s.started ? "On the ground" : "Not yet off-block", "", UIKit.MutedTextColor));
+        }
+        Tiles(tiles, w);
+
+        float total = Mathf.Max(0, f.arr - f.dep) / 60f;
+        var lines = new List<string>
+        {
+            "Off-block <b>" + sim.UtcAt(f.dep).ToString("HH:mm", Inv) + "</b>  ·  arrival <b>" + sim.UtcAt(f.arr).ToString("HH:mm", Inv) +
+            "</b> UTC  ·  " + sim.UtcAt(f.dep).ToString("ddd d MMM", Inv),
+            "Flown <b>" + Duration(total * Mathf.Clamp01(s.progress)) + "</b> of <b>" + Duration(total) + "</b>",
+            "Operator <b>" + Operator(f.op) + "</b>  ·  aircraft <b>" + (string.IsNullOrEmpty(f.type) ? "not given" : f.type) + "</b>",
+            f.path == "greatCircle" ? "Path <b>approximate</b> (great circle, real times)"
+                : f.path == "partial" ? "Path <b>recorded</b> track, ends filled in" : "Path <b>recorded</b> track (EUROCONTROL)",
+        };
+        if (a != null && b != null) lines.Insert(0, "<b>" + ShortName(a) + "</b>  to  <b>" + ShortName(b) + "</b>");
+        Lines(lines, w);
+        Hint("Track points are a few minutes apart; the aircraft flies straight between them. ID " + f.id + " (anonymous).", w);
+    }
+
+    // ICAO operator code; "ZZZ" means anonymised in the EUROCONTROL data.
+    private static string Operator(string op)
+    {
+        if (string.IsNullOrEmpty(op)) return "not given";
+        return op == "ZZZ" ? "anonymised" : op;
     }
 
     private void BuildNode(GraphNode node, float w)

@@ -41,6 +41,11 @@ public class GraphSelector : MonoBehaviour
     /// (e.g. CityClusters' city nodes, which are not GraphNodes).
     /// </summary>
     public event Func<Collider, bool> ColliderClicked;
+    /// <summary>
+    /// A click / tap along a ray that hit no airport, offered before the routes are tested;
+    /// a handler returns true to take it (FlightSimulator picks aircraft this way).
+    /// </summary>
+    public event Func<Ray, bool> RayClicked;
 
     public GraphNode SelectedNode => selectedNode;
     public GraphEdge SelectedEdge => selectedEdge;
@@ -49,7 +54,7 @@ public class GraphSelector : MonoBehaviour
     private GraphEdge selectedEdge;
 
     // What is highlighted, so RefreshSelection can draw it again after the graph is restyled.
-    private enum Highlight { None, Node, Edge, Path }
+    private enum Highlight { None, Node, Edge, Path, Airports }
     private Highlight highlight = Highlight.None;
     private List<GraphNode> pathNodes = new List<GraphNode>();
     private List<GraphEdge> pathEdges = new List<GraphEdge>();
@@ -62,17 +67,22 @@ public class GraphSelector : MonoBehaviour
 
     private void OnEnable()
     {
-        if (graph != null) graph.PeriodChanged += RefreshSelection;
+        if (graph == null) return;
+        graph.PeriodChanged += RefreshSelection;
+        // Map <-> 3D restyles every airport (sizes, colours): draw the selection again.
+        graph.LayoutChanged += RefreshSelection;
     }
 
     private void OnDisable()
     {
-        if (graph != null) graph.PeriodChanged -= RefreshSelection;
+        if (graph == null) return;
+        graph.PeriodChanged -= RefreshSelection;
+        graph.LayoutChanged -= RefreshSelection;
     }
 
     /// <summary>
-    /// Draws the current selection again (e.g. after the timeline changed the month:
-    /// sizes, visible routes and colours were reset). Raises no selection events, so
+    /// Draws the current selection again (e.g. after the timeline changed the month or the
+    /// layout switched: sizes, visible routes and colours were reset). Raises no selection events, so
     /// panels and narration are not triggered again.
     /// </summary>
     public void RefreshSelection()
@@ -88,7 +98,21 @@ public class GraphSelector : MonoBehaviour
             case Highlight.Path:
                 HighlightPath(pathNodes, pathEdges);
                 break;
+            case Highlight.Airports:
+                ShowAirports();
+                break;
         }
+    }
+
+    /// <summary>Offers a ray click to the RayClicked handlers (XRGraphInput's taps, the mouse); true if one took it.</summary>
+    public bool OfferRayClick(Ray ray)
+    {
+        if (RayClicked == null) return false;
+        foreach (Func<Ray, bool> handler in RayClicked.GetInvocationList())
+        {
+            if (handler(ray)) return true;
+        }
+        return false;
     }
 
     private void Update()
@@ -131,6 +155,7 @@ public class GraphSelector : MonoBehaviour
             }
         }
 
+        if (OfferRayClick(ray)) return;
         GraphEdge edge = PickEdge(screenPos);
         if (edge != null)
         {
@@ -335,6 +360,35 @@ public class GraphSelector : MonoBehaviour
         foreach (GraphNode n in graph.Nodes.Values)
         {
             SetNodeVisual(n, n == from || n == to, onPathNodes.Contains(n));
+        }
+    }
+
+    /// <summary>
+    /// Lights up two airports and dims everything else, as the backdrop for something drawn
+    /// over the graph (a selected aircraft: FlightSimulator). Not a selection: raises no
+    /// event; any selection or ClearSelection replaces it.
+    /// </summary>
+    public void HighlightAirports(GraphNode a, GraphNode b)
+    {
+        pathNodes = new List<GraphNode> { a, b };
+        pathEdges = new List<GraphEdge>();
+        ShowAirports();
+    }
+
+    private void ShowAirports()
+    {
+        ResetVisuals();
+        selectedNode = null;
+        selectedEdge = null;
+        highlight = Highlight.Airports;
+        foreach (GraphEdge e in graph.Edges)
+        {
+            SetEdgeVisual(e, false);
+        }
+        foreach (GraphNode n in graph.Nodes.Values)
+        {
+            bool end = pathNodes.Contains(n);
+            SetNodeVisual(n, end, end);
         }
     }
 

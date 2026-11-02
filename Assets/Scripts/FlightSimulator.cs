@@ -20,12 +20,20 @@ using UnityEngine.Rendering;
 /// per flight, so thousands of them stay cheap.
 /// Shown and driven by FlightPanel (dashboard → Live flights, P in the Editor):
 /// aircraft are drawn only while Visible.
+/// Colours tell the flight phase from the data's flight levels: climbing, cruising,
+/// descending (colorByPhase). Pointing at an aircraft and pulling the trigger (click in the
+/// Editor; GraphSelector.RayClicked) selects it (TASKS B24): it turns yellow and larger,
+/// its whole path is drawn, both airports light up and GraphInfoPanel shows a FLIGHT card.
 /// </summary>
 public class FlightSimulator : MonoBehaviour
 {
     public GraphLoader graph;
     [Tooltip("Map view: aircraft fly at their real positions over it. Found in the scene if unset.")]
     public GeoMapView geoMap;
+    [Tooltip("Ray clicks for picking aircraft, airport highlight. Found in the scene if unset.")]
+    public GraphSelector selector;
+    [Tooltip("Shows the selected aircraft's card. Found in the scene if unset.")]
+    public GraphInfoPanel infoPanel;
     [Tooltip("Relative to Application.streamingAssetsPath.")]
     public string flightsFileName = "flights_ectrl.json";
 
@@ -57,6 +65,41 @@ public class FlightSimulator : MonoBehaviour
     public float mapAircraftSize = 0.02f;
     [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
     public float mapCruiseHeight = 0.04f;
+
+    [Header("Flight phase colours")]
+    [Tooltip("Colour each aircraft by what it is doing: climbing, cruising (aircraftColor) or descending. Off = all aircraftColor.")]
+    public bool colorByPhase = true;
+    public Color climbColor = new Color(0.45f, 0.86f, 0.6f);
+    public Color descendColor = new Color(0.78f, 0.62f, 1f);
+    [Tooltip("Vertical speed (ft/min) beyond which an aircraft counts as climbing / descending instead of cruising.")]
+    public float levelChangeFtPerMin = 300f;
+
+    [Header("Selected aircraft")]
+    [Tooltip("An aircraft counts as hit within this angle of the ray (degrees, seen from the hand / eye).")]
+    public float pickAngle = 1f;
+    public Color selectedColor = new Color(1f, 0.9f, 0.2f);
+    [Tooltip("Size of the selected aircraft relative to the others.")]
+    public float selectedScale = 1.8f;
+    [Tooltip("Width of the selected aircraft's path line on the map (m); three times this in the 3D layout.")]
+    public float pathWidth = 0.004f;
+    [Tooltip("Optional material for the path line (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
+    public Material pathMaterial;
+
+    /// <summary>What an aircraft is doing, from the flight levels of its path.</summary>
+    public enum Phase { Climbing, Cruising, Descending }
+
+    /// <summary>A flight now (TryGetState).</summary>
+    public struct FlightState
+    {
+        public bool started;        // off-block passed
+        public bool landed;         // arrival passed
+        public bool airborne;       // between the first and last point above the ground
+        public float flightLevel;   // hundreds of feet, interpolated
+        public float groundSpeedKmh;
+        public float verticalFtPerMin;
+        public Phase phase;
+        public float progress;      // 0 at off-block .. 1 at arrival
+    }
 
     private const int MaxInstancesPerCall = 1023;
     private const float MinStepSqr = 1e-10f;
@@ -96,15 +139,41 @@ public class FlightSimulator : MonoBehaviour
     // Mesh drawn per aircraft: aircraftMesh, or ownedMesh built at runtime (only that one is destroyed).
     private Mesh mesh;
     private Mesh ownedMesh;
-    private Material runtimeMaterial;
-    private RenderParams renderParams;
-    private Matrix4x4[] matrices = new Matrix4x4[0];
+    // One draw batch per phase (Phase order) plus the selected aircraft; runtime material copies.
+    private readonly Material[] phaseMaterials = new Material[3];
+    private readonly RenderParams[] phaseParams = new RenderParams[3];
+    private Matrix4x4[][] phaseMatrices = { new Matrix4x4[0], new Matrix4x4[0], new Matrix4x4[0] };
+    private readonly int[] phaseCounts = new int[3];
+    private readonly int[] phaseAirborne = new int[3];
+    private Material selectedMaterial;
+    private RenderParams selectedParams;
+    private readonly Matrix4x4[] selectedMatrix = new Matrix4x4[1];
+    private bool selectedDrawn;
+    // Aircraft drawn in the last frame, for picking.
+    private SimFlight[] drawnFlights = new SimFlight[0];
+    private Vector3[] drawnPositions = new Vector3[0];
     private int activeCount;
     private int airborneCount;
 
+    private bool visible;
+    private SimFlight selected;
+    private string selectedId;
+    // True while this class clears GraphSelector itself, so its own SelectionCleared does not count.
+    private bool selecting;
+    private LineRenderer pathLine;
+    private Material runtimePathMaterial;
 
-    /// <summary>Aircraft are drawn (and time runs) only while visible: FlightPanel open.</summary>
-    public bool Visible { get; set; }
+
+    /// <summary>Aircraft are drawn (and time runs) only while visible: FlightPanel open. Hiding clears the selected aircraft.</summary>
+    public bool Visible
+    {
+        get => visible;
+        set
+        {
+            visible = value;
+            if (!visible) ClearFlight();
+        }
+    }
     public bool IsReady => ready;
     /// <summary>Length of the simulated window (s).</summary>
     public int DurationSec => data != null ? data.durationSec : 0;
@@ -118,6 +187,12 @@ public class FlightSimulator : MonoBehaviour
     public int ActiveCount => activeCount;
     /// <summary>Aircraft in the air in the last frame, wherever they are (also beyond the map's rim).</summary>
     public int AirborneCount => airborneCount;
+    /// <summary>Of AirborneCount, how many are in each phase in the last frame.</summary>
+    public int AirborneIn(Phase phase) => phaseAirborne[(int)phase];
+    /// <summary>The selected aircraft (TASKS B24), or null.</summary>
+    public FlightData SelectedFlight => selected != null ? selected.data : null;
+    /// <summary>Raised when an aircraft is selected, and with null when the selection ends.</summary>
+    public event Action<FlightData> FlightSelected;
     /// <summary>Trajectory or EdgeArc once loaded (Auto resolved).</summary>
     public PathMode ActiveMode => activeMode;
     public IReadOnlyList<FlightData> Flights => data != null ? data.flights : null;
@@ -127,6 +202,8 @@ public class FlightSimulator : MonoBehaviour
     {
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
         if (geoMap == null) geoMap = FindFirstObjectByType<GeoMapView>();
+        if (selector == null) selector = FindFirstObjectByType<GraphSelector>();
+        if (infoPanel == null) infoPanel = FindFirstObjectByType<GraphInfoPanel>();
     }
 
     private void OnEnable()
@@ -135,6 +212,14 @@ public class FlightSimulator : MonoBehaviour
         {
             geoMap.ModeChanged += OnMapModeChanged;
             geoMap.Moved += OnMapMoved;
+        }
+        if (selector != null)
+        {
+            selector.RayClicked += TryPick;
+            selector.NodeSelected += OnGraphNodeSelected;
+            selector.EdgeSelected += OnGraphEdgeSelected;
+            selector.PathSelected += OnGraphPathSelected;
+            selector.SelectionCleared += OnGraphSelectionCleared;
         }
     }
 
@@ -145,7 +230,21 @@ public class FlightSimulator : MonoBehaviour
             geoMap.ModeChanged -= OnMapModeChanged;
             geoMap.Moved -= OnMapMoved;
         }
+        if (selector != null)
+        {
+            selector.RayClicked -= TryPick;
+            selector.NodeSelected -= OnGraphNodeSelected;
+            selector.EdgeSelected -= OnGraphEdgeSelected;
+            selector.PathSelected -= OnGraphPathSelected;
+            selector.SelectionCleared -= OnGraphSelectionCleared;
+        }
     }
+
+    // Another selection (airport, route, connection) or a cleared one ends the aircraft's.
+    private void OnGraphNodeSelected(GraphNode node) => DropFlight();
+    private void OnGraphEdgeSelected(GraphEdge edge) => DropFlight();
+    private void OnGraphPathSelected(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges) => DropFlight();
+    private void OnGraphSelectionCleared() => DropFlight();
 
     // Map <-> 3D: paths are rebuilt for the new layout (real positions or route arcs).
     private void OnMapModeChanged(bool onMap)
@@ -166,8 +265,11 @@ public class FlightSimulator : MonoBehaviour
     private void OnDestroy()
     {
         // Runtime-created assets are not scene objects: destroy them or they leak every Play.
-        if (runtimeMaterial != null) Destroy(runtimeMaterial);
+        foreach (Material m in phaseMaterials) if (m != null) Destroy(m);
+        if (selectedMaterial != null) Destroy(selectedMaterial);
+        if (runtimePathMaterial != null) Destroy(runtimePathMaterial);
         if (ownedMesh != null) Destroy(ownedMesh);
+        if (pathLine != null) Destroy(pathLine.gameObject);
     }
 
     private IEnumerator Start()
@@ -247,12 +349,22 @@ public class FlightSimulator : MonoBehaviour
         lastSimTime = simTime;
 
         // While the airports fly between the 3D layout and the map, the paths do not fit either.
-        if (geoMap != null && geoMap.Switching) return;
-        UpdateInstances();
-        for (int start = 0; start < activeCount; start += MaxInstancesPerCall)
+        if (geoMap != null && geoMap.Switching)
         {
-            Graphics.RenderMeshInstanced(renderParams, mesh, 0, matrices, Mathf.Min(MaxInstancesPerCall, activeCount - start), start);
+            if (pathLine != null) pathLine.enabled = false;
+            return;
         }
+        ApplyColours();
+        UpdateInstances();
+        for (int p = 0; p < 3; p++)
+        {
+            for (int start = 0; start < phaseCounts[p]; start += MaxInstancesPerCall)
+            {
+                Graphics.RenderMeshInstanced(phaseParams[p], mesh, 0, phaseMatrices[p], Mathf.Min(MaxInstancesPerCall, phaseCounts[p] - start), start);
+            }
+        }
+        if (selectedDrawn) Graphics.RenderMeshInstanced(selectedParams, mesh, 0, selectedMatrix, 1);
+        UpdatePathLine();
     }
 
     // ------------------------------------------------------------------ public controls
@@ -370,7 +482,11 @@ public class FlightSimulator : MonoBehaviour
             if (f.id != null) flightsById[f.id] = sim;
         }
 
-        matrices = new Matrix4x4[flights.Count];
+        for (int p = 0; p < 3; p++) phaseMatrices[p] = new Matrix4x4[flights.Count];
+        drawnFlights = new SimFlight[flights.Count];
+        drawnPositions = new Vector3[flights.Count];
+        // The selected aircraft survives a rebuild (map <-> 3D, map raised): the same flight, new paths.
+        selected = selectedId != null && flightsById.TryGetValue(selectedId, out SimFlight again) ? again : null;
         Debug.Log($"FlightSimulator: {flights.Count} flights, {activeMode} mode" +
                   (malformed > 0 ? $", {malformed} malformed skipped" : "") +
                   (noEdge > 0 ? $", {noEdge} without a graph edge skipped" : ""));
@@ -496,34 +612,57 @@ public class FlightSimulator : MonoBehaviour
             mesh = ownedMesh;
         }
 
-        Material source = aircraftMaterial;
-        if (source != null)
+        Shader fallback = null;
+        if (aircraftMaterial == null)
         {
-            runtimeMaterial = new Material(source);
-        }
-        else
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            if (shader == null)
+            fallback = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            if (fallback == null)
             {
                 Debug.LogError("FlightSimulator: no Unlit shader found. Assign aircraftMaterial.");
                 return false;
             }
-            runtimeMaterial = new Material(shader);
         }
-        runtimeMaterial.name = "Flight Sim Aircraft (runtime)";
-        runtimeMaterial.enableInstancing = true;
-        runtimeMaterial.color = aircraftColor;
-
-        renderParams = new RenderParams(runtimeMaterial)
+        // Instances move every frame; a huge box keeps them from being culled as a group.
+        var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
+        Material NewMaterial(string name)
+        {
+            Material m = aircraftMaterial != null ? new Material(aircraftMaterial) : new Material(fallback);
+            m.name = "Flight Sim " + name + " (runtime)";
+            m.enableInstancing = true;
+            return m;
+        }
+        RenderParams Params(Material m) => new RenderParams(m)
         {
             shadowCastingMode = ShadowCastingMode.Off,
             receiveShadows = false,
             layer = gameObject.layer,
-            // Instances move every frame; a huge box keeps them from being culled as a group.
-            worldBounds = new Bounds(Vector3.zero, Vector3.one * 100000f),
+            worldBounds = bounds,
         };
+        for (int p = 0; p < 3; p++)
+        {
+            phaseMaterials[p] = NewMaterial(((Phase)p).ToString());
+            phaseParams[p] = Params(phaseMaterials[p]);
+        }
+        selectedMaterial = NewMaterial("Selected");
+        selectedParams = Params(selectedMaterial);
+        ApplyColours();
         return true;
+    }
+
+    /// <summary>The colour an aircraft in this phase is drawn in (cruising = aircraftColor).</summary>
+    public Color PhaseColor(Phase phase)
+    {
+        return phase == Phase.Climbing ? climbColor : phase == Phase.Descending ? descendColor : aircraftColor;
+    }
+
+    // Material colours from the Inspector (colours and colorByPhase can change while playing).
+    private void ApplyColours()
+    {
+        for (int p = 0; p < 3; p++)
+        {
+            if (phaseMaterials[p] != null) phaseMaterials[p].color = colorByPhase ? PhaseColor((Phase)p) : aircraftColor;
+        }
+        if (selectedMaterial != null) selectedMaterial.color = selectedColor;
     }
 
     /// <summary>
@@ -575,6 +714,12 @@ public class FlightSimulator : MonoBehaviour
     {
         activeCount = 0;
         airborneCount = 0;
+        selectedDrawn = false;
+        for (int p = 0; p < 3; p++)
+        {
+            phaseCounts[p] = 0;
+            phaseAirborne[p] = 0;
+        }
         bool map = activeMode == PathMode.Trajectory;
         Vector3 scale = Vector3.one * (map ? mapAircraftSize : aircraftSize);
         Vector3 up = map ? mapUp : Vector3.up;
@@ -583,11 +728,47 @@ public class FlightSimulator : MonoBehaviour
             // Only aircraft in the air: taxiing ones would pile up on the hubs.
             if (simTime < f.airStart || simTime > f.airEnd) continue;
             airborneCount++;
+            AdvanceCursor(f, simTime);
+            Phase phase = PhaseOf(f.data, f.cursor);
+            phaseAirborne[(int)phase]++;
             Pose(f, out Vector3 position, out Vector3 forward);
             // On the map, not while beyond its rim: they appear where they cross it.
             if (map && f.offMap[f.cursor] && f.offMap[Mathf.Min(f.cursor + 1, f.offMap.Length - 1)]) continue;
-            matrices[activeCount++] = Matrix4x4.TRS(position, Quaternion.LookRotation(forward, up), scale);
+            Quaternion rotation = Quaternion.LookRotation(forward, up);
+            drawnFlights[activeCount] = f;
+            drawnPositions[activeCount] = position;
+            activeCount++;
+            if (f == selected)
+            {
+                selectedMatrix[0] = Matrix4x4.TRS(position, rotation, scale * selectedScale);
+                selectedDrawn = true;
+                continue;
+            }
+            int batch = colorByPhase ? (int)phase : (int)Phase.Cruising;
+            phaseMatrices[batch][phaseCounts[batch]++] = Matrix4x4.TRS(position, rotation, scale);
         }
+    }
+
+    // Segment index at `time` (time only moves forward between ResetCursors).
+    private static void AdvanceCursor(SimFlight f, float time)
+    {
+        int[] t = f.data.t;
+        int last = t.Length - 2;
+        while (f.cursor < last && t[f.cursor + 1] <= time) f.cursor++;
+    }
+
+    // Phase on segment i (point i to i + 1), from its vertical speed.
+    private Phase PhaseOf(FlightData f, int i)
+    {
+        float rate = VerticalFtPerMin(f, i);
+        return rate > levelChangeFtPerMin ? Phase.Climbing : rate < -levelChangeFtPerMin ? Phase.Descending : Phase.Cruising;
+    }
+
+    private static float VerticalFtPerMin(FlightData f, int i)
+    {
+        int j = Mathf.Min(i + 1, f.t.Length - 1);
+        float minutes = (f.t[j] - f.t[i]) / 60f;
+        return minutes > 0f ? (f.fl[j] - f.fl[i]) * 100f / minutes : 0f;
     }
 
     // First and last time the flight is above the ground (flight level > 0), widened to the
@@ -640,6 +821,159 @@ public class FlightSimulator : MonoBehaviour
         if (simTime < f.start || simTime > f.end) return false;
         Pose(f, out position, out forward);
         return true;
+    }
+
+    /// <summary>
+    /// What flight `id` is doing at the current simulated time: flight level, ground speed and
+    /// vertical speed on its current segment, phase, progress. False if the flight is unknown.
+    /// </summary>
+    public bool TryGetState(string id, out FlightState state)
+    {
+        state = default;
+        if (id == null || !flightsById.TryGetValue(id, out SimFlight sim)) return false;
+        FlightData f = sim.data;
+        int n = f.t.Length;
+        state.started = simTime >= sim.start;
+        state.landed = simTime > sim.end;
+        state.airborne = simTime >= sim.airStart && simTime <= sim.airEnd;
+        state.progress = Mathf.InverseLerp(sim.start, sim.end, simTime);
+        int i = 0;
+        while (i < n - 2 && f.t[i + 1] <= simTime) i++;
+        int j = i + 1;
+        float span = f.t[j] - f.t[i];
+        float u = span > 0f ? Mathf.Clamp01((simTime - f.t[i]) / span) : 1f;
+        state.flightLevel = Mathf.Lerp(f.fl[i], f.fl[j], u);
+        float hours = span / 3600f;
+        state.groundSpeedKmh = hours > 0f ? DistanceKm(f.lat[i], f.lon[i], f.lat[j], f.lon[j]) / hours : 0f;
+        state.verticalFtPerMin = VerticalFtPerMin(f, i);
+        state.phase = PhaseOf(f, i);
+        return true;
+    }
+
+    /// <summary>UTC time `seconds` after the window start (flight times: dep, arr, t).</summary>
+    public DateTime UtcAt(float seconds)
+    {
+        return data == null ? default : DateTimeOffset.FromUnixTimeSeconds(data.startEpoch).UtcDateTime.AddSeconds(seconds);
+    }
+
+    private static float DistanceKm(float lat1, float lon1, float lat2, float lon2)
+    {
+        float p1 = lat1 * Mathf.Deg2Rad, p2 = lat2 * Mathf.Deg2Rad;
+        float a = Mathf.Pow(Mathf.Sin((p2 - p1) / 2f), 2f) +
+                  Mathf.Cos(p1) * Mathf.Cos(p2) * Mathf.Pow(Mathf.Sin((lon2 - lon1) * Mathf.Deg2Rad / 2f), 2f);
+        return 2f * 6371f * Mathf.Asin(Mathf.Min(1f, Mathf.Sqrt(a)));
+    }
+
+    // ------------------------------------------------------------------ selected aircraft
+
+    // GraphSelector.RayClicked: the drawn aircraft closest to the ray within pickAngle.
+    private bool TryPick(Ray ray)
+    {
+        if (!ready || !Visible || activeCount == 0 || GuidedTour.InputLocked) return false;
+        SimFlight hit = null;
+        float best = pickAngle;
+        for (int i = 0; i < activeCount; i++)
+        {
+            Vector3 to = drawnPositions[i] - ray.origin;
+            if (to.sqrMagnitude < 0.01f) continue;
+            float angle = Vector3.Angle(ray.direction, to);
+            if (angle < best)
+            {
+                best = angle;
+                hit = drawnFlights[i];
+            }
+        }
+        if (hit == null) return false;
+        Select(hit);
+        return true;
+    }
+
+    /// <summary>Selects flight `id` (as if picked); false if unknown.</summary>
+    public bool SelectFlight(string id)
+    {
+        if (id == null || !flightsById.TryGetValue(id, out SimFlight f)) return false;
+        Select(f);
+        return true;
+    }
+
+    private void Select(SimFlight f)
+    {
+        // Clear the graph's own selection first (its card, highlight); not an end of ours.
+        selecting = true;
+        if (selector != null) selector.ClearSelection();
+        selecting = false;
+        selected = f;
+        selectedId = f.data.id;
+        if (selector != null && f.data.origin != null && f.data.destination != null &&
+            graph.Nodes.TryGetValue(f.data.origin, out GraphNode from) && graph.Nodes.TryGetValue(f.data.destination, out GraphNode to))
+        {
+            selector.HighlightAirports(from, to);
+        }
+        if (infoPanel != null) infoPanel.ShowFlight(this, f.data);
+        Camera cam = Camera.main;
+        if (cam != null) UISounds.Play(UISounds.Click, cam.transform.position + cam.transform.forward * 0.5f);
+        Debug.Log($"FlightSimulator: selected flight {f.data.id} {f.data.origin} -> {f.data.destination} ({f.data.op}, {f.data.type})");
+        FlightSelected?.Invoke(f.data);
+    }
+
+    /// <summary>Ends the aircraft selection: its card, highlight and path go.</summary>
+    public void ClearFlight()
+    {
+        if (selected == null) return;
+        if (selector != null) selector.ClearSelection(); // also hides the card; calls DropFlight
+        DropFlight();
+    }
+
+    // The selection ended elsewhere (GraphSelector): forget it, without touching GraphSelector.
+    private void DropFlight()
+    {
+        if (selecting || selected == null) return;
+        selected = null;
+        selectedId = null;
+        if (pathLine != null) pathLine.enabled = false;
+        FlightSelected?.Invoke(null);
+    }
+
+    // The selected aircraft's whole path: its track on the map, its route arc in 3D.
+    private void UpdatePathLine()
+    {
+        if (selected == null)
+        {
+            if (pathLine != null) pathLine.enabled = false;
+            return;
+        }
+        if (pathLine == null)
+        {
+            var go = new GameObject("Selected Flight Path");
+            pathLine = go.AddComponent<LineRenderer>();
+            pathLine.useWorldSpace = true;
+            pathLine.shadowCastingMode = ShadowCastingMode.Off;
+            pathLine.receiveShadows = false;
+            pathLine.numCapVertices = 2;
+            if (pathMaterial != null) pathLine.sharedMaterial = pathMaterial;
+            else
+            {
+                runtimePathMaterial = new Material(Shader.Find("Sprites/Default")) { name = "Flight Sim Path (runtime)" };
+                pathLine.sharedMaterial = runtimePathMaterial;
+            }
+        }
+        bool map = activeMode == PathMode.Trajectory;
+        pathLine.enabled = true;
+        pathLine.widthMultiplier = map ? pathWidth : pathWidth * 3f;
+        Color c = selectedColor;
+        pathLine.startColor = pathLine.endColor = new Color(c.r, c.g, c.b, 0.85f);
+        if (map)
+        {
+            Vector3[] local = selected.local;
+            pathLine.positionCount = local.Length;
+            for (int i = 0; i < local.Length; i++) pathLine.SetPosition(i, graph.transform.TransformPoint(local[i]));
+        }
+        else
+        {
+            Vector3[] points = selected.edge.points;
+            pathLine.positionCount = points.Length;
+            pathLine.SetPositions(points);
+        }
     }
 
     private static void SampleTrajectory(SimFlight f, float time, out Vector3 position, out Vector3 forward)
