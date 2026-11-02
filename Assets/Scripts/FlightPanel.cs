@@ -13,6 +13,9 @@ using UnityEngine.UI;
 /// the whole window with a time slider on top. While it is open the aircraft are drawn,
 /// the routes are dimmed behind them and the graph shows the simulated day's month
 /// (sizes and routes of that month); closing restores both.
+/// A legend under the chart gives the aircraft colours (climbing / cruising / descending)
+/// with how many are in each phase now; pointing at an aircraft and pulling the trigger
+/// shows its card (FlightSimulator, TASKS B24).
 /// Opened from the dashboard (Live flights), by voice, or P in the Editor ([ / ] speed).
 /// </summary>
 public class FlightPanel : MonoBehaviour
@@ -35,7 +38,7 @@ public class FlightPanel : MonoBehaviour
     public float snapDistance = 2f;
     public float followSpeed = 3f;
 
-    private static readonly Vector2 Size = new Vector2(960f, 236f);
+    private static readonly Vector2 Size = new Vector2(960f, 268f);
     private const float Pad = 24f;
     private const int ChartBins = 96;
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -47,6 +50,9 @@ public class FlightPanel : MonoBehaviour
     private Button speedButton;
     private Slider slider;
     private UIChart chart;
+    // Legend: one chip + text per flight phase (FlightSimulator.Phase order), and the picking hint.
+    private readonly GameObject[] legendItems = new GameObject[6];
+    private readonly TextMeshProUGUI[] legendTexts = new TextMeshProUGUI[3];
     private float[] profile;
     private bool following;
     private int periodBefore = -1;
@@ -286,6 +292,21 @@ public class FlightPanel : MonoBehaviour
             UIKit.Text(root, start.AddHours(h).ToString("HH:mm", Inv), UIKit.SmallSize, UIKit.MutedTextColor, x - 40f,
                        chartY + chartH + 12f, 80f, 24f, TextAlignmentOptions.Top);
         }
+
+        // Legend: what the aircraft colours mean, with how many are doing it now.
+        float lx = chartX;
+        float ly = chartY + chartH + 42f;
+        for (int p = 0; p < 3; p++)
+        {
+            Image chip = UIKit.Box(root, "Legend " + (FlightSimulator.Phase)p, simulator.PhaseColor((FlightSimulator.Phase)p), 4f);
+            UIKit.Place(chip.rectTransform, lx, ly + 5f, 14f, 14f);
+            legendTexts[p] = UIKit.Text(root, "", 15f, UIKit.MutedTextColor, lx + 20f, ly, 180f, 24f, TextAlignmentOptions.Left);
+            legendItems[2 * p] = chip.gameObject;
+            legendItems[2 * p + 1] = legendTexts[p].gameObject;
+            lx += 196f;
+        }
+        UIKit.Text(root, "Trigger on an aircraft: its details", 15f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
+                   TextAlignmentOptions.Right);
         Refresh();
     }
 
@@ -344,6 +365,12 @@ public class FlightPanel : MonoBehaviour
                       Mathf.Clamp(Mathf.FloorToInt(simulator.SimTime / duration * ChartBins), 0, ChartBins - 1));
         if (playIcon != null) playIcon.SetShape(simulator.IsPlaying ? UIIcon.Shape.Pause : UIIcon.Shape.Play);
         UIKit.SetButtonLabel(speedButton, SpeedLabel(simulator.Speed));
+        foreach (GameObject item in legendItems) if (item != null && item.activeSelf != simulator.colorByPhase) item.SetActive(simulator.colorByPhase);
+        for (int p = 0; p < 3; p++)
+        {
+            var phase = (FlightSimulator.Phase)p;
+            if (legendTexts[p] != null) legendTexts[p].text = phase + "  " + simulator.AirborneIn(phase).ToString("N0", Inv);
+        }
     }
 
     /// <summary>60 -> "1 min/s", 30 -> "30 s/s", 3600 -> "1 h/s".</summary>
