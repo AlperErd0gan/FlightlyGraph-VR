@@ -71,7 +71,9 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   `GraphRecenter`, `GeoMapView`, `FlightPanel` when the scene has none.
 - Live flights: `FlightPanel` (panel; dashboard, P, voice) drives `FlightSimulator`
   (GPU-instanced aircraft from `flights_ectrl.json`; real positions on the map via
-  `GeoMapView`, route arcs in 3D; paths rebuilt on `GeoMapView.ModeChanged` / `Moved`).
+  `GeoMapView`, route arcs in 3D; paths rebuilt on `GeoMapView.ModeChanged` / `Moved`;
+  coloured by flight phase; a tap on an aircraft — `GraphSelector.RayClicked`, offered
+  before the routes — selects it: `GraphInfoPanel.ShowFlight` card, path line, airports lit).
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
 - XR: `XRGraphInput`, `HandTeleport`, `GraphRecenter` (teleports the user to the graph,
