@@ -12,7 +12,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 ///   connectHoldSeconds shows the connection between the two (ConnectionFinder),
 ///   so routes work without an A / X button. The held node grows while holding.
 /// - empty space: edges have no colliders, so a short select (tap) that hovers
-///   nothing tests the ray against the edge arcs (GraphSelector.PickEdgeAlongRay);
+///   nothing is first offered to GraphSelector.RayClicked (aircraft of the live
+///   flights), then tested against the edge arcs (GraphSelector.PickEdgeAlongRay);
 ///   a miss clears the selection. Holding on empty space is left to HandTeleport.
 /// </summary>
 public class XRGraphInput : MonoBehaviour
@@ -130,7 +131,9 @@ public class XRGraphInput : MonoBehaviour
 
             Transform origin = interactor.curveOrigin;
             if (origin == null) continue;
-            GraphEdge edge = selector.PickEdgeAlongRay(new Ray(origin.position, origin.forward), edgePickAngle);
+            var ray = new Ray(origin.position, origin.forward);
+            if (selector.OfferRayClick(ray)) continue; // e.g. an aircraft of the live flights
+            GraphEdge edge = selector.PickEdgeAlongRay(ray, edgePickAngle);
             if (edge != null)
             {
                 selector.SelectEdge(edge);
