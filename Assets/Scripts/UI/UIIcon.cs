@@ -8,7 +8,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasRenderer))]
 public class UIIcon : MaskableGraphic
 {
-    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter, Globe, Plane }
+    public enum Shape { None, Play, Pause, Close, Previous, Next, Timeline, Grid, Recenter, Globe, Plane, Check }
 
     public Shape shape = Shape.Play;
 
@@ -83,6 +83,11 @@ public class UIIcon : MaskableGraphic
                 Triangle(vh, P(0.55f, 0.62f), P(0.55f, 0.48f), P(0.94f, 0.4f));
                 Triangle(vh, P(0.45f, 0.24f), P(0.28f, 0.1f), P(0.45f, 0.14f));
                 Triangle(vh, P(0.55f, 0.24f), P(0.55f, 0.14f), P(0.72f, 0.1f));
+                break;
+            case Shape.Check:
+                // A tick.
+                Line(vh, P(0.16f, 0.52f), P(0.42f, 0.26f), line * 1.3f);
+                Line(vh, P(0.42f, 0.26f), P(0.86f, 0.76f), line * 1.3f);
                 break;
             case Shape.Globe:
                 // Outline, a meridian and the equator.

@@ -11,11 +11,52 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 /// Simulator; Shift+click on desktop). Shows the direct edge if there is one,
 /// otherwise the route with the fewest stops (breadth-first search over all
 /// edges, busiest legs tried first, so among equally short routes busier ones win).
+/// While the live flights are shown (FlightPanel open) it shows a real connection
+/// instead (TASKS B7): actual flights of that day, each next one leaving 45 min .. 6 h
+/// after the previous one lands (ConnectionSearch), the first one leaving after the
+/// panel's time; Earlier / Later step through the day's options, Watch plays it, and
+/// "Same airline only" keeps to one operator. No connection that day: the network's
+/// route is shown with a note.
 /// </summary>
 public class ConnectionFinder : MonoBehaviour
 {
     public GraphLoader graph;
     public GraphSelector selector;
+
+    [Header("Real connections (live flights shown, TASKS B7)")]
+    [Tooltip("Live flights panel: while it is open, connections use that day's real flights. Found in the scene if unset.")]
+    public FlightPanel flights;
+    [Tooltip("Shows the connection's card. Found in the scene if unset.")]
+    public GraphInfoPanel infoPanel;
+    [Tooltip("Shortest time between landing and the next flight leaving, at the same airport (minutes).")]
+    public float minConnectionMinutes = 45f;
+    [Tooltip("Longest wait for the next flight (hours).")]
+    public float maxWaitHours = 6f;
+    [Tooltip("Most flights in a connection (3 = up to two changes).")]
+    [Range(1, 3)] public int maxFlights = 3;
+    [Tooltip("Only connections whose flights share one operator (anonymised operators, ~19% of flights, are left out then). Also on the card.")]
+    public bool sameAirlineOnly = false;
+
+    /// <summary>A real connection being shown: the day's options between two airports and the one on the card.</summary>
+    public class RealConnection
+    {
+        public GraphNode from;
+        public GraphNode to;
+        public List<ConnectionSearch.Itinerary> options = new List<ConnectionSearch.Itinerary>();
+        public int index = -1;
+        /// <summary>The panel's time was after the day's last option: the last one is shown.</summary>
+        public bool noneAfterNow;
+        public bool sameAirline;
+        /// <summary>The network's route (all months), shown when no real connection exists.</summary>
+        public List<GraphNode> networkRoute = new List<GraphNode>();
+        public ConnectionSearch.Itinerary Current => index >= 0 && index < options.Count ? options[index] : null;
+    }
+
+    /// <summary>The real connection on the card, or null.</summary>
+    public RealConnection Current { get; private set; }
+
+    private ConnectionSearch search;
+    private IReadOnlyList<FlightData> searchedFlights;
 
     private InputAction rightButton;
     private InputAction leftButton;
@@ -25,6 +66,7 @@ public class ConnectionFinder : MonoBehaviour
     {
         if (graph == null) graph = FindFirstObjectByType<GraphLoader>();
         if (selector == null) selector = FindFirstObjectByType<GraphSelector>();
+        if (infoPanel == null) infoPanel = FindFirstObjectByType<GraphInfoPanel>();
         rightButton = new InputAction("Connection Right", InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         leftButton = new InputAction("Connection Left", InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
     }
@@ -33,15 +75,27 @@ public class ConnectionFinder : MonoBehaviour
     {
         rightButton.Enable();
         leftButton.Enable();
-        if (selector != null) selector.ConnectionRequested += Connect;
+        if (selector == null) return;
+        selector.ConnectionRequested += Connect;
+        selector.NodeSelected += OnOtherSelection;
+        selector.EdgeSelected += OnOtherSelection;
+        selector.SelectionCleared += OnCleared;
     }
 
     private void OnDisable()
     {
         rightButton.Disable();
         leftButton.Disable();
-        if (selector != null) selector.ConnectionRequested -= Connect;
+        if (selector == null) return;
+        selector.ConnectionRequested -= Connect;
+        selector.NodeSelected -= OnOtherSelection;
+        selector.EdgeSelected -= OnOtherSelection;
+        selector.SelectionCleared -= OnCleared;
     }
+
+    private void OnOtherSelection(GraphNode node) => Current = null;
+    private void OnOtherSelection(GraphEdge edge) => Current = null;
+    private void OnCleared() => Current = null;
 
     private void OnDestroy()
     {
@@ -57,7 +111,10 @@ public class ConnectionFinder : MonoBehaviour
 
     private void Update()
     {
-        if (graph == null || selector == null || !graph.IsLoaded || GuidedTour.InputLocked) return;
+        if (graph == null || selector == null || !graph.IsLoaded) return;
+        // A real connection belongs to the live flights: it goes when their panel closes.
+        if (Current != null && !LiveFlightsShown) selector.ClearSelection();
+        if (GuidedTour.InputLocked) return;
         if (rightButton.WasPressedThisFrame()) TryConnect(InteractorHandedness.Right);
         if (leftButton.WasPressedThisFrame()) TryConnect(InteractorHandedness.Left);
     }
@@ -92,6 +149,11 @@ public class ConnectionFinder : MonoBehaviour
 
     public void Connect(GraphNode from, GraphNode to)
     {
+        if (LiveFlightsShown)
+        {
+            ShowRealConnection(from, to);
+            return;
+        }
         var nodes = new List<GraphNode>();
         var edges = new List<GraphEdge>();
         if (!FindPath(from, to, nodes, edges))
@@ -100,6 +162,156 @@ public class ConnectionFinder : MonoBehaviour
             return;
         }
         selector.SelectPath(nodes, edges);
+    }
+
+    // ---- Real connections (TASKS B7) --------------------------------------------
+
+    private FlightSimulator Simulator => flights != null ? flights.simulator : null;
+
+    /// <summary>True while the live flights panel is open with its flights loaded.</summary>
+    public bool LiveFlightsShown
+    {
+        get
+        {
+            if (flights == null) flights = FindFirstObjectByType<FlightPanel>();
+            return flights != null && flights.IsOpen && Simulator != null && Simulator.IsReady && Simulator.Flights != null;
+        }
+    }
+
+    private ConnectionSearch.Settings Settings => new ConnectionSearch.Settings
+    {
+        minConnectionSec = Mathf.RoundToInt(minConnectionMinutes * 60f),
+        maxWaitSec = Mathf.RoundToInt(maxWaitHours * 3600f),
+        maxLegs = maxFlights,
+        sameAirline = sameAirlineOnly,
+    };
+
+    private ConnectionSearch Search
+    {
+        get
+        {
+            IReadOnlyList<FlightData> all = Simulator.Flights;
+            if (search == null || !ReferenceEquals(all, searchedFlights))
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                search = new ConnectionSearch(all);
+                searchedFlights = all;
+                Debug.Log($"ConnectionFinder: real connections over {search.PassengerFlights} passenger flights " +
+                          $"({search.OtherFlights} cargo / business / other left out" + (search.HasSegments ? "" : "; no market segments in the file, all used") +
+                          $"), indexed in {watch.Elapsed.TotalMilliseconds:F0} ms");
+            }
+            return search;
+        }
+    }
+
+    /// <summary>The day's real connections from `from` to `to`; shows the first one leaving after the panel's time.</summary>
+    public void ShowRealConnection(GraphNode from, GraphNode to)
+    {
+        var c = new RealConnection { from = from, to = to, sameAirline = sameAirlineOnly };
+        var nodes = new List<GraphNode>();
+        var edges = new List<GraphEdge>();
+        if (FindPath(from, to, nodes, edges)) c.networkRoute = nodes;
+        Find(c, Simulator.SimTime);
+        Current = c;
+        Display();
+    }
+
+    // Options of c for the current settings; the shown one is the first leaving at or after `after` (s).
+    private void Find(RealConnection c, float after)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        c.options = Search.Options(c.from.id, c.to.id, Settings);
+        // The day's connections: the first flight leaves on the day (the file also holds the evening before).
+        c.options.RemoveAll(o => o.Departure < 0);
+        c.index = c.options.FindIndex(o => o.Departure >= after);
+        c.noneAfterNow = c.index < 0 && c.options.Count > 0;
+        if (c.noneAfterNow) c.index = c.options.Count - 1;
+        Debug.Log($"ConnectionFinder: {c.from.ShortCode} -> {c.to.ShortCode}: {c.options.Count} real connection(s) that day" +
+                  (c.sameAirline ? " (same airline)" : "") + $", found in {watch.Elapsed.TotalMilliseconds:F0} ms");
+    }
+
+    // Shows Current: its airports and routes highlighted, its flights marked, its card.
+    private void Display()
+    {
+        RealConnection c = Current;
+        if (c == null) return;
+        ConnectionSearch.Itinerary it = c.Current;
+        var nodes = new List<GraphNode>();
+        var edges = new List<GraphEdge>();
+        if (it != null)
+        {
+            nodes.Add(c.from);
+            foreach (FlightData leg in it.legs)
+            {
+                if (!graph.Nodes.TryGetValue(leg.destination, out GraphNode next)) continue;
+                GraphEdge e = FindEdge(nodes[nodes.Count - 1].id, next.id);
+                if (e != null) edges.Add(e);
+                nodes.Add(next);
+            }
+        }
+        else
+        {
+            nodes.AddRange(c.networkRoute);
+            for (int i = 0; i + 1 < nodes.Count; i++)
+            {
+                GraphEdge e = FindEdge(nodes[i].id, nodes[i + 1].id);
+                if (e != null) edges.Add(e);
+            }
+        }
+        // Selecting the route ends any earlier connection (events), so keep ours across it.
+        RealConnection keep = c;
+        if (nodes.Count >= 2 && edges.Count == nodes.Count - 1) selector.SelectPath(nodes, edges);
+        else selector.SelectNode(c.from);
+        Current = keep;
+        Simulator.ShowItinerary(it != null ? it.legs : null);
+        if (infoPanel != null) infoPanel.ShowConnection(this, Simulator);
+    }
+
+    /// <summary>The option before the shown one (earlier departure).</summary>
+    public void Earlier() => Step(-1);
+
+    /// <summary>The option after the shown one (later departure).</summary>
+    public void Later() => Step(+1);
+
+    private void Step(int delta)
+    {
+        RealConnection c = Current;
+        if (c == null || c.options.Count == 0) return;
+        int next = Mathf.Clamp(c.index + delta, 0, c.options.Count - 1);
+        if (next == c.index) return;
+        c.index = next;
+        c.noneAfterNow = false;
+        Display();
+    }
+
+    /// <summary>Plays the shown connection: the panel's time goes to ten minutes before its first flight leaves.</summary>
+    public void Watch()
+    {
+        ConnectionSearch.Itinerary it = Current?.Current;
+        if (it == null || flights == null) return;
+        Simulator.Seek(Mathf.Max(0f, it.Departure - 600f));
+        flights.SetPlaying(true);
+    }
+
+    /// <summary>Same airline only on / off: searches again, keeping about the same departure.</summary>
+    public void SetSameAirline(bool value)
+    {
+        RealConnection c = Current;
+        sameAirlineOnly = value;
+        if (c == null) return;
+        float after = c.Current != null ? c.Current.Departure : Simulator.SimTime;
+        c.sameAirline = value;
+        Find(c, after);
+        Display();
+    }
+
+    private GraphEdge FindEdge(string a, string b)
+    {
+        foreach (GraphEdge e in graph.EdgesOf(a))
+        {
+            if ((e.sourceId == a && e.targetId == b) || (e.sourceId == b && e.targetId == a)) return e;
+        }
+        return null;
     }
 
     /// <summary>Fewest-edges route between two airports, without selecting it (used by the guided tour).</summary>
