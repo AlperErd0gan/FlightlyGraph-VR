@@ -185,6 +185,9 @@ public class GeminiLiveAssistant : MonoBehaviour
 
     private void OnDestroy()
     {
+        // Audio first: the streamed clip's callback (ReadAudio) runs on the audio thread and must not
+        // be called while this object is torn down (leaving Play mode could crash the Editor).
+        StopAudioOutput();
         if (selector != null)
         {
             selector.NodeSelected -= OnNodeSelected;
@@ -193,6 +196,19 @@ public class GeminiLiveAssistant : MonoBehaviour
         talkAction.Dispose();
         Disconnect();
         StopMic();
+    }
+
+    // Quitting / leaving Play mode: stop the stream before objects are destroyed in any order.
+    private void OnApplicationQuit() => StopAudioOutput();
+
+    /// <summary>Stops the voice and releases the streamed clip, so its reader callback is no longer called.</summary>
+    private void StopAudioOutput()
+    {
+        if (audioSource == null) return;
+        audioSource.Stop();
+        AudioClip clip = audioSource.clip;
+        audioSource.clip = null;
+        if (clip != null) Destroy(clip);
     }
 
     private void OnValidate()
