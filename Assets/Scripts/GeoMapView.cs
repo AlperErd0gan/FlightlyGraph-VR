@@ -60,8 +60,11 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Range(0f, 90f)] public float domeElevation = 40f;
     [Tooltip("World texture for the dome (StreamingAssets, equirectangular; scripts/build_globe.py). Loaded the first time the dome opens.")]
     public string globeTextureFile = "globe_dark.png";
-    [Tooltip("Airports and routes this far (m) off the globe's surface, towards you, so the codes above them stay inside.")]
-    public float domeNodeLift = 0.12f;
+    [Tooltip("Airports and routes this far (m, times ViewScale) off the map's surface, towards you: small, so each airport touches its spot " +
+             "(the world texture lies 0.05 m behind the surface). Was 0.12: airports floated off the map (B31).")]
+    public float domeNodeLift = 0.01f;
+    [Tooltip("Airport codes (HubLabels) on the flat map and the dome. Off: codes only in the graph view; names come from the map and HoverLabel (B30).")]
+    public bool showAirportCodes = false;
     [Tooltip("Extra latitude / longitude grid over the globe (deg); 0 = none (the world texture has a 10 deg grid).")]
     public float graticuleStep = 0f;
     public Color graticuleColor = new Color(0.12f, 0.2f, 0.32f, 1f);
@@ -304,6 +307,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         var nodes = new List<GraphNode>(graph.Nodes.Values);
         var from = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) from[i] = nodes[i].transform.localPosition;
+        if (onMap) ScaleCodes();
         graph.SetLayout(onMap ? this : null);
         var to = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) to[i] = cities != null ? cities.RestingPosition(nodes[i]) : graph.HomePosition(nodes[i]);
@@ -359,7 +363,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     }
 
     /// <summary>Airports' and routes' height off the surface: more on the dome (codes above them stay inside).</summary>
-    private float Lift => IsDome ? domeNodeLift : nodeLift;
+    private float Lift => IsDome ? domeNodeLift * ViewScale : nodeLift;
 
     /// <summary>Planar map position (degrees) of an airport: true for Europe, on the band for the rest.</summary>
     public Vector2 PlanarOf(GraphNode node)
@@ -495,13 +499,13 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         if (raiseMoved) Moved?.Invoke();
     }
 
-    /// <summary>The airport codes (HubLabels, its public layoutLabelScale) grow with ViewScale on the dome.</summary>
+    /// <summary>The airport codes (HubLabels, its public layoutLabelScale): hidden (scale 0) on the map and the dome unless showAirportCodes; else they grow with ViewScale on the dome.</summary>
     private void ScaleCodes()
     {
         HubLabels codes = FindFirstObjectByType<HubLabels>();
         if (codes == null) return;
         if (flatCodeScale < 0f) flatCodeScale = codes.layoutLabelScale;
-        codes.layoutLabelScale = flatCodeScale * ViewScale;
+        codes.layoutLabelScale = showAirportCodes ? flatCodeScale * ViewScale : 0f;
     }
 
     private float flatCodeScale = -1f;
