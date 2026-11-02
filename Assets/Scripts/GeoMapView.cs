@@ -19,6 +19,13 @@ using UnityEngine.Networking;
 /// The map never goes into the floor: when its lowest part (the band and the names
 /// beyond it) would come closer than floorClearance to GraphLoader.FloorY, the whole
 /// map is raised, also later when the floor or the graph moves.
+/// Dome (SetDome, DomeToggle's button): you at the centre of the Earth. The same projection
+/// on the inside of a sphere of domeRadius around the graph centre (you, after Go to graph
+/// centre), at true scale: every airport and route in its real direction from the Earth's
+/// centre. The sharp map of Europe is in front of you, domeElevation up (north up), the
+/// rest of the world (globe_dark.png from build_globe.py, equirectangular) on a sphere just
+/// behind it; airports beyond Europe sit at their true places with their names. Everything on it is scaled by ViewScale. Leaving the map always
+/// returns to the flat map.
 /// </summary>
 public class GeoMapView : MonoBehaviour, IGraphLayout
 {
@@ -44,6 +51,25 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     public float curvatureRadius = 3.5f;
     [Tooltip("Lowest part of the map (band and the names beyond it) stays this far above the floor (m); the map is raised when it would reach lower.")]
     public float floorClearance = 0.1f;
+
+    [Header("Dome: you at the centre of the Earth (DomeToggle)")]
+    [Tooltip("Distance from the graph centre (your eyes) to the globe's surface (m).")]
+    public float domeRadius = 6f;
+    [Tooltip("Height (deg) of the map of Europe's centre above the horizon, in front of you: 90 = overhead (neck strain), " +
+             "lower = more of the southern airports under the floor (40: only Sao Paulo).")]
+    [Range(0f, 90f)] public float domeElevation = 40f;
+    [Tooltip("World texture for the dome (StreamingAssets, equirectangular; scripts/build_globe.py). Loaded the first time the dome opens.")]
+    public string globeTextureFile = "globe_dark.png";
+    [Tooltip("Airports and routes this far (m, times ViewScale) off the map's surface, towards you: small, so each airport touches its spot " +
+             "(the world texture lies 0.05 m behind the surface). Was 0.12: airports floated off the map (B31).")]
+    public float domeNodeLift = 0.01f;
+    [Tooltip("Airport codes (HubLabels) on the flat map and the dome. Off: codes only in the graph view; names come from the map and HoverLabel (B30).")]
+    public bool showAirportCodes = false;
+    [Tooltip("Extra latitude / longitude grid over the globe (deg); 0 = none (the world texture has a 10 deg grid).")]
+    public float graticuleStep = 0f;
+    public Color graticuleColor = new Color(0.12f, 0.2f, 0.32f, 1f);
+    public Color graticuleMainColor = new Color(0.22f, 0.38f, 0.58f, 1f);
+    public Color globeInsideColor = new Color(0.02f, 0.03f, 0.06f, 1f);
 
     [Header("Airports and routes on the map")]
     [Tooltip("Airport size multiplier on the map (smaller than in the 3D layout, the map is closer). Upper bound: see maxNodeDiameter.")]
@@ -98,13 +124,20 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>The map file is loaded and the graph is ready.</summary>
     public bool Ready { get; private set; }
     public bool Switching => transition != null;
+    /// <summary>True while the map is bent around the viewer (dome) instead of flat in front.</summary>
+    public bool IsDome { get; private set; }
+    /// <summary>
+    /// Size of everything on the map (airports, routes, names, band, codes, aircraft) relative to the
+    /// flat map: the dome is domeRadius away instead of `distance`, so it is scaled to look the same.
+    /// </summary>
+    public float ViewScale => IsDome ? domeRadius / Mathf.Max(0.5f, distance) : 1f;
     /// <summary>Raised when a switch has finished (true = map).</summary>
     public event System.Action<bool> ModeChanged;
     /// <summary>Raised after the map was placed again (raised above a moved floor): positions on it changed.</summary>
     public event System.Action Moved;
     public GeoMapProjection Projection => projection;
     /// <summary>Radius of the map of Europe in degrees of arc (beyond it: the outer band).</summary>
-    public float MapRadiusDegrees => map != null ? map.radiusDeg : 0f;
+    public float MapRadiusDegrees => map != null ? (IsDome ? 180f : map.radiusDeg) : 0f; // the dome has no "beyond the map"
     public int OutsideCount => outside.Count;
     public bool IsOutside(GraphNode node) => outside.Contains(node);
 
@@ -113,7 +146,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     {
         get
         {
-            if (maxNodeDiameter <= 0f || graph == null || !graph.IsLoaded) return nodeScale;
+            if (maxNodeDiameter <= 0f || graph == null || !graph.IsLoaded) return nodeScale * ViewScale;
             if (scaleFrame != Time.frameCount)
             {
                 // Size of the biggest airport without a layout (nodeBaseSize + nodeSizePerSqrtValue * sqrt(value)).
@@ -122,7 +155,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
                 {
                     biggest = Mathf.Max(biggest, graph.nodeBaseSize + graph.nodeSizePerSqrtValue * Mathf.Sqrt(Mathf.Max(0, node.value)));
                 }
-                cachedScale = biggest > 1e-6f ? Mathf.Min(nodeScale, maxNodeDiameter / biggest) : nodeScale;
+                cachedScale = (biggest > 1e-6f ? Mathf.Min(nodeScale, maxNodeDiameter / biggest) : nodeScale) * ViewScale;
                 scaleFrame = Time.frameCount;
             }
             return cachedScale;
@@ -138,7 +171,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         scaleFrame = -1;
         if (Application.isPlaying && IsMap && graph != null && graph.IsLoaded && ReferenceEquals(graph.Layout, this)) graph.SetLayout(this);
     }
-    public float EdgeWidthScale => edgeWidthScale;
+    public float EdgeWidthScale => edgeWidthScale * ViewScale;
 
     private class MapFile
     {
@@ -163,6 +196,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private readonly HashSet<GraphNode> outside = new HashSet<GraphNode>();
     private MapFile map;
     private Texture2D texture;
+    private Texture2D globeTexture;
+    private bool globeLoaded;
     private readonly List<Object> owned = new List<Object>();
     private Transform visual;
     private InputAction toggleAction;
@@ -272,6 +307,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         var nodes = new List<GraphNode>(graph.Nodes.Values);
         var from = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) from[i] = nodes[i].transform.localPosition;
+        if (onMap) ScaleCodes();
         graph.SetLayout(onMap ? this : null);
         var to = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) to[i] = cities != null ? cities.RestingPosition(nodes[i]) : graph.HomePosition(nodes[i]);
@@ -289,6 +325,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = to[i];
         visual.localScale = Vector3.one;
         if (!onMap) visual.gameObject.SetActive(false);
+        // B / the dashboard / the tour always bring the flat map next time.
+        if (!onMap && IsDome) SetDomeShape(false, false); // ModeChanged below rebuilds what depends on the map
 
         graph.RebuildEdges(graph.Edges);
         float fadeIn = instant ? 0f : 0.35f;
@@ -306,18 +344,26 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
 
     public Vector3 Home(GraphNode node)
     {
-        return projection.Surface(PlanarOf(node), nodeLift);
+        return projection.Surface(PlanarOf(node), Lift);
     }
 
     public void FillEdge(Vector3 a, Vector3 b, Vector3[] points)
     {
+        if (IsDome)
+        {
+            FillGreatCircle(a, b, points);
+            return;
+        }
         Transform t = graph.transform;
         Vector2 pa = projection.Unproject(t.InverseTransformPoint(a));
         Vector2 pb = projection.Unproject(t.InverseTransformPoint(b));
-        float lift = Mathf.Min(maxArcLift, arcHeight * Vector2.Distance(pa, pb) * projection.metersPerDegree);
-        projection.FillArc(pa, pb, nodeLift, lift, points);
+        float lift = Mathf.Min(maxArcLift * ViewScale, arcHeight * Vector2.Distance(pa, pb) * projection.metersPerDegree);
+        projection.FillArc(pa, pb, Lift, lift, points);
         for (int i = 0; i < points.Length; i++) points[i] = t.TransformPoint(points[i]);
     }
+
+    /// <summary>Airports' and routes' height off the surface: more on the dome (codes above them stay inside).</summary>
+    private float Lift => IsDome ? domeNodeLift * ViewScale : nodeLift;
 
     /// <summary>Planar map position (degrees) of an airport: true for Europe, on the band for the rest.</summary>
     public Vector2 PlanarOf(GraphNode node)
@@ -333,6 +379,11 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     {
         projection.centerLat = map.centerLat;
         projection.centerLon = map.centerLon;
+        if (IsDome)
+        {
+            PlaceDome();
+            return;
+        }
         projection.metersPerDegree = mapRadius / map.radiusDeg;
         projection.curvatureRadius = curvatureRadius;
         float a = tilt * Mathf.Deg2Rad;
@@ -355,7 +406,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>World height of the map's lowest point: the outer edge of the band, plus room for the names beyond it.</summary>
     private float LowestPointY()
     {
-        float outer = map.radiusDeg + MetersToDegrees(bandGap + bandWidth + 0.06f);
+        float outer = map.radiusDeg + MetersToDegrees((bandGap + bandWidth + 0.06f) * ViewScale);
         float lowest = float.MaxValue;
         for (int j = 0; j < 72; j++)
         {
@@ -369,6 +420,18 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>Places the map again (floor or graph moved) and, when it moved, the airports and routes on it.</summary>
     private void Replace()
     {
+        if (IsDome)
+        {
+            // Its size / height depend on the floor: shape it again, airports and routes with it.
+            SetDomeShape(true);
+            if (!IsMap) return;
+            foreach (GraphNode node in graph.Nodes.Values)
+            {
+                node.transform.localPosition = cities != null ? cities.RestingPosition(node) : graph.HomePosition(node);
+            }
+            graph.RebuildEdges(graph.Edges);
+            return;
+        }
         Vector3 before = projection.center;
         Place();
         if ((projection.center - before).sqrMagnitude < 1e-8f) return;
@@ -382,12 +445,167 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         graph.RebuildEdges(graph.Edges);
     }
 
-    private float BandMiddle => map.radiusDeg + MetersToDegrees(bandGap + bandWidth * 0.5f);
+    // ---- Dome -------------------------------------------------------------
+
+    /// <summary>Switches between the flat map and the dome (map shown: the airports fly over; else only the shape changes).</summary>
+    public void SetDome(bool dome)
+    {
+        if (!Ready || dome == IsDome || Switching) return;
+        transition = StartCoroutine(ChangeShape(dome));
+    }
+
+    private IEnumerator ChangeShape(bool dome)
+    {
+        if (dome)
+        {
+            // The dome is centred on the graph centre: stand there first. Recentring may move the
+            // floor (matchEyeHeight); GraphLoader reads the new FloorY in its LateUpdate, so wait.
+            GraphRecenter recenter = FindFirstObjectByType<GraphRecenter>();
+            if (recenter != null)
+            {
+                recenter.Recenter();
+                yield return null;
+                yield return null;
+            }
+        }
+        if (dome && !globeLoaded)
+        {
+            // The world texture is only needed here: loaded the first time the dome opens.
+            globeLoaded = true;
+            byte[] image = null;
+            if (!string.IsNullOrEmpty(globeTextureFile)) yield return ReadStreamingAsset(globeTextureFile, bytes => image = bytes);
+            if (image != null)
+            {
+                globeTexture = LoadTexture(image);
+                if (globeTexture != null) globeTexture.name = "Geo Globe Texture";
+            }
+        }
+        SetDomeShape(dome);
+        if (IsMap) yield return MoveToShape();
+        transition = null;
+    }
+
+    /// <summary>Places the map (flat or dome), its airports and its visual again; raises Moved unless told not to.</summary>
+    private void SetDomeShape(bool dome, bool raiseMoved = true)
+    {
+        IsDome = dome;
+        scaleFrame = -1; // NodeScale depends on ViewScale
+        ScaleCodes();
+        Place();
+        PlaceAirports();
+        RebuildVisual();
+        placedFloorY = graph.FloorY;
+        placedGraphY = graph.transform.position.y;
+        if (raiseMoved) Moved?.Invoke();
+    }
+
+    /// <summary>The airport codes (HubLabels, its public layoutLabelScale): hidden (scale 0) on the map and the dome unless showAirportCodes; else they grow with ViewScale on the dome.</summary>
+    private void ScaleCodes()
+    {
+        HubLabels codes = FindFirstObjectByType<HubLabels>();
+        if (codes == null) return;
+        if (flatCodeScale < 0f) flatCodeScale = codes.layoutLabelScale;
+        codes.layoutLabelScale = showAirportCodes ? flatCodeScale * ViewScale : 0f;
+    }
+
+    private float flatCodeScale = -1f;
+
+    /// <summary>Dome: the projection on the inside of a sphere of domeRadius around the graph centre, map centre domeElevation up in front.</summary>
+    private void PlaceDome()
+    {
+        // Azimuthal equidistant + this sphere = every point at its true angle from the map centre:
+        // the view from the Earth's centre.
+        projection.metersPerDegree = domeRadius * Mathf.Deg2Rad;
+        // Negative curvature: the sphere's centre is on the viewer's side, at the graph centre.
+        projection.curvatureRadius = -domeRadius;
+        // Centre in front and up, facing you; north up, east right.
+        float e = domeElevation * Mathf.Deg2Rad;
+        Vector3 direction = new Vector3(0f, Mathf.Sin(e), Mathf.Cos(e));
+        projection.Place(direction * domeRadius, -direction, Vector3.up);
+        placedFloorY = graph.FloorY;
+        placedGraphY = graph.transform.position.y;
+        int hidden = 0;
+        foreach (GraphNode node in graph.Nodes.Values)
+        {
+            Vector3 at = graph.transform.TransformPoint(projection.Surface(projection.Project(node.lat, node.lon), Lift));
+            if (at.y < graph.FloorY + floorClearance) hidden++;
+        }
+        Debug.Log($"GeoMapView: dome {domeRadius:F1} m around you at true scale, Europe {domeElevation:F0} deg up" +
+                  (hidden > 0 ? $"; {hidden} airport(s) below the floor" : "") + ".");
+    }
+
+    /// <summary>Dome: a route along the great circle between its airports, raised towards the centre in the middle.</summary>
+    private void FillGreatCircle(Vector3 a, Vector3 b, Vector3[] points)
+    {
+        Transform t = graph.transform;
+        Vector3 centre = projection.center - projection.normal * projection.curvatureRadius; // the sphere's centre (you)
+        Vector3 da = (t.InverseTransformPoint(a) - centre).normalized;
+        Vector3 db = (t.InverseTransformPoint(b) - centre).normalized;
+        float angle = Vector3.Angle(da, db) * Mathf.Deg2Rad;
+        float lift = Mathf.Min(maxArcLift * ViewScale, arcHeight * angle * domeRadius);
+        int n = points.Length - 1;
+        for (int i = 0; i <= n; i++)
+        {
+            float f = n > 0 ? (float)i / n : 0f;
+            float r = domeRadius - Lift - lift * 4f * f * (1f - f);
+            points[i] = t.TransformPoint(centre + Vector3.Slerp(da, db, f) * r);
+        }
+    }
+
+    /// <summary>Destroys and builds the map's meshes, materials and names again (the texture stays).</summary>
+    private void RebuildVisual()
+    {
+        bool shown = visual != null && visual.gameObject.activeSelf;
+        if (visual != null) Destroy(visual.gameObject);
+        for (int i = owned.Count - 1; i >= 0; i--)
+        {
+            if (owned[i] == texture || owned[i] == globeTexture) continue;
+            if (owned[i] != null) Destroy(owned[i]);
+            owned.RemoveAt(i);
+        }
+        BuildVisual();
+        visual.gameObject.SetActive(shown);
+    }
+
+    /// <summary>Map shown: the airports fly to their places on the new shape, routes fade out and in.</summary>
+    private IEnumerator MoveToShape()
+    {
+        graph.SetEdgeFade(0f);
+        var nodes = new List<GraphNode>(graph.Nodes.Values);
+        var from = new Vector3[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++) from[i] = nodes[i].transform.localPosition;
+        graph.SetLayout(this);
+        var to = new Vector3[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++) to[i] = cities != null ? cities.RestingPosition(nodes[i]) : graph.HomePosition(nodes[i]);
+        for (float t = 0f; t < transitionSeconds; t += Time.deltaTime)
+        {
+            float s = Mathf.SmoothStep(0f, 1f, t / transitionSeconds);
+            for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = Vector3.LerpUnclamped(from[i], to[i], s);
+            yield return null;
+        }
+        for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = to[i];
+        graph.RebuildEdges(graph.Edges);
+        for (float t = 0f; t < 0.35f; t += Time.deltaTime)
+        {
+            graph.SetEdgeFade(t / 0.35f);
+            yield return null;
+        }
+        graph.SetEdgeFade(1f);
+        Moved?.Invoke();
+    }
+
+    private float BandMiddle => map.radiusDeg + MetersToDegrees((bandGap + bandWidth * 0.5f) * ViewScale);
 
     private void PlaceAirports()
     {
         planar.Clear();
         outside.Clear();
+        if (IsDome)
+        {
+            // Every airport at its true place on the globe: nothing is "beyond the map".
+            foreach (GraphNode node in graph.Nodes.Values) planar[node] = projection.Project(node.lat, node.lon);
+            return;
+        }
         var beyond = new List<GraphNode>();
         foreach (GraphNode node in graph.Nodes.Values)
         {
@@ -401,7 +619,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         var bearings = new float[beyond.Count];
         for (int i = 0; i < beyond.Count; i++) bearings[i] = Bearing(beyond[i]);
         float ring = BandMiddle;
-        float minGap = Mathf.Min(outsideSpacing / (ring * projection.metersPerDegree), 2f * Mathf.PI / Mathf.Max(1, beyond.Count));
+        float minGap = Mathf.Min(outsideSpacing * ViewScale / (ring * projection.metersPerDegree), 2f * Mathf.PI / Mathf.Max(1, beyond.Count));
         float[] angles = Spread(bearings, minGap);
         for (int i = 0; i < beyond.Count; i++)
         {
@@ -462,13 +680,21 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         visual.localPosition = projection.center;   // meshes around the centre, so it scales in place
 
         float r = map.radiusDeg;
-        float bandFrom = r + MetersToDegrees(bandGap);
-        float bandTo = bandFrom + MetersToDegrees(bandWidth);
-        float rim = MetersToDegrees(0.006f);
+        float k = ViewScale;
+        float bandFrom = r + MetersToDegrees(bandGap * k);
+        float bandTo = bandFrom + MetersToDegrees(bandWidth * k);
+        float rim = MetersToDegrees(0.006f * k);
         AddMesh("Map", Disc(r, 48, 160, map.textureHalfSizeDeg), TextureMaterial());
-        AddMesh("Rim", Annulus(r, r + rim, 160, 0.001f), ColorMaterial(rimColor));
-        AddMesh("Band", Annulus(bandFrom, bandTo, 160, 0f), ColorMaterial(bandColor));
-        AddMesh("Band Edge", Annulus(bandTo, bandTo + rim * 0.5f, 160, 0.001f), ColorMaterial(rimColor * 0.5f));
+        if (!IsDome) AddMesh("Rim", Annulus(r, r + rim, 160, 0.001f), ColorMaterial(rimColor)); // on the dome Europe blends into the world
+        if (IsDome)
+        {
+            AddGlobe();
+        }
+        else
+        {
+            AddMesh("Band", Annulus(bandFrom, bandTo, 160, 0f), ColorMaterial(bandColor));
+            AddMesh("Band Edge", Annulus(bandTo, bandTo + rim * 0.5f, 160, 0.001f), ColorMaterial(rimColor * 0.5f));
+        }
 
         nameBoxes.Clear();
         int hidden = 0;
@@ -479,7 +705,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
             countries.Sort((a, b) => a.rank.CompareTo(b.rank));
             foreach (Label label in countries)
             {
-                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank)) * countryNameScale;
+                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank)) * countryNameScale * k;
                 Vector2 at = new Vector2(label.x, label.y);
                 TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, at, 0.003f);
                 text.characterSpacing = 6f;
@@ -487,7 +713,9 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
             }
         }
         // Busiest airports first; with onePerCity a city's other airports get no name.
+        // Dome: the airports beyond Europe, named next to their true place.
         var beyond = new List<GraphNode>(outside);
+        if (IsDome) foreach (GraphNode node in graph.Nodes.Values) if (PlanarOf(node).magnitude > r) beyond.Add(node);
         beyond.Sort((a, b) => b.value.CompareTo(a.value));
         var named = new HashSet<string>();
         foreach (GraphNode node in beyond)
@@ -499,8 +727,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
                 continue;
             }
             Vector2 dir = PlanarOf(node).normalized;
-            Vector2 at = dir * (bandTo + MetersToDegrees(0.015f));
-            TextMeshPro text = NewText(node.ShortCode + " · " + city, outsideNameSize, outsideNameColor, at, 0.003f);
+            Vector2 at = IsDome ? PlanarOf(node) + dir * MetersToDegrees(0.06f * k) : dir * (bandTo + MetersToDegrees(0.015f * k));
+            TextMeshPro text = NewText(node.ShortCode + " · " + city, outsideNameSize * k, outsideNameColor, at, 0.003f);
             // Anchor the text on its side nearest the map, so it reads outwards from the band.
             Vector2 pivot = new Vector2(dir.x > 0.35f ? 0f : dir.x < -0.35f ? 1f : 0.5f,
                                         Mathf.Abs(dir.x) > 0.35f ? 0.5f : dir.y > 0f ? 0f : 1f);
@@ -526,7 +754,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         // The text is aligned to the pivot's side horizontally and centred vertically in its rect.
         float left = c.x - pivot.x * size.x;
         float middle = c.y + (0.5f - pivot.y) * boxHeight;
-        var box = new Rect(left - nameGap, middle - size.y * 0.5f - nameGap, size.x + 2f * nameGap, size.y + 2f * nameGap);
+        float gap = nameGap * ViewScale;
+        var box = new Rect(left - gap, middle - size.y * 0.5f - gap, size.x + 2f * gap, size.y + 2f * gap);
         foreach (Rect kept in nameBoxes)
         {
             if (!kept.Overlaps(box)) continue;
@@ -547,7 +776,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         text.color = color;
         text.alignment = TextAlignmentOptions.Center;
         text.textWrappingMode = TextWrappingModes.NoWrap;
-        text.rectTransform.sizeDelta = new Vector2(0.6f, 0.06f);
+        text.rectTransform.sizeDelta = new Vector2(0.6f, 0.06f) * ViewScale;
         go.transform.localPosition = projection.Surface(at, lift) - projection.center;
         // TMP text reads correctly when its +Z points away from the viewer: into the map.
         go.transform.localRotation = Quaternion.LookRotation(-projection.NormalAt(at), projection.NorthAt(at));
@@ -628,6 +857,145 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         return NewMesh("Geo Map Ring", vertices, uvs, triangles);
     }
 
+    /// <summary>
+    /// Dome: the rest of the globe — a latitude / longitude grid (equator and prime meridian
+    /// brighter) just behind the map's surface and a dark sphere behind it, so the sky reads as
+    /// the inside of the Earth. Real-width strips, not 1-pixel lines (they shimmer in VR).
+    /// </summary>
+    private void AddGlobe()
+    {
+        Vector3 centre = projection.center - projection.normal * projection.curvatureRadius;
+        const float maxAngle = 178f; // the projection is singular at the antipode
+        float width = 0.012f * ViewScale;
+        if (graticuleStep > 0.5f)
+        {
+            var normal = new List<Vector3>();
+            var main = new List<Vector3>();
+            for (float lat = -90f + graticuleStep; lat < 90f - 0.01f; lat += graticuleStep)
+            {
+                GridLine(Mathf.Abs(lat) < 0.01f ? main : normal, i => new Vector2(lat, -180f + i * 2f), 181, centre, maxAngle, width);
+            }
+            for (float lon = -180f; lon < 180f - 0.01f; lon += graticuleStep)
+            {
+                GridLine(Mathf.Abs(lon) < 0.01f ? main : normal, i => new Vector2(-89.9f + i * 1.998f, lon), 91, centre, maxAngle, width);
+            }
+            AddMesh("Graticule", StripMesh("Geo Map Graticule", normal), ColorMaterial(graticuleColor));
+            AddMesh("Graticule Main", StripMesh("Geo Map Graticule Main", main), ColorMaterial(graticuleMainColor));
+        }
+        if (globeTexture != null) AddMesh("Globe", WorldSphere(centre, domeRadius + 0.05f * ViewScale), TextureMaterial(globeTexture));
+        else AddMesh("Globe Inside", Sphere(centre - projection.center, domeRadius + 0.15f * ViewScale, 48, 96), ColorMaterial(globeInsideColor));
+    }
+
+    // A line of (lat, lon) samples as quads on the globe just behind the surface, skipping the folded part.
+    private void GridLine(List<Vector3> quads, System.Func<int, Vector2> latLon, int count, Vector3 centre, float maxAngle, float width)
+    {
+        Vector3 previous = Vector3.zero;
+        bool hasPrevious = false;
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 ll = latLon(i);
+            Vector2 p = projection.Project(ll.x, ll.y);
+            if (p.magnitude > maxAngle)
+            {
+                hasPrevious = false;
+                continue;
+            }
+            Vector3 at = projection.Surface(p, -0.03f * ViewScale) - projection.center;
+            if (hasPrevious)
+            {
+                Vector3 radial = (at - (centre - projection.center)).normalized;
+                Vector3 side = Vector3.Cross(at - previous, radial).normalized * (width * 0.5f);
+                quads.Add(previous - side);
+                quads.Add(previous + side);
+                quads.Add(at + side);
+                quads.Add(at - side);
+            }
+            previous = at;
+            hasPrevious = true;
+        }
+    }
+
+    private static Mesh StripMesh(string name, List<Vector3> quads)
+    {
+        var triangles = new List<int>();
+        for (int i = 0; i + 3 < quads.Count; i += 4)
+        {
+            triangles.AddRange(new[] { i, i + 1, i + 2, i, i + 2, i + 3 });
+        }
+        var uvs = new List<Vector2>(new Vector2[quads.Count]);
+        return NewMesh(name, quads, uvs, triangles);
+    }
+
+    /// <summary>
+    /// Dome: the world texture (equirectangular) on a sphere of `radius` around `centre` (graph
+    /// space), just behind the map of Europe. Each (lat, lon) goes to its true direction from the
+    /// Earth's centre through a rotation (the map centre to projection.center's direction, east and
+    /// north to the projection's), the same directions Surface(Project()) gives, but also fine at
+    /// the antipode. A duplicated column at lon 180 keeps the texture seamless.
+    /// </summary>
+    private Mesh WorldSphere(Vector3 centre, float radius)
+    {
+        const int latSteps = 90, lonSteps = 180;
+        double lat0 = map.centerLat * Mathf.Deg2Rad, lon0 = map.centerLon * Mathf.Deg2Rad;
+        Vector3 Ecef(double la, double lo) => new Vector3((float)(System.Math.Cos(la) * System.Math.Cos(lo)),
+                                                           (float)(System.Math.Cos(la) * System.Math.Sin(lo)),
+                                                           (float)System.Math.Sin(la));
+        Vector3 p0 = Ecef(lat0, lon0);
+        Vector3 e0 = new Vector3((float)-System.Math.Sin(lon0), (float)System.Math.Cos(lon0), 0f);
+        Vector3 n0 = Vector3.Cross(p0, e0); // north at the map centre
+        Vector3 toCentre = -projection.normal; // from you towards the map centre
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var triangles = new List<int>();
+        for (int i = 0; i <= latSteps; i++)
+        {
+            float lat = -90f + 180f * i / latSteps;
+            for (int j = 0; j <= lonSteps; j++)
+            {
+                float lon = -180f + 360f * j / lonSteps;
+                Vector3 v = Ecef(lat * Mathf.Deg2Rad, lon * Mathf.Deg2Rad);
+                Vector3 dir = toCentre * Vector3.Dot(v, p0) + projection.east * Vector3.Dot(v, e0) + projection.north * Vector3.Dot(v, n0);
+                vertices.Add(centre + dir * radius - projection.center);
+                uvs.Add(new Vector2((lon + 180f) / 360f, (lat + 90f) / 180f));
+            }
+        }
+        for (int i = 0; i < latSteps; i++)
+        {
+            for (int j = 0; j < lonSteps; j++)
+            {
+                int a = i * (lonSteps + 1) + j, b = a + lonSteps + 1;
+                triangles.AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
+            }
+        }
+        return NewMesh("Geo Map World Sphere", vertices, uvs, triangles);
+    }
+
+    // A UV sphere around `centre` (local), seen from inside (the materials draw both sides).
+    private static Mesh Sphere(Vector3 centre, float radius, int rings, int segments)
+    {
+        var vertices = new List<Vector3>();
+        var triangles = new List<int>();
+        for (int k = 0; k <= rings; k++)
+        {
+            float v = Mathf.PI * k / rings;
+            for (int j = 0; j <= segments; j++)
+            {
+                float u = 2f * Mathf.PI * j / segments;
+                vertices.Add(centre + new Vector3(Mathf.Sin(v) * Mathf.Cos(u), Mathf.Cos(v), Mathf.Sin(v) * Mathf.Sin(u)) * radius);
+            }
+        }
+        for (int k = 0; k < rings; k++)
+        {
+            for (int j = 0; j < segments; j++)
+            {
+                int a = k * (segments + 1) + j, b = a + segments + 1;
+                triangles.AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
+            }
+        }
+        var uvs = new List<Vector2>(new Vector2[vertices.Count]);
+        return NewMesh("Geo Map Globe Inside", vertices, uvs, triangles);
+    }
+
     // Wound so the front faces the viewer (east = right, north = up as seen from in front).
     private static void Face(List<int> triangles, int a, int b, int c)
     {
@@ -647,7 +1015,9 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         return mesh;
     }
 
-    private Material TextureMaterial()
+    private Material TextureMaterial() => TextureMaterial(texture);
+
+    private Material TextureMaterial(Texture2D tex)
     {
         Material m;
         if (mapMaterial != null) m = new Material(mapMaterial);
@@ -657,10 +1027,10 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
             m = new Material(shader);
         }
         m.name = "Geo Map (runtime)";
-        if (texture != null)
+        if (tex != null)
         {
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", texture);
-            m.mainTexture = texture;
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            m.mainTexture = tex;
         }
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
         if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f); // visible from behind too
