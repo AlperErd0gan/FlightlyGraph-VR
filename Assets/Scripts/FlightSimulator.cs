@@ -52,17 +52,19 @@ public class FlightSimulator : MonoBehaviour
     public bool loop = true;
 
     [Header("Aircraft")]
-    [Tooltip("Optional mesh pointing along +Z (e.g. an aircraft model). Default: a small flat aircraft silhouette built at runtime.")]
+    [Tooltip("Optional mesh pointing along +Z (e.g. an aircraft model). Default: a low-poly 3D airliner built at runtime.")]
     public Mesh aircraftMesh;
     [Tooltip("Material with 'Enable GPU Instancing' (e.g. URP/Unlit). Assign it so the shader is in builds; " +
              "if unset, URP Unlit is looked up by name. A runtime copy gets aircraftColor.")]
     public Material aircraftMaterial;
+    [Tooltip("Shade the aircraft with the scene's light (URP Simple Lit, instanced) so their 3D shape shows; an Unlit aircraftMaterial is replaced by it. Off = the material as it is.")]
+    public bool litAircraft = true;
     [Tooltip("Light and plain so the aircraft do not compete with the orange / blue airports.")]
     public Color aircraftColor = new Color(0.78f, 0.84f, 0.94f);
     [Tooltip("Aircraft length in the 3D layout (m).")]
-    public float aircraftSize = 0.08f;
+    public float aircraftSize = 0.11f;
     [Tooltip("Aircraft length on the map (m); the map is closer and Europe is ~2 m wide.")]
-    public float mapAircraftSize = 0.027f;
+    public float mapAircraftSize = 0.038f;
     [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
     public float mapCruiseHeight = 0.04f;
 
@@ -76,7 +78,7 @@ public class FlightSimulator : MonoBehaviour
 
     [Header("Selected aircraft")]
     [Tooltip("An aircraft counts as hit within this angle of the ray (degrees, seen from the hand / eye).")]
-    public float pickAngle = 1f;
+    public float pickAngle = 2.5f;
     public Color selectedColor = new Color(1f, 0.9f, 0.2f);
     [Tooltip("Size of the selected aircraft relative to the others.")]
     public float selectedScale = 1.8f;
@@ -613,7 +615,11 @@ public class FlightSimulator : MonoBehaviour
         }
 
         Shader fallback = null;
-        if (aircraftMaterial == null)
+        // Lit: an Unlit material shows the 3D mesh as a flat silhouette.
+        Shader lit = litAircraft ? Shader.Find("Universal Render Pipeline/Simple Lit") : null;
+        bool useLit = lit != null && (aircraftMaterial == null || aircraftMaterial.shader.name.Contains("Unlit"));
+        if (useLit) fallback = lit;
+        else if (aircraftMaterial == null)
         {
             fallback = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             if (fallback == null)
@@ -626,7 +632,7 @@ public class FlightSimulator : MonoBehaviour
         var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
         Material NewMaterial(string name)
         {
-            Material m = aircraftMaterial != null ? new Material(aircraftMaterial) : new Material(fallback);
+            Material m = aircraftMaterial != null && !useLit ? new Material(aircraftMaterial) : new Material(fallback);
             m.name = "Flight Sim " + name + " (runtime)";
             m.enableInstancing = true;
             return m;
@@ -666,39 +672,101 @@ public class FlightSimulator : MonoBehaviour
     }
 
     /// <summary>
-    /// Unit-length aircraft silhouette along +Z, flat (seen from above like a map symbol):
-    /// slim fuselage, swept wings, tailplane, plus a low fin so it does not vanish edge-on.
-    /// Every face is present in both windings, so any culling mode shows it.
+    /// Default aircraft, 1 m long (scaled by aircraftSize), nose along +Z, up +Y: a low-poly
+    /// airliner — round fuselage with nose and tail cones, swept wings and tailplane with some
+    /// thickness, two engines under the wings, a fin. Flat-shaded: every triangle has its own
+    /// vertices and an outward normal, so a lit material shows its shape.
     /// </summary>
     private static Mesh BuildAircraftMesh()
     {
         var vertices = new List<Vector3>();
+        var normals = new List<Vector3>();
         var triangles = new List<int>();
-        void Polygon(params Vector3[] points)
+
+        // One triangle, wound so its front (and normal) faces `outward`.
+        void Tri(Vector3 a, Vector3 b, Vector3 c, Vector3 outward)
         {
-            int start = vertices.Count;
-            vertices.AddRange(points);
-            for (int i = 1; i + 1 < points.Length; i++)
+            Vector3 n = Vector3.Cross(b - a, c - a);
+            if (Vector3.Dot(n, outward) < 0f)
             {
-                triangles.AddRange(new[] { start, start + i, start + i + 1, start, start + i + 1, start + i });
+                (b, c) = (c, b);
+                n = -n;
+            }
+            n.Normalize();
+            int i = vertices.Count;
+            vertices.Add(a);
+            vertices.Add(b);
+            vertices.Add(c);
+            normals.Add(n);
+            normals.Add(n);
+            normals.Add(n);
+            triangles.Add(i);
+            triangles.Add(i + 1);
+            triangles.Add(i + 2);
+        }
+
+        // A tube along Z through `rings` (z, radius), sides sides, centred on (x, y); radius 0 = a point.
+        void Tube(float x, float y, (float z, float r)[] rings, int sides)
+        {
+            for (int k = 0; k + 1 < rings.Length; k++)
+            {
+                for (int j = 0; j < sides; j++)
+                {
+                    float a0 = 2f * Mathf.PI * j / sides, a1 = 2f * Mathf.PI * (j + 1) / sides;
+                    Vector3 Ring(int ring, float a) => new Vector3(x + Mathf.Cos(a) * rings[ring].r, y + Mathf.Sin(a) * rings[ring].r, rings[ring].z);
+                    Vector3 p00 = Ring(k, a0), p01 = Ring(k, a1), p10 = Ring(k + 1, a0), p11 = Ring(k + 1, a1);
+                    Vector3 outward = new Vector3(Mathf.Cos((a0 + a1) * 0.5f), Mathf.Sin((a0 + a1) * 0.5f), 0f);
+                    if (rings[k].r > 0f) Tri(p00, p01, p11, outward);
+                    if (rings[k + 1].r > 0f) Tri(p00, p11, p10, outward);
+                    else Tri(p00, p01, p10, outward);
+                }
             }
         }
-        Vector3 P(float x, float z) => new Vector3(x, 0f, z);
-        // Fuselage (nose at +Z).
-        Polygon(P(0f, 0.5f), P(0.045f, 0.4f), P(0.045f, -0.36f), P(0f, -0.5f), P(-0.045f, -0.36f), P(-0.045f, 0.4f));
-        // Wings, swept back.
-        Polygon(P(0.04f, 0.14f), P(0.48f, -0.1f), P(0.48f, -0.17f), P(0.04f, -0.06f));
-        Polygon(P(-0.04f, 0.14f), P(-0.04f, -0.06f), P(-0.48f, -0.17f), P(-0.48f, -0.1f));
-        // Tailplane.
-        Polygon(P(0.03f, -0.33f), P(0.18f, -0.43f), P(0.18f, -0.48f), P(0.03f, -0.44f));
-        Polygon(P(-0.03f, -0.33f), P(-0.03f, -0.44f), P(-0.18f, -0.48f), P(-0.18f, -0.43f));
-        // Fin.
-        Polygon(new Vector3(0f, 0f, -0.28f), new Vector3(0f, 0.13f, -0.46f), new Vector3(0f, 0f, -0.48f));
+
+        // A thin plate: outline in its own plane (u, v), `axis` = 1 for horizontal (y = level),
+        // 0 for vertical (x = level); thickness t. Top, bottom and the edges.
+        void Plate(Vector2[] outline, float level, float t, bool horizontal)
+        {
+            Vector3 At(Vector2 p, float side) => horizontal
+                ? new Vector3(p.x, level + side * t * 0.5f, p.y)
+                : new Vector3(level + side * t * 0.5f, p.x, p.y);
+            Vector3 up = horizontal ? Vector3.up : Vector3.right;
+            for (int i = 1; i + 1 < outline.Length; i++)
+            {
+                Tri(At(outline[0], 1f), At(outline[i], 1f), At(outline[i + 1], 1f), up);
+                Tri(At(outline[0], -1f), At(outline[i], -1f), At(outline[i + 1], -1f), -up);
+            }
+            Vector2 centre = Vector2.zero;
+            foreach (Vector2 p in outline) centre += p;
+            centre /= outline.Length;
+            for (int i = 0; i < outline.Length; i++)
+            {
+                Vector2 a = outline[i], b = outline[(i + 1) % outline.Length];
+                Vector2 mid = (a + b) * 0.5f - centre;
+                Vector3 outward = horizontal ? new Vector3(mid.x, 0f, mid.y) : new Vector3(0f, mid.x, mid.y);
+                Tri(At(a, 1f), At(b, 1f), At(b, -1f), outward);
+                Tri(At(a, 1f), At(b, -1f), At(a, -1f), outward);
+            }
+        }
+
+        // Fuselage: nose cone, cabin, tail cone (slightly raised, as on airliners).
+        Tube(0f, 0f, new[] { (0.5f, 0f), (0.46f, 0.03f), (0.4f, 0.05f), (0.3f, 0.058f), (-0.25f, 0.058f), (-0.4f, 0.04f), (-0.5f, 0f) }, 10);
+        // Wings (low, swept back) and tailplane.
+        Plate(new[] { new Vector2(0.04f, 0.14f), new Vector2(0.5f, -0.1f), new Vector2(0.5f, -0.16f), new Vector2(0.04f, -0.08f) }, -0.025f, 0.016f, true);
+        Plate(new[] { new Vector2(-0.04f, 0.14f), new Vector2(-0.04f, -0.08f), new Vector2(-0.5f, -0.16f), new Vector2(-0.5f, -0.1f) }, -0.025f, 0.016f, true);
+        Plate(new[] { new Vector2(0.03f, -0.33f), new Vector2(0.19f, -0.43f), new Vector2(0.19f, -0.48f), new Vector2(0.03f, -0.45f) }, 0.015f, 0.01f, true);
+        Plate(new[] { new Vector2(-0.03f, -0.33f), new Vector2(-0.03f, -0.45f), new Vector2(-0.19f, -0.48f), new Vector2(-0.19f, -0.43f) }, 0.015f, 0.01f, true);
+        // Fin (vertical; outline in (y, z)).
+        Plate(new[] { new Vector2(0.03f, -0.26f), new Vector2(0.21f, -0.43f), new Vector2(0.21f, -0.49f), new Vector2(0.03f, -0.48f) }, 0f, 0.01f, false);
+        // Engines under the wings.
+        var engine = new[] { (0.13f, 0.022f), (0.12f, 0.03f), (-0.02f, 0.03f), (-0.05f, 0.02f) };
+        Tube(0.19f, -0.065f, engine, 8);
+        Tube(-0.19f, -0.065f, engine, 8);
 
         var mesh = new Mesh { name = "Flight Sim Aircraft" };
         mesh.SetVertices(vertices);
+        mesh.SetNormals(normals);
         mesh.SetTriangles(triangles, 0);
-        mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
     }
@@ -866,20 +934,23 @@ public class FlightSimulator : MonoBehaviour
 
     // ------------------------------------------------------------------ selected aircraft
 
-    // GraphSelector.RayClicked: the drawn aircraft closest to the ray within pickAngle.
+    // GraphSelector.RayClicked: the drawn aircraft closest to the ray, within pickAngle or its own visible size.
     private bool TryPick(Ray ray)
     {
         if (!ready || !Visible || activeCount == 0 || GuidedTour.InputLocked) return false;
         SimFlight hit = null;
-        float best = pickAngle;
+        float best = 1f; // angle / reach of the best hit so far; < 1 is a hit
+        float half = (MapShown ? mapAircraftSize : aircraftSize) * 0.5f;
         for (int i = 0; i < activeCount; i++)
         {
             Vector3 to = drawnPositions[i] - ray.origin;
             if (to.sqrMagnitude < 0.01f) continue;
-            float angle = Vector3.Angle(ray.direction, to);
-            if (angle < best)
+            // Within pickAngle of its centre, or anywhere on it when it is near and looks bigger.
+            float reach = Mathf.Max(pickAngle, Mathf.Atan2(half, to.magnitude) * Mathf.Rad2Deg);
+            float score = Vector3.Angle(ray.direction, to) / reach;
+            if (score < best)
             {
-                best = angle;
+                best = score;
                 hit = drawnFlights[i];
             }
         }
