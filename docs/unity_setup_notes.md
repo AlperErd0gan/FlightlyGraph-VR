@@ -160,15 +160,17 @@ No scene change: the dashboard adds `FlightPanel`, which adds a
 so it is shared outside git like the graph files). Without it the Live flights
 button is disabled (Console: a warning, not an error).
 
-- Assign a material with **Enable GPU Instancing** (e.g. URP / Unlit) to
-  `FlightSimulator.aircraftMaterial`: the aircraft are drawn instanced, and in a
-  build the shader must be referenced. In the Editor over Link the fallback
-  (URP / Unlit found by name) works if instancing is enabled on it.
-- Tune: `mapAircraftSize` (2.7 cm), `aircraftSize` (3D, 8 cm), `mapCruiseHeight`
+- The aircraft are a low-poly 3D airliner built at runtime (or `aircraftMesh`),
+  drawn instanced. With `litAircraft` (on) they use **URP / Simple Lit** so the
+  scene's light shows their shape; an Unlit `aircraftMaterial` is replaced by it.
+  For a build, assign a **Simple Lit** material with **Enable GPU Instancing** to
+  `FlightSimulator.aircraftMaterial` so the shader is included (in the Editor over
+  Link the shader is found by name).
+- Tune: `mapAircraftSize` (3.8 cm), `aircraftSize` (3D, 11 cm), `mapCruiseHeight`
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
 - Flight phase colours: `colorByPhase`, `climbColor`, `descendColor` (cruising =
   `aircraftColor`), `levelChangeFtPerMin` (300). Selected aircraft: `pickAngle`
-  (1°), `selectedColor`, `selectedScale`, `pathWidth` (4 mm), optional `pathMaterial`
+  (2.5°; a near aircraft is hit anywhere on its visible size), `selectedColor`, `selectedScale`, `pathWidth` (4 mm), optional `pathMaterial`
   (vertex colours; Sprites/Default is created otherwise — assign one for builds).
 - The route mesh renders before the other transparent objects (it used to be
   drawn over the dashboard and the info card).
