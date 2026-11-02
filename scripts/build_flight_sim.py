@@ -24,7 +24,9 @@ Path source, per flight:
 Output: data/processed/flights_ectrl.json
   { source, flightsFile, pointsFile, day, startLabel, startEpoch, durationSec,
     candidateFlights, flightCount, pathSources,
-    flights: [{ id, from, to, op, type, path, dep, arr, t[], lat[], lon[], fl[], hdg[] }] }
+    flights: [{ id, from, to, op, type, seg, path, dep, arr, t[], lat[], lon[], fl[], hdg[] }] }
+seg is the STATFOR market segment (Mainline, Lowcost, Regional Aircraft, Charter,
+All-Cargo, Business Aviation, ...): Unity's real connections use passenger flights only.
 t / dep / arr are seconds from the window start (startEpoch, Unix time, UTC);
 a flight already under way at the start has a negative dep.
 
@@ -63,7 +65,7 @@ SIMPLIFY_KM_PER_FL = 0.1
 
 FLIGHT_COLUMNS = ["ECTRL ID", "ADEP", "ADEP Latitude", "ADEP Longitude", "ADES", "ADES Latitude",
                   "ADES Longitude", "FILED OFF BLOCK TIME", "FILED ARRIVAL TIME", "ACTUAL OFF BLOCK TIME",
-                  "ACTUAL ARRIVAL TIME", "AC Type", "AC Operator", "Requested FL"]
+                  "ACTUAL ARRIVAL TIME", "AC Type", "AC Operator", "Requested FL", "STATFOR Market Segment"]
 POINT_COLUMNS = ["ECTRL ID", "Sequence Number", "Time Over", "Flight Level", "Latitude", "Longitude"]
 
 log = logging.getLogger("build_flight_sim")
@@ -344,6 +346,7 @@ def flight_record(row, path_kind, t, lat, lon, fl):
         to=row["ADES"],
         op=row["AC Operator"] or None,
         type=row["AC Type"] or None,
+        seg=row["STATFOR Market Segment"] or None,
         path=path_kind,
         dep=int(round(t[0])),
         arr=int(round(t[-1])),
