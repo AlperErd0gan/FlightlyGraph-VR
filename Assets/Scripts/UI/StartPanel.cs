@@ -37,6 +37,8 @@ public class StartPanel : MonoBehaviour
     public bool showOnStart = true;
     [Tooltip("Key that opens the panel (Input System path), e.g. for testing in the Editor. Empty = none.")]
     public string homeKey = "<Keyboard>/home";
+    [Tooltip("Keep the Gemini voice assistant off (not connected, push-to-talk ignored, no orb; the Wit assistant waits too) until Start exploring / Guided tour and the intro after it have ended.")]
+    public bool geminiAfterStart = true;
 
     [Header("Panel")]
     [Tooltip("Distance (m) in front of the eyes.")]
@@ -89,6 +91,9 @@ public class StartPanel : MonoBehaviour
     private NearFarInteractor leftHand;
     private float nextHandSearch;
     private InputAction homeAction;
+    private readonly List<GeminiLiveAssistant> heldGemini = new List<GeminiLiveAssistant>();
+    private readonly List<VoiceAssistant> heldVoices = new List<VoiceAssistant>();
+    private bool geminiPending;
     private Transform holo;
     private Material holoMaterial;
     private readonly List<Mesh> holoMeshes = new List<Mesh>();
@@ -135,6 +140,37 @@ public class StartPanel : MonoBehaviour
         started = !showOnStart;
         if (showOnStart) Open();
         else canvas.gameObject.SetActive(false);
+        if (showOnStart && geminiAfterStart) HoldGemini();
+    }
+
+    /// <summary>
+    /// Switches the Gemini assistant off until the first start (this runs before its Start, so it
+    /// also connects only then). Only the ones switched off here are switched on again.
+    /// </summary>
+    private void HoldGemini()
+    {
+        foreach (GeminiLiveAssistant g in FindObjectsByType<GeminiLiveAssistant>(FindObjectsSortMode.None))
+        {
+            if (!g.enabled) continue;
+            g.enabled = false;
+            heldGemini.Add(g);
+        }
+        if (heldGemini.Count == 0) return;
+        // Otherwise the Wit assistant would take push-to-talk (Y) on the start screen instead.
+        foreach (VoiceAssistant v in FindObjectsByType<VoiceAssistant>(FindObjectsSortMode.None))
+        {
+            if (v.Suspended) continue;
+            v.Suspended = true;
+            heldVoices.Add(v);
+        }
+    }
+
+    private void ReleaseGemini()
+    {
+        foreach (VoiceAssistant v in heldVoices) if (v != null) v.Suspended = false; // Gemini suspends it again once connected
+        heldVoices.Clear();
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null) g.enabled = true;
+        heldGemini.Clear();
     }
 
     private void OnEnable() => homeAction?.Enable();
@@ -157,6 +193,12 @@ public class StartPanel : MonoBehaviour
         if (graph == null) return;
         if (hologram && !holoBuilding && graph.IsLoaded) StartCoroutine(BuildHologram());
         if (!started) KeepGraphHidden();
+
+        if (geminiPending && graph.IsLoaded && (intro == null || !intro.Playing))
+        {
+            geminiPending = false;
+            ReleaseGemini();
+        }
 
         if (tourPending && tour != null && graph.IsLoaded && (intro == null || !intro.Playing))
         {
@@ -226,6 +268,8 @@ public class StartPanel : MonoBehaviour
         {
             started = true;
             ShowGraph();
+            // Gemini comes on (connects, says it is listening) once the intro has ended, see Update.
+            geminiPending = heldGemini.Count > 0;
         }
         if (withTour)
         {
