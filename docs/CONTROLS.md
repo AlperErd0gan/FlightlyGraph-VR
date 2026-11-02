@@ -22,7 +22,11 @@ slowly and now and then morphs onto a small map of Europe and back. Only one pan
 closes the start panel and the other way round. Point and
 pull the trigger (pinch with hands) to choose. Later, a small **Home** button
 on the left wrist (shown when the inside of the wrist faces you) brings the
-panel back; the graph stays where it is.
+panel back; the graph stays where it is. The Gemini voice assistant stays off (not connected,
+Y ignored, no orb; the Wit assistant waits too) until Start exploring / Guided
+tour and the graph's opening animation after it have ended (`StartPanel.geminiAfterStart`), only once: Home later leaves it on. StartPanel is
+added at runtime, so to turn this off add a `StartPanel` component to the scene and untick
+it before Play.
 
 ## Graph (nothing open)
 
@@ -42,6 +46,10 @@ panel back; the graph stays where it is.
 | Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
 | Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | Home |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
+
+Pointing a ray at an airport (or the mouse in the Editor) shows its name above
+it, without selecting it (`HoverLabel`, adds itself to the scene; untick
+`showOnHover` to turn it off).
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
@@ -105,6 +113,26 @@ Appears below and to the right of your gaze, with a line to the selection.
 
 It hides while the dashboard is open and closes by itself if you walk or
 teleport more than 5 m away from where you selected.
+
+## Graph search (bar under the info card)
+
+While an airport is selected, a bar hangs under the info card (`GraphSearchView`,
+adds itself to the scene). Point and pull the trigger (pinch / click) on its
+buttons. The search starts at the selected airport and uses only the routes the
+graph shows (timeline month, filters, city groups).
+
+| Button | Does |
+|---|---|
+| **BFS** | breadth-first: every airport with a direct flight lights up, then those 1 transfer away, then 2, ... (colour per layer) |
+| **DFS** | depth-first: follows one branch as deep as it goes, then goes back up (white cursor) |
+| **1 transfer** / **2 transfers** | airports reachable with at most one / two changes of plane (direct flights included), with the counts |
+| **Pause** / **Slower** / **Faster** / **Stop** | while a search plays; **Again** replays it when it has ended |
+
+Each airport is joined to the one it was found from; the selected airport's
+yellow routes are dimmed while a search shows and come back on Stop. The bar hides while a route between two airports is shown. From a big hub
+almost everything is direct or 1 transfer away; a small airport shows the
+layers better. The bar shows only together with the info card (it hides with it,
+e.g. while the dashboard is open).
 
 ## Dashboard (left menu button / F1)
 
