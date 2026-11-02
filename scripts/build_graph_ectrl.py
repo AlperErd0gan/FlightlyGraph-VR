@@ -128,8 +128,9 @@ def read_flights(path, positions):
     for side in PAIR:
         lat, lon = f"{side}_lat", f"{side}_lon"
         fill = (df[lat].isna() | df[lon].isna()) & df[side].isin(positions.index)
-        df.loc[fill, lat] = df.loc[fill, side].map(positions["lat"])
-        df.loc[fill, lon] = df.loc[fill, side].map(positions["lon"])
+        if fill.any():  # pandas 3 rejects assigning an empty selection to a float column
+            df.loc[fill, lat] = df.loc[fill, side].map(positions["lat"])
+            df.loc[fill, lon] = df.loc[fill, side].map(positions["lon"])
         filled |= fill
     t = {c: pd.to_datetime(raw[c], format=TIME_FMT, errors="coerce")
          for c in ("filed_off", "filed_arr", "actual_off", "actual_arr")}
