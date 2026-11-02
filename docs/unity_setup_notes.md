@@ -120,6 +120,13 @@ Without them the map view is unavailable and nothing else changes (Console:
   found by name). In the Editor over Link that is fine; for an EXE / APK assign
   an Unlit material to `GeoMapView.mapMaterial` so the shader is included.
 - `HubLabels.layoutLabelScale` (0.35) shrinks the airport codes on the map.
+Map size (2026-11-02): `mapRadius` 1.3 m (was 1.0), `tilt` 20° (was 30°: more
+upright, facing the viewer), airports on the map `maxNodeDiameter` 0.04 m (was 0.03)
+and `nodeScale` 0.6 (was 0.45). Its lowest part stays `floorClearance` above the
+floor, so a bigger / more upright map is raised (the Console logs "map raised X m").
+These are script defaults: a `GeoMapView` already in the scene keeps its Inspector
+values. Radius and tilt are read at start; the airport sizes change live in Play mode.
+
 ## 8. Real-time voice with Gemini (TASKS B5, branch b5-realtime-voice)
 
 `GeminiLiveAssistant` talks to the Gemini Live API over one WebSocket, straight
