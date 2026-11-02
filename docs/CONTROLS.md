@@ -85,7 +85,7 @@ the microphone is sent to Wit; the name is checked on the returned text.
 |---|---|
 | help | lists the commands |
 | show Istanbul · find FRA · where is Munich · (just) London | selects the airport (code, name or city; a city gives its busiest airport) and turns you to it |
-| route from London to Ankara · connect Paris and Rome · how do I get from X to Y | fewest-stops route |
+| route from London to Ankara · connect Paris and Rome · how do I get from X to Y | fewest-stops route; while Live flights is open, a real connection of that day |
 | describe · what is this | narrates the selection |
 | clear · close | clears the selection |
 | regional view · show clusters / top routes · normal view / switch view | view mode |
@@ -221,6 +221,26 @@ hides it), aircraft type and whether the path is recorded or approximate. The
 card follows the aircraft and updates twice a second. Airports still take a
 tap first; while the live flights are shown, a tap near the map's busy areas
 usually finds an aircraft rather than a route.
+
+**Real connections** (TASKS B7): while the Live flights panel is open, asking
+for the route to a second airport (hold the trigger / pinch on it, A / X, Shift
++ click, or by voice) shows a real connection of that day instead of the
+network's fewest-stops route: actual flights (passenger flights only, actual
+off-block and arrival times), each next one leaving 45 min to 6 h after the
+previous one lands at the same airport, at most three flights. The first one
+leaving after the panel's time is shown; its flights are drawn in yellow with
+their paths and the route animates. The card lists the flights with times
+(UTC), the changes and the waiting, the door-to-door time, and a live line
+("Now 16:31: flight 1 of 2, in the air at FL297", "changing at BSL, next flight
+in 38 min"). With no connection that day the network's route is shown with a
+note. Possible, not necessarily bookable (no tickets, alliances, terminals).
+
+| Action (real connection card) | Controller / hands | Editor |
+|---|---|---|
+| Earlier / Later option of the day | **Earlier** / **Later** on the card | click |
+| Play it from ten minutes before it leaves | **Watch** | click |
+| Only one operator for all flights (anonymised ones, ~1 in 5, left out) | **Same airline only** checkbox | click |
+| Close | X on the card, trigger on empty space, or close the panel | X / Esc |
 
 | Action | Controller / hands | Editor |
 |---|---|---|
