@@ -15,6 +15,7 @@ project: there is no ProjectSettings/ and no scene here.
 - `GeminiLiveAssistant` stays off for `*_ectrl` scenes unless the user ticks
   `allowLicensedData`. Do not change that default.
 - Commit / push only when asked. Branch first for larger features (PRs into `main`).
+  Small fixes go on the shared branch `general-fixes`.
 - Keep `docs/CONTROLS.md` and `Assets/Scripts/UI/ControlsHelp.cs` in sync.
 - Track work in `TASKS.md` (backlog items B1, B2, ...; `[x]` when done).
 

@@ -48,8 +48,9 @@ it before Play.
 | Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | Home |
 | Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
-Pointing a ray at an airport (or the mouse in the Editor) shows its name above
-it, without selecting it (`HoverLabel`, adds itself to the scene; untick
+Pointing a ray at an airport (or the mouse in the Editor) shows its name right
+on top of it (its code hides meanwhile; on the map the name lies on the map like
+the country names), without selecting it (`HoverLabel`, adds itself to the scene; untick
 `showOnHover` to turn it off).
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
