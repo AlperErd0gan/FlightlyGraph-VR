@@ -60,9 +60,9 @@ public class FlightSimulator : MonoBehaviour
     [Tooltip("Light and plain so the aircraft do not compete with the orange / blue airports.")]
     public Color aircraftColor = new Color(0.78f, 0.84f, 0.94f);
     [Tooltip("Aircraft length in the 3D layout (m).")]
-    public float aircraftSize = 0.06f;
+    public float aircraftSize = 0.08f;
     [Tooltip("Aircraft length on the map (m); the map is closer and Europe is ~2 m wide.")]
-    public float mapAircraftSize = 0.02f;
+    public float mapAircraftSize = 0.027f;
     [Tooltip("Map view: height of FL400 (40,000 ft) above the map (m). Exaggerated: true to scale it would be ~4 mm.")]
     public float mapCruiseHeight = 0.04f;
 
