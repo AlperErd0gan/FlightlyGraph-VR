@@ -161,3 +161,24 @@ button is disabled (Console: a warning, not an error).
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
 - The route mesh renders before the other transparent objects (it used to be
   drawn over the dashboard and the info card).
+
+## 10. Performance monitor (debug tool, TASKS B22)
+
+No scene change: `PerfMonitor` adds itself when the scene has a `GraphLoader`.
+**F3** turns it on / off (off at start; `showOnStart` to change). While on:
+
+- A small text near the top right of the view: average FPS and frame time of the
+  last second, the worst frame, frames over the headset's budget (its refresh rate,
+  else `targetFps` 72), and what was going on (3D / map, timeline, flights, Gemini).
+  Red when more than 10 % of the frames were over budget.
+- One CSV row per second in `Application.persistentDataPath`
+  (`perf_<date>_<time>.csv`; the path is logged when it starts): `time_s, scene,
+  fps_avg, frame_ms_avg, frame_ms_worst, frames, over_budget, budget_fps, view,
+  timeline_playing, flights_playing, gemini_speaking`. Numbers use a dot as the
+  decimal separator on every PC.
+
+Over Link the numbers are the PC's frame times, not the Quest's own. For "runs at
+N FPS on Quest 3" in a paper, measure in a standalone APK build (or with OVR Metrics
+Tool). The headset has no F3, so for an APK add the `PerfMonitor` component to any
+object in the scene and tick **Show On Start** before building (it then does not add a
+second one).
