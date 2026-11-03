@@ -94,6 +94,7 @@ public class StartPanel : MonoBehaviour
     private readonly List<GeminiLiveAssistant> heldGemini = new List<GeminiLiveAssistant>();
     private readonly List<VoiceAssistant> heldVoices = new List<VoiceAssistant>();
     private bool geminiPending;
+    private GameObject voiceCaption; // the assistants' caption (VoiceAssistant), hidden while the panel is open
     private Transform holo;
     private Material holoMaterial;
     private readonly List<Mesh> holoMeshes = new List<Mesh>();
@@ -186,6 +187,14 @@ public class StartPanel : MonoBehaviour
         if (holoMaterial != null) Destroy(holoMaterial);
         if (holoDiscMaterial != null) Destroy(holoDiscMaterial);
         foreach (Mesh m in holoMeshes) if (m != null) Destroy(m);
+    }
+
+    // After the assistants' Update: a caption they show while the panel is open is never drawn.
+    private void LateUpdate()
+    {
+        if (!IsOpen) return;
+        if (voiceCaption == null) voiceCaption = GameObject.Find("Voice Assistant Caption");
+        if (voiceCaption != null && voiceCaption.activeSelf) voiceCaption.SetActive(false);
     }
 
     private void Update()
