@@ -1069,7 +1069,8 @@ public class FlightSimulator : MonoBehaviour
         LineRenderer pathLine = pathLines[index];
         bool map = activeMode == PathMode.Trajectory;
         pathLine.enabled = true;
-        pathLine.widthMultiplier = (map ? pathWidth : pathWidth * 3f) * (selected == null ? itineraryPathScale : 1f);
+        // On the dome (GeoMapView.ViewScale) the lines grow with the aircraft, or they are hairlines 6 m away.
+        pathLine.widthMultiplier = (map ? pathWidth * geoMap.ViewScale : pathWidth * 3f) * (selected == null ? itineraryPathScale : 1f);
         Color c = selectedColor;
         pathLine.startColor = pathLine.endColor = new Color(c.r, c.g, c.b, 0.85f);
         if (map)
