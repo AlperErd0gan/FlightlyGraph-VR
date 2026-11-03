@@ -84,6 +84,8 @@ public class FlightSimulator : MonoBehaviour
     public float selectedScale = 1.8f;
     [Tooltip("Width of the selected aircraft's path line on the map (m); three times this in the 3D layout.")]
     public float pathWidth = 0.004f;
+    [Tooltip("Path lines of a real connection's flights relative to pathWidth: the routes are dimmed while the live flights are shown, these lines carry the connection.")]
+    public float itineraryPathScale = 1.6f;
     [Tooltip("Optional material for the path line (vertex colours, e.g. Sprites/Default). If unset, Sprites/Default is created.")]
     public Material pathMaterial;
 
@@ -149,8 +151,9 @@ public class FlightSimulator : MonoBehaviour
     private readonly int[] phaseAirborne = new int[3];
     private Material selectedMaterial;
     private RenderParams selectedParams;
-    private readonly Matrix4x4[] selectedMatrix = new Matrix4x4[1];
-    private bool selectedDrawn;
+    // The selected aircraft, or the aircraft of a shown connection (up to three flights).
+    private readonly Matrix4x4[] selectedMatrix = new Matrix4x4[4];
+    private int selectedDrawn;
     // Aircraft drawn in the last frame, for picking.
     private SimFlight[] drawnFlights = new SimFlight[0];
     private Vector3[] drawnPositions = new Vector3[0];
@@ -160,9 +163,13 @@ public class FlightSimulator : MonoBehaviour
     private bool visible;
     private SimFlight selected;
     private string selectedId;
+    // Flights of a real connection shown by ConnectionFinder (TASKS B7), marked like the selected aircraft.
+    private readonly List<SimFlight> itinerary = new List<SimFlight>();
+    private readonly List<string> itineraryIds = new List<string>();
     // True while this class clears GraphSelector itself, so its own SelectionCleared does not count.
     private bool selecting;
-    private LineRenderer pathLine;
+    // One path line per marked flight.
+    private readonly List<LineRenderer> pathLines = new List<LineRenderer>();
     private Material runtimePathMaterial;
 
 
@@ -193,6 +200,8 @@ public class FlightSimulator : MonoBehaviour
     public int AirborneIn(Phase phase) => phaseAirborne[(int)phase];
     /// <summary>The selected aircraft (TASKS B24), or null.</summary>
     public FlightData SelectedFlight => selected != null ? selected.data : null;
+    /// <summary>Flights of the connection shown (ShowItinerary), empty if none.</summary>
+    public IReadOnlyList<string> ItineraryIds => itineraryIds;
     /// <summary>Raised when an aircraft is selected, and with null when the selection ends.</summary>
     public event Action<FlightData> FlightSelected;
     /// <summary>Trajectory or EdgeArc once loaded (Auto resolved).</summary>
@@ -271,7 +280,7 @@ public class FlightSimulator : MonoBehaviour
         if (selectedMaterial != null) Destroy(selectedMaterial);
         if (runtimePathMaterial != null) Destroy(runtimePathMaterial);
         if (ownedMesh != null) Destroy(ownedMesh);
-        if (pathLine != null) Destroy(pathLine.gameObject);
+        foreach (LineRenderer line in pathLines) if (line != null) Destroy(line.gameObject);
     }
 
     private IEnumerator Start()
@@ -353,7 +362,7 @@ public class FlightSimulator : MonoBehaviour
         // While the airports fly between the 3D layout and the map, the paths do not fit either.
         if (geoMap != null && geoMap.Switching)
         {
-            if (pathLine != null) pathLine.enabled = false;
+            HidePathLines(0);
             return;
         }
         ApplyColours();
@@ -365,8 +374,8 @@ public class FlightSimulator : MonoBehaviour
                 Graphics.RenderMeshInstanced(phaseParams[p], mesh, 0, phaseMatrices[p], Mathf.Min(MaxInstancesPerCall, phaseCounts[p] - start), start);
             }
         }
-        if (selectedDrawn) Graphics.RenderMeshInstanced(selectedParams, mesh, 0, selectedMatrix, 1);
-        UpdatePathLine();
+        if (selectedDrawn > 0) Graphics.RenderMeshInstanced(selectedParams, mesh, 0, selectedMatrix, selectedDrawn);
+        UpdatePathLines();
     }
 
     // ------------------------------------------------------------------ public controls
@@ -487,8 +496,10 @@ public class FlightSimulator : MonoBehaviour
         for (int p = 0; p < 3; p++) phaseMatrices[p] = new Matrix4x4[flights.Count];
         drawnFlights = new SimFlight[flights.Count];
         drawnPositions = new Vector3[flights.Count];
-        // The selected aircraft survives a rebuild (map <-> 3D, map raised): the same flight, new paths.
+        // The selected aircraft and a shown connection survive a rebuild (map <-> 3D, map raised): same flights, new paths.
         selected = selectedId != null && flightsById.TryGetValue(selectedId, out SimFlight again) ? again : null;
+        itinerary.Clear();
+        foreach (string id in itineraryIds) if (flightsById.TryGetValue(id, out SimFlight leg)) itinerary.Add(leg);
         Debug.Log($"FlightSimulator: {flights.Count} flights, {activeMode} mode" +
                   (malformed > 0 ? $", {malformed} malformed skipped" : "") +
                   (noEdge > 0 ? $", {noEdge} without a graph edge skipped" : ""));
@@ -782,7 +793,7 @@ public class FlightSimulator : MonoBehaviour
     {
         activeCount = 0;
         airborneCount = 0;
-        selectedDrawn = false;
+        selectedDrawn = 0;
         for (int p = 0; p < 3; p++)
         {
             phaseCounts[p] = 0;
@@ -806,10 +817,9 @@ public class FlightSimulator : MonoBehaviour
             drawnFlights[activeCount] = f;
             drawnPositions[activeCount] = position;
             activeCount++;
-            if (f == selected)
+            if ((f == selected || (itinerary.Count > 0 && itinerary.Contains(f))) && selectedDrawn < selectedMatrix.Length)
             {
-                selectedMatrix[0] = Matrix4x4.TRS(position, rotation, scale * selectedScale);
-                selectedDrawn = true;
+                selectedMatrix[selectedDrawn++] = Matrix4x4.TRS(position, rotation, scale * selectedScale);
                 continue;
             }
             int batch = colorByPhase ? (int)phase : (int)Phase.Cruising;
@@ -987,10 +997,31 @@ public class FlightSimulator : MonoBehaviour
         FlightSelected?.Invoke(f.data);
     }
 
-    /// <summary>Ends the aircraft selection: its card, highlight and path go.</summary>
+    /// <summary>
+    /// Marks the flights of a real connection (ConnectionFinder, TASKS B7): drawn like the
+    /// selected aircraft while in the air, their paths drawn throughout. No card and no
+    /// selection change here: the caller selected the route and shows its card. Any other
+    /// selection or a cleared one ends it, as for the selected aircraft.
+    /// </summary>
+    public void ShowItinerary(IReadOnlyList<FlightData> legs)
+    {
+        selected = null;
+        selectedId = null;
+        itinerary.Clear();
+        itineraryIds.Clear();
+        if (legs == null) return;
+        foreach (FlightData leg in legs)
+        {
+            if (leg == null || leg.id == null || !flightsById.TryGetValue(leg.id, out SimFlight f)) continue;
+            itinerary.Add(f);
+            itineraryIds.Add(leg.id);
+        }
+    }
+
+    /// <summary>Ends the aircraft selection or the shown connection: card, highlight and paths go.</summary>
     public void ClearFlight()
     {
-        if (selected == null) return;
+        if (selected == null && itinerary.Count == 0) return;
         if (selector != null) selector.ClearSelection(); // also hides the card; calls DropFlight
         DropFlight();
     }
@@ -998,53 +1029,67 @@ public class FlightSimulator : MonoBehaviour
     // The selection ended elsewhere (GraphSelector): forget it, without touching GraphSelector.
     private void DropFlight()
     {
-        if (selecting || selected == null) return;
+        if (selecting || (selected == null && itinerary.Count == 0)) return;
+        bool hadAircraft = selected != null;
         selected = null;
         selectedId = null;
-        if (pathLine != null) pathLine.enabled = false;
-        FlightSelected?.Invoke(null);
+        itinerary.Clear();
+        itineraryIds.Clear();
+        HidePathLines(0);
+        if (hadAircraft) FlightSelected?.Invoke(null);
     }
 
-    // The selected aircraft's whole path: its track on the map, its route arc in 3D.
-    private void UpdatePathLine()
+    // Whole path of each marked flight: its track on the map, its route arc in 3D.
+    private void UpdatePathLines()
     {
-        if (selected == null)
+        int count = 0;
+        if (selected != null) DrawPath(selected, count++);
+        else foreach (SimFlight f in itinerary) DrawPath(f, count++);
+        HidePathLines(count);
+    }
+
+    private void DrawPath(SimFlight f, int index)
+    {
+        while (pathLines.Count <= index)
         {
-            if (pathLine != null) pathLine.enabled = false;
-            return;
-        }
-        if (pathLine == null)
-        {
-            var go = new GameObject("Selected Flight Path");
-            pathLine = go.AddComponent<LineRenderer>();
-            pathLine.useWorldSpace = true;
-            pathLine.shadowCastingMode = ShadowCastingMode.Off;
-            pathLine.receiveShadows = false;
-            pathLine.numCapVertices = 2;
-            if (pathMaterial != null) pathLine.sharedMaterial = pathMaterial;
+            var go = new GameObject("Selected Flight Path" + (pathLines.Count == 0 ? "" : " " + (pathLines.Count + 1)));
+            LineRenderer line = go.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.shadowCastingMode = ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.numCapVertices = 2;
+            if (pathMaterial != null) line.sharedMaterial = pathMaterial;
             else
             {
-                runtimePathMaterial = new Material(Shader.Find("Sprites/Default")) { name = "Flight Sim Path (runtime)" };
-                pathLine.sharedMaterial = runtimePathMaterial;
+                if (runtimePathMaterial == null) runtimePathMaterial = new Material(Shader.Find("Sprites/Default")) { name = "Flight Sim Path (runtime)" };
+                line.sharedMaterial = runtimePathMaterial;
             }
+            pathLines.Add(line);
         }
+        LineRenderer pathLine = pathLines[index];
         bool map = activeMode == PathMode.Trajectory;
         pathLine.enabled = true;
-        pathLine.widthMultiplier = map ? pathWidth : pathWidth * 3f;
+        // On the dome (GeoMapView.ViewScale) the lines grow with the aircraft, or they are hairlines 6 m away.
+        pathLine.widthMultiplier = (map ? pathWidth * geoMap.ViewScale : pathWidth * 3f) * (selected == null ? itineraryPathScale : 1f);
         Color c = selectedColor;
         pathLine.startColor = pathLine.endColor = new Color(c.r, c.g, c.b, 0.85f);
         if (map)
         {
-            Vector3[] local = selected.local;
+            Vector3[] local = f.local;
             pathLine.positionCount = local.Length;
             for (int i = 0; i < local.Length; i++) pathLine.SetPosition(i, graph.transform.TransformPoint(local[i]));
         }
         else
         {
-            Vector3[] points = selected.edge.points;
+            Vector3[] points = f.edge.points;
             pathLine.positionCount = points.Length;
             pathLine.SetPositions(points);
         }
+    }
+
+    private void HidePathLines(int from)
+    {
+        for (int i = from; i < pathLines.Count; i++) if (pathLines[i] != null) pathLines[i].enabled = false;
     }
 
     private static void SampleTrajectory(SimFlight f, float time, out Vector3 position, out Vector3 forward)

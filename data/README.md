@@ -250,6 +250,13 @@ python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD
   track: great circle, real times, taxi / climb / descent model).
 - Every path is simplified with Douglas-Peucker on the time-synchronised
   distance (`--tolerance-km`, at most `--max-points`): turns, climbs /
-  descents and stops keep their points. A whole day is ~11 MB.
-- `t`, `dep`, `arr`: seconds from `startEpoch` (Unix time, UTC); `fl`: flight
-  level (100 ft); `hdg`: course to the next point (degrees from true north).
+  descents and stops keep their points.
+- `t`, `dep`, `arr`: seconds from `startEpoch` (Unix time, UTC); `dep` / `arr`
+  are the flight's actual off-block and arrival times (they match the flight
+  list exactly); `fl`: flight level (100 ft); `hdg`: course to the next point
+  (degrees from true north).
+- `op`: ICAO operator code (`ZZZ` = anonymised by EUROCONTROL, ~19% of
+  passenger flights); `type`: ICAO aircraft type; `seg`: STATFOR market segment
+  (Mainline, Lowcost, Regional Aircraft, Charter = passenger flights, used by
+  the real connections; All-Cargo, Business Aviation, ... are not).
+- A whole day with real tracks (Fri 29 Aug 2025, all with a track): ~18 MB.

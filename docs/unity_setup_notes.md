@@ -168,6 +168,14 @@ button is disabled (Console: a warning, not an error).
   Link the shader is found by name).
 - Tune: `mapAircraftSize` (3.8 cm), `aircraftSize` (3D, 11 cm), `mapCruiseHeight`
   (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
+- Real connections (TASKS B7, `ConnectionFinder` + `ConnectionSearch`): while the
+  Live flights panel is open, the route gesture shows actual flights of that
+  day. Fields on `ConnectionFinder`: `minConnectionMinutes` (45),
+  `maxWaitHours` (6), `maxFlights` (3), `sameAirlineOnly` (also a checkbox on
+  the card). Needs `seg` (market segment) in `flights_ectrl.json`: rebuild it
+  with the current `build_flight_sim.py` (an older file works, but cargo and
+  business flights are then used too). `FlightSimulator.itineraryPathScale`
+  (1.6) thickens the connection's path lines.
 - Flight phase colours: `colorByPhase`, `climbColor`, `descendColor` (cruising =
   `aircraftColor`), `levelChangeFtPerMin` (300). Selected aircraft: `pickAngle`
   (2.5°; a near aircraft is hit anywhere on its visible size), `selectedColor`, `selectedScale`, `pathWidth` (4 mm), optional `pathMaterial`

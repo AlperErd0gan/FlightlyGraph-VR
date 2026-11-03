@@ -108,6 +108,12 @@ public class GraphInfoPanel : MonoBehaviour
     private float nextRefresh;
     // The card shown is an aircraft's (placed level, higher: flightCardDownOffset).
     private bool aircraftCard;
+    // One line that changes while shown (a real connection's "Now ..."), updated in place, not rebuilt.
+    private TextMeshProUGUI liveLine;
+    private System.Func<string> liveSource;
+    private float nextLive;
+    // A card button's action, run next frame: it rebuilds the card, which would destroy the button mid-click.
+    private System.Action pending;
     private float y; // layout cursor while building
 
     public bool IsShowing => canvas != null && canvas.gameObject.activeSelf;
@@ -154,9 +160,22 @@ public class GraphInfoPanel : MonoBehaviour
         UIKit.EnsureXREventSystem();
     }
 
+    private void Update()
+    {
+        if (pending == null) return;
+        System.Action action = pending;
+        pending = null;
+        action();
+    }
+
     private void LateUpdate()
     {
         if (!IsShowing || !ResolveViewer()) return;
+        if (liveLine != null && liveSource != null && Time.unscaledTime >= nextLive)
+        {
+            nextLive = Time.unscaledTime + 0.5f;
+            liveLine.text = liveSource();
+        }
         if (refreshEvery > 0f && Time.unscaledTime >= nextRefresh)
         {
             nextRefresh = Time.unscaledTime + refreshEvery;
@@ -338,6 +357,8 @@ public class GraphInfoPanel : MonoBehaviour
         // active object, and measuring the text needs it.
         canvas.gameObject.SetActive(true);
         for (int i = content.childCount - 1; i >= 0; i--) DestroyImmediate(content.GetChild(i).gameObject);
+        liveLine = null;
+        liveSource = null;
         y = Pad;
         build(Width - 2f * Pad);
         float height = y + Pad - 6f;
@@ -425,6 +446,120 @@ public class GraphInfoPanel : MonoBehaviour
         Lines(lines, w);
         Hint("Track points are a few minutes apart; the aircraft flies straight between them. ID " + f.id + " (anonymous).", w);
     }
+
+    /// <summary>
+    /// Card of a real connection (ConnectionFinder, TASKS B7): the shown option's flights with
+    /// times and changes, where it stands now, Earlier / Later / Watch and "Same airline only".
+    /// </summary>
+    public void ShowConnection(ConnectionFinder finder, FlightSimulator sim)
+    {
+        ConnectionFinder.RealConnection c = finder.Current;
+        if (c == null) return;
+        string key = "real:" + c.from.id + ">" + c.to.id + ":" + c.index + "/" + c.options.Count + (c.sameAirline ? ":same" : "");
+        GraphNode to = c.to;
+        Present(key, w => BuildConnection(finder, sim, c, w), () => to.transform.position + Vector3.up * to.transform.lossyScale.y * 0.5f, true);
+    }
+
+    private void BuildConnection(ConnectionFinder finder, FlightSimulator sim, ConnectionFinder.RealConnection c, float w)
+    {
+        string day = sim.UtcAt(0).ToString("ddd d MMM yyyy", Inv);
+        string rules = Num(finder.minConnectionMinutes) + " min - " + Num(finder.maxWaitHours) + " h at each change";
+        ConnectionSearch.Itinerary it = c.Current;
+        if (it != null)
+        {
+            var codes = new StringBuilder(c.from.ShortCode);
+            foreach (FlightData leg in it.legs) codes.Append("  >  ").Append(Code(leg.destination));
+            string subtitle = day + "  ·  option " + (c.index + 1) + " of " + c.options.Count;
+            if (c.noneAfterNow) subtitle += "  ·  none left after " + sim.UtcAt(sim.SimTime).ToString("HH:mm", Inv) + ", last shown";
+            Header("REAL CONNECTION", codes.ToString(), subtitle, w);
+
+            Tiles(new List<(string, string, Color)>
+            {
+                (Duration((it.Arrival - it.Departure) / 60f), TimeLabel(sim, it.Departure) + " - " + TimeLabel(sim, it.Arrival) + " UTC", UIKit.TextColor),
+                (it.Transfers == 0 ? "Direct" : it.Transfers + (it.Transfers == 1 ? " change" : " changes"),
+                 it.Transfers == 0 ? "one flight" : it.legs.Count + " flights", it.Transfers == 0 ? UIKit.GoodColor : UIKit.HighlightColor),
+                (it.Transfers == 0 ? "-" : Duration(it.WaitSec / 60f), "waiting", UIKit.TextColor),
+            }, w);
+
+            var rows = new List<(string, string)>();
+            for (int i = 0; i < it.legs.Count; i++)
+            {
+                FlightData leg = it.legs[i];
+                if (i > 0)
+                {
+                    rows.Add(("<color=#" + ColorUtility.ToHtmlStringRGB(UIKit.MutedTextColor) + ">   change at " + Code(leg.origin) + "</color>",
+                              Duration((leg.dep - it.legs[i - 1].arr) / 60f)));
+                }
+                rows.Add(("<b>" + Code(leg.origin) + "</b> " + TimeLabel(sim, leg.dep) + "  >  <b>" + Code(leg.destination) + "</b> " +
+                          TimeLabel(sim, leg.arr) + "   " + OperatorShort(leg.op), Duration((leg.arr - leg.dep) / 60f)));
+            }
+            List("Flights (UTC)", rows, w);
+            LiveLine(() => ConnectionStatus(sim, it), w);
+        }
+        else
+        {
+            Header("REAL CONNECTION", c.from.ShortCode + "  >  " + c.to.ShortCode, day, w);
+            var lines = new List<string>
+            {
+                "<b>No connection this day</b> with " + rules + (c.sameAirline ? " on one airline" : "") + ".",
+            };
+            if (c.networkRoute.Count > 2)
+            {
+                var via = new StringBuilder();
+                for (int i = 1; i < c.networkRoute.Count - 1; i++) via.Append(i > 1 ? ", " : "").Append(c.networkRoute[i].ShortCode);
+                lines.Add("The network (all months) has a route via <b>" + via + "</b>: its flights do not line up this day.");
+            }
+            if (c.sameAirline) lines.Add("Untick <b>Same airline only</b> to allow changing airlines.");
+            Lines(lines, w);
+        }
+
+        ButtonRow(new List<(string, UIIcon.Shape, System.Action, bool)>
+        {
+            ("Earlier", UIIcon.Shape.Previous, finder.Earlier, it != null && c.index > 0),
+            ("Later", UIIcon.Shape.Next, finder.Later, it != null && c.index < c.options.Count - 1),
+            ("Watch", UIIcon.Shape.Play, finder.Watch, it != null),
+        }, w);
+        Checkbox("Same airline only", c.sameAirline, () => finder.SetSameAirline(!c.sameAirline), w);
+        Hint("Real flights of this day (actual off-block and arrival times, passenger flights only), " + rules +
+             ". Possible, not necessarily bookable" +
+             (c.sameAirline ? "; anonymised operators (about 1 in 5 flights) are left out." : "."), w);
+    }
+
+    // Where the shown connection stands at the panel's time.
+    private string ConnectionStatus(FlightSimulator sim, ConnectionSearch.Itinerary it)
+    {
+        float now = sim.SimTime;
+        string at = "Now " + sim.UtcAt(now).ToString("HH:mm", Inv) + ": ";
+        List<FlightData> legs = it.legs;
+        if (now < legs[0].dep) return at + "the first flight leaves in " + Duration((legs[0].dep - now) / 60f);
+        for (int i = 0; i < legs.Count; i++)
+        {
+            FlightData leg = legs[i];
+            if (now >= leg.dep && now <= leg.arr)
+            {
+                string state = sim.TryGetState(leg.id, out FlightSimulator.FlightState s) && s.airborne
+                    ? "in the air at FL" + Mathf.RoundToInt(s.flightLevel).ToString("000", Inv)
+                    : now - leg.dep < (leg.arr - leg.dep) / 2 ? "taxiing out" : "landed, taxiing in";
+                return at + (legs.Count > 1 ? "flight " + (i + 1) + " of " + legs.Count + ", " : "") + state;
+            }
+            if (i + 1 < legs.Count && now > leg.arr && now < legs[i + 1].dep)
+            {
+                return at + "changing at " + Code(leg.destination) + ", next flight in " + Duration((legs[i + 1].dep - now) / 60f);
+            }
+        }
+        return at + "arrived at " + TimeLabel(sim, it.Arrival);
+    }
+
+    private string Code(string airport) => airport != null && graph.Nodes.TryGetValue(airport, out GraphNode n) ? n.ShortCode : airport;
+
+    // "14:20", or "00:40 +1" for the next day.
+    private static string TimeLabel(FlightSimulator sim, float seconds)
+    {
+        return sim.UtcAt(seconds).ToString("HH:mm", Inv) + (seconds >= 86400f ? " +1" : "");
+    }
+
+    private static string OperatorShort(string op) =>
+        string.IsNullOrEmpty(op) ? "" : op == ConnectionSearch.HiddenOperator ? "<i>op. hidden</i>" : op;
 
     // ICAO operator code; "ZZZ" means anonymised in the EUROCONTROL data.
     private static string Operator(string op)
@@ -627,6 +762,56 @@ public class GraphInfoPanel : MonoBehaviour
             y += 26f;
         }
         y += 8f;
+    }
+
+    // Buttons side by side; disabled ones are drawn but do nothing.
+    private void ButtonRow(List<(string label, UIIcon.Shape icon, System.Action action, bool enabled)> buttons, float w)
+    {
+        const float gap = 10f;
+        const float h = 46f;
+        float bw = (w - gap * (buttons.Count - 1)) / buttons.Count;
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            System.Action action = buttons[i].action;
+            Button b = UIKit.Button(content, buttons[i].label, () => pending = action, Pad + i * (bw + gap), y, bw, h,
+                                    UIKit.ButtonStyle.Secondary, 17f, buttons[i].icon);
+            b.interactable = buttons[i].enabled;
+        }
+        y += h + 10f;
+    }
+
+    // A checkbox: a box (ticked when on) and its label, the whole row clickable.
+    private void Checkbox(string label, bool on, System.Action toggle, float w)
+    {
+        const float h = 40f;
+        Button b = UIKit.Button(content, label, () => pending = toggle, Pad, y, w, h, UIKit.ButtonStyle.Ghost, 17f);
+        TextMeshProUGUI text = b.GetComponentInChildren<TextMeshProUGUI>();
+        text.alignment = TextAlignmentOptions.Left;
+        text.margin = new Vector4(44f, 0f, 8f, 0f);
+        Image box = UIKit.Box(b.transform, "Box", on ? UIKit.AccentColor : new Color(1f, 1f, 1f, 0.12f), 5f);
+        UIKit.Place(box.rectTransform, 10f, (h - 24f) / 2f, 24f, 24f);
+        box.raycastTarget = false;
+        if (on)
+        {
+            RectTransform tick = UIKit.NewRect("Tick", box.transform);
+            UIKit.Stretch(tick, 3f);
+            UIIcon icon = tick.gameObject.AddComponent<UIIcon>();
+            icon.shape = UIIcon.Shape.Check;
+            icon.color = new Color(0.03f, 0.08f, 0.13f, 1f);
+            icon.raycastTarget = false;
+        }
+        y += h + 8f;
+    }
+
+    // One line that LateUpdate refreshes in place from `source`.
+    private void LiveLine(System.Func<string> source, float w)
+    {
+        liveSource = source;
+        liveLine = UIKit.Text(content, source(), 15f, UIKit.HighlightColor, Pad, y, w, 22f);
+        liveLine.textWrappingMode = TextWrappingModes.NoWrap;
+        liveLine.overflowMode = TextOverflowModes.Ellipsis;
+        nextLive = Time.unscaledTime + 0.5f;
+        y += 30f;
     }
 
     private void Hint(string text, float w)

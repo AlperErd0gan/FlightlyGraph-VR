@@ -40,6 +40,7 @@ public static class ControlsHelp
         R("Close the info card", "X on the card", "same", "X / Esc"),
         R("Graph search (BFS / DFS)", "bar under an airport's card", "same", "click"),
         R("Aircraft details (live flights)", "point + trigger on it", "point + pinch", "click"),
+        R("Real connection (live flights)", "route to a 2nd airport", "same", "Shift + click"),
     };
 
     /// <summary>Voice assistant: hold Y (N in the Editor), say it, release. Shown on the Controls page's Voice tab.</summary>
@@ -47,7 +48,7 @@ public static class ControlsHelp
     {
         ("\"help\"", "lists what you can say"),
         ("\"show Istanbul\" · \"find FRA\" · \"London\"", "selects the airport, turns you to it"),
-        ("\"route from London to Ankara\"", "fewest-stops route"),
+        ("\"route from London to Ankara\"", "fewest stops; real flights with Live flights"),
         ("\"describe\" · \"what is this\"", "tells about the selection"),
         ("\"clear\" · \"close\"", "clears the selection"),
         ("\"regional view\" · \"top routes\"", "view mode"),

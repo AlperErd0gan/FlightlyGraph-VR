@@ -104,7 +104,9 @@ public class RouteDraw : MonoBehaviour
         }
         Color color = hidden[0].color;
         color.a = 1f;
-        float width = Mathf.Max(minWidth, hidden[0].width * widthScale);
+        // A layout draws routes thinner (the map: GeoMapView.edgeWidthScale); the line follows, or it is a band on the map.
+        float layoutScale = graph.Layout != null ? graph.Layout.EdgeWidthScale : 1f;
+        float width = Mathf.Max(minWidth, hidden[0].width * widthScale) * layoutScale;
 
         float nodeSize = nodes[0].transform.lossyScale.x;
         Transform head = MakeSphere("RouteDraw Light", Color.white, out Material headMaterial).transform;

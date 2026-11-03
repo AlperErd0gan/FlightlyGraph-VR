@@ -32,6 +32,8 @@ public class FlightData
     public string op;
     /// <summary>ICAO aircraft type, may be null.</summary>
     public string type;
+    /// <summary>STATFOR market segment (Mainline, Lowcost, Regional Aircraft, Charter, All-Cargo, ...); null in older files.</summary>
+    public string seg;
     /// <summary>"actual" (EUROCONTROL point profile) or "greatCircle" (approximate route, real times).</summary>
     public string path;
     public int dep;

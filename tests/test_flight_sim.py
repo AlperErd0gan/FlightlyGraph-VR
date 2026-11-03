@@ -87,6 +87,7 @@ def test_actual_profile(setup):
     _, flights = run(setup, "all.json")
     f = flights["1"]
     assert f["path"] == "actual" and (f["from"], f["to"]) == ("AAAA", "BBBB")
+    assert (f["op"], f["type"], f["seg"]) == ("THY", "A320", "Mainline")
     assert f["t"] == [1800, 2400, 3600, 6600, 7200]
     assert (f["dep"], f["arr"]) == (1800, 7200)
     assert f["lon"] == [20.0, 20.0, 25.0, 30.0, 30.0]
