@@ -78,6 +78,7 @@ public class RouteDraw : MonoBehaviour
     private void OnPath(IReadOnlyList<GraphNode> nodes, IReadOnlyList<GraphEdge> edges)
     {
         Cancel();
+        if (Comfort.ReduceMotion) return; // the selector's highlight shows the route, without the travelling light
         if (nodes == null || edges == null || edges.Count == 0 || nodes.Count != edges.Count + 1) return;
         running = StartCoroutine(Play(new List<GraphNode>(nodes), new List<GraphEdge>(edges)));
     }

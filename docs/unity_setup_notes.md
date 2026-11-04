@@ -41,6 +41,17 @@ intentionally not created by this repo until a Unity project exists there.
    `nodes.json` / `edges.json`.
 3. Press Play. Console should log `GraphLoader: loaded N nodes, M edges`.
 
+Controller vibration (`ControllerHaptics`, in code) goes through each
+controller's `HapticImpulsePlayer`, which the XRI Starter Assets rig
+(XR Origin (XR Rig)) already has. That rig's Near-Far interactors also carry
+`SimpleHapticFeedback`, which pulses on hover (0.25 for 0.1 s) and select
+(0.5 for 0.1 s) of XR interactables, so the airports vibrate without our code;
+our code adds the pulses it does not cover (UI buttons, aircraft, routes, a
+found connection) and fills in the airport select pulse only when the rig has
+none. Hand tracking has no vibration. Error messages of the route gestures use
+`VoiceAssistant.ShowCaption`: without a `VoiceAssistant` in the scene they only
+reach the Console.
+
 ## 4. Not yet wired
 
 `GraphLoader.SetEdgeWeightThreshold(float)` exists but has no UI (future task).
@@ -103,6 +114,18 @@ No scene change: the dashboard adds `GeoMapView` like the timeline. It needs
 (public domain map data) and copied by `scripts/sync_streaming_assets.sh`.
 Without them the map view is unavailable and nothing else changes (Console:
 "GeoMapView: 'geomap.json' not found").
+
+Switching (map ↔ 3D, flat ↔ dome) moves the airports on critically damped springs:
+`springSmoothTime` (0.3 s, they settle in about 1.2 s) replaced the old fixed
+`transitionSeconds`; a value saved in a scene under the old name is ignored.
+Pressing again mid-way turns them around; the dome switch takes a reversal too.
+
+Panels (dashboard, Live flights, timeline, info card) add a `PanelTransition`
+to their canvas at runtime: they grow from 96% and fade in from where they were
+called, and leave the same way (`smoothTime` 0.06 s, `startScale`,
+`maxSourceOffset` 8 cm). Their children are moved under a "Body" rect on first
+use. `Comfort.ReduceMotion` (dashboard → Controls → Reduce motion) is kept in
+PlayerPrefs (`FlightlyVR.ReduceMotion`).
 
 - Rebuild the map (only if the airports change): `python scripts/build_geomap.py`
   (downloads Natural Earth once).

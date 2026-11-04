@@ -59,7 +59,11 @@ public class TimelinePanel : MonoBehaviour
     private bool following;
     private InputAction toggleKey;
 
-    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
+    /// <summary>Open as far as the user is concerned: false as soon as it starts fading out.</summary>
+    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf && (panelTransition == null || panelTransition.Shown);
+
+    private PanelTransition panelTransition;
+    private PanelTransition Transition => panelTransition != null ? panelTransition : panelTransition = PanelTransition.On(canvas);
     public bool IsPlaying => playing;
     /// <summary>Months per second (speeds may be edited at runtime, so the index is clamped).</summary>
     private float CurrentSpeed => speeds != null && speeds.Length > 0 ? speeds[Mathf.Clamp(speedIndex, 0, speeds.Length - 1)] : 1f;
@@ -187,7 +191,7 @@ public class TimelinePanel : MonoBehaviour
             Place(cam.transform);
         }
         following = false;
-        canvas.gameObject.SetActive(true);
+        Transition.Show(PanelTransition.CalledFrom()); // from the dashboard button that opened it
         UISounds.Play(UISounds.Open, canvas.transform.position);
         if (!graph.HasPeriod) graph.SetPeriod(Mathf.Clamp(openAtPeriod, 0, graph.PeriodCount - 1));
         SyncFromGraph();
@@ -199,7 +203,7 @@ public class TimelinePanel : MonoBehaviour
         if (canvas == null || !IsOpen) return;
         SetPlaying(false);
         UISounds.Play(UISounds.Close, canvas.transform.position);
-        canvas.gameObject.SetActive(false);
+        Transition.Hide();
         graph.SetPeriod(-1);
     }
 

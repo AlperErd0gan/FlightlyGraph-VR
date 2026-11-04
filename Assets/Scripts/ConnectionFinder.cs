@@ -17,6 +17,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 /// panel's time; Earlier / Later step through the day's options, Watch plays it, and
 /// "Same airline only" keeps to one operator. No connection that day: the network's
 /// route is shown with a note.
+/// What goes wrong (nothing selected, no airport pointed at, no route) is said on the voice
+/// assistant's caption, not only in the Console; a found connection pulses the controller.
 /// </summary>
 public class ConnectionFinder : MonoBehaviour
 {
@@ -56,6 +58,7 @@ public class ConnectionFinder : MonoBehaviour
     public RealConnection Current { get; private set; }
 
     private ConnectionSearch search;
+    private VoiceAssistant voice;
     private IReadOnlyList<FlightData> searchedFlights;
 
     private InputAction rightButton;
@@ -124,44 +127,69 @@ public class ConnectionFinder : MonoBehaviour
         GraphNode from = selector.SelectedNode;
         if (from == null)
         {
-            Debug.Log("ConnectionFinder: select a node first (grip / pinch), then point at another and press A / X.");
+            Notice("Select an airport first, then point at a second one and press <b>A</b> / <b>X</b>.");
             return;
         }
-        GraphNode to = HoveredNode(hand);
-        if (to == null || to == from) return;
-        Connect(from, to);
+        GraphNode to = HoveredNode(hand, out NearFarInteractor by);
+        if (to == null || to == from)
+        {
+            Notice("Point at a second airport, then press <b>A</b> / <b>X</b>.");
+            return;
+        }
+        if (ShowConnection(from, to)) ControllerHaptics.Pulse(by, ControllerHaptics.FoundAmplitude, ControllerHaptics.FoundSeconds);
+    }
+
+    /// <summary>Tells the user on the voice assistant's caption (the Console too); only the Console when the scene has no assistant.</summary>
+    private void Notice(string text)
+    {
+        Debug.Log("ConnectionFinder: " + text);
+        if (voice == null) voice = FindFirstObjectByType<VoiceAssistant>();
+        if (voice != null) voice.ShowCaption(text, 4f);
     }
 
     /// <summary>Node currently hovered by that hand's Near-Far interactor, or null.</summary>
-    private GraphNode HoveredNode(InteractorHandedness hand)
+    private GraphNode HoveredNode(InteractorHandedness hand, out NearFarInteractor by)
     {
+        by = null;
         foreach (NearFarInteractor interactor in interactors)
         {
             if (interactor == null || !interactor.isActiveAndEnabled || interactor.handedness != hand) continue;
             foreach (IXRHoverInteractable hovered in interactor.interactablesHovered)
             {
                 GraphNode node = hovered.transform.GetComponent<GraphNode>();
-                if (node != null) return node;
+                if (node != null)
+                {
+                    by = interactor;
+                    return node;
+                }
             }
         }
         return null;
     }
 
-    public void Connect(GraphNode from, GraphNode to)
+    public void Connect(GraphNode from, GraphNode to) => ShowConnection(from, to);
+
+    /// <summary>
+    /// Connect, telling whether a connection is shown: true for a route, or a real connection
+    /// of the day while the live flights are open; false when there is none (said on the caption,
+    /// or on the real connection card).
+    /// </summary>
+    public bool ShowConnection(GraphNode from, GraphNode to)
     {
         if (LiveFlightsShown)
         {
             ShowRealConnection(from, to);
-            return;
+            return Current != null && Current.Current != null;
         }
         var nodes = new List<GraphNode>();
         var edges = new List<GraphEdge>();
         if (!FindPath(from, to, nodes, edges))
         {
-            Debug.LogWarning($"ConnectionFinder: no route between '{from.label}' and '{to.label}' in this graph.");
-            return;
+            Notice($"No route between {from.ShortCode} and {to.ShortCode} in this graph.");
+            return false;
         }
         selector.SelectPath(nodes, edges);
+        return true;
     }
 
     // ---- Real connections (TASKS B7) --------------------------------------------

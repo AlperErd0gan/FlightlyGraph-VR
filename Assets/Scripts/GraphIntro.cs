@@ -57,6 +57,12 @@ public class GraphIntro : MonoBehaviour
         phaseStart = Time.time;
         graph.SetEdgeFade(0f);
         Apply(0f);
+        if (Comfort.ReduceMotion)
+        {
+            // No unfolding: the graph is there at once, only the routes fade in.
+            Apply(1f);
+            phase = Phase.Routes;
+        }
         UISounds.Play(UISounds.Open, graph.transform.position);
     }
 

@@ -68,7 +68,8 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   `EdgeWidthScale`); edges stay `minEdgeHeight` above the real floor (largest teleport
   area collider, `FloorY`).
 - `GeoMapView` (+ `GeoMapProjection`): map layout of Europe; `maxNodeDiameter` caps node
-  size on the map.
+  size on the map. Map ↔ 3D and flat ↔ dome move the airports on springs (`springSmoothTime`,
+  reversible mid-way).
 - `DataDashboard`: the menu; at runtime it adds `TimelinePanel`, `CityClusters`,
   `GraphRecenter`, `GeoMapView`, `FlightPanel` when the scene has none.
 - Live flights: `FlightPanel` (panel; dashboard, P, voice) drives `FlightSimulator`
@@ -88,7 +89,10 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   eggs, public `RunCommand` / `FindAirport` / `ShowCaption`), `NodeNarrator`,
   `GuidedTour`, `GeminiLiveAssistant` (realtime voice, tools call
   `VoiceAssistant.RunCommand`; `commandsOnly`, `englishOnly`). `MicTest` is a debug tool.
-- UI: `UI/UIKit` (shared look), `UIIcon`, `UISounds`, `ControlsHelp`, `UIChart`.
+- UI: `UI/UIKit` (shared look; buttons click and pulse on press, act on release), `UIIcon`,
+  `UISounds`, `ControllerHaptics` (controller pulses the rig's `SimpleHapticFeedback` does not
+  cover), `PanelTransition` (panels grow / fade in from their source and leave the same way),
+  `Comfort` (Reduce motion), `ControlsHelp`, `UIChart`.
 
 ## Docs
 

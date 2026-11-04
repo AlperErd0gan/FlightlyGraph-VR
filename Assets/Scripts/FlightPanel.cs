@@ -61,7 +61,11 @@ public class FlightPanel : MonoBehaviour
     private InputAction fasterKey;
     private InputAction slowerKey;
 
-    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
+    /// <summary>Open as far as the user is concerned: false as soon as it starts fading out.</summary>
+    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf && (panelTransition == null || panelTransition.Shown);
+
+    private PanelTransition panelTransition;
+    private PanelTransition Transition => panelTransition != null ? panelTransition : panelTransition = PanelTransition.On(canvas);
     /// <summary>Flights loaded and the panel built (one frame after the simulator is ready), so Open works.</summary>
     public bool Available => canvas != null && simulator != null && simulator.IsReady && simulator.FlightCount > 0;
 
@@ -186,7 +190,7 @@ public class FlightPanel : MonoBehaviour
             Place(cam.transform);
         }
         following = false;
-        canvas.gameObject.SetActive(true);
+        Transition.Show(PanelTransition.CalledFrom()); // from the dashboard button that opened it
         UISounds.Play(UISounds.Open, canvas.transform.position);
 
         periodBefore = graph.HasPeriod ? graph.Period : -1;
@@ -207,7 +211,7 @@ public class FlightPanel : MonoBehaviour
         graph.SetEdgeDimming(1f);
         if (graph.HasTimeAxis) graph.SetPeriod(periodBefore);
         UISounds.Play(UISounds.Close, canvas.transform.position);
-        canvas.gameObject.SetActive(false);
+        Transition.Hide();
     }
 
     public void SetPlaying(bool value)
@@ -300,12 +304,12 @@ public class FlightPanel : MonoBehaviour
         {
             Image chip = UIKit.Box(root, "Legend " + (FlightSimulator.Phase)p, simulator.PhaseColor((FlightSimulator.Phase)p), 4f);
             UIKit.Place(chip.rectTransform, lx, ly + 5f, 14f, 14f);
-            legendTexts[p] = UIKit.Text(root, "", 15f, UIKit.MutedTextColor, lx + 20f, ly, 180f, 24f, TextAlignmentOptions.Left);
+            legendTexts[p] = UIKit.Text(root, "", 16f, UIKit.MutedTextColor, lx + 20f, ly, 180f, 24f, TextAlignmentOptions.Left);
             legendItems[2 * p] = chip.gameObject;
             legendItems[2 * p + 1] = legendTexts[p].gameObject;
             lx += 196f;
         }
-        UIKit.Text(root, "Trigger on an aircraft: its details", 15f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
+        UIKit.Text(root, "Trigger on an aircraft: its details", 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
                    TextAlignmentOptions.Right);
         Refresh();
     }

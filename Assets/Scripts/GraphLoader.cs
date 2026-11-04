@@ -642,6 +642,9 @@ public class GraphLoader : MonoBehaviour
         LayoutChanged?.Invoke();
     }
 
+    /// <summary>The current route fade (SetEdgeFade).</summary>
+    public float EdgeFade => edgeFade;
+
     /// <summary>Fades every route (1 = as styled, 0 = invisible), e.g. while airports move.</summary>
     public void SetEdgeFade(float fade)
     {

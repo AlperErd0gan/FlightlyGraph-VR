@@ -150,6 +150,7 @@ public class GraphSelector : MonoBehaviour
                     ConnectionRequested(selectedNode, node);
                     return;
                 }
+                UISounds.Play(UISounds.Click, node.transform.position); // as with the trigger (XRGraphInput)
                 SelectNode(node);
                 return;
             }
@@ -159,6 +160,7 @@ public class GraphSelector : MonoBehaviour
         GraphEdge edge = PickEdge(screenPos);
         if (edge != null)
         {
+            UISounds.Play(UISounds.Click, edge.Midpoint);
             SelectEdge(edge);
         }
         else
