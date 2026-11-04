@@ -15,6 +15,9 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 ///   nothing is first offered to GraphSelector.RayClicked (aircraft of the live
 ///   flights), then tested against the edge arcs (GraphSelector.PickEdgeAlongRay);
 ///   a miss clears the selection. Holding on empty space is left to HandTeleport.
+/// - feedback: pressing an airport clicks at once (the rig's SimpleHapticFeedback vibrates
+///   on select; ControllerHaptics fills in when the rig has none); a picked aircraft or route
+///   clicks and pulses, and a found connection gives a firmer pulse.
 /// </summary>
 public class XRGraphInput : MonoBehaviour
 {
@@ -95,8 +98,9 @@ public class XRGraphInput : MonoBehaviour
 
     private void UpdateHolds()
     {
-        foreach (PendingHold hold in holds.Values)
+        foreach (KeyValuePair<IXRSelectInteractor, PendingHold> pair in holds)
         {
+            PendingHold hold = pair.Value;
             if (hold.connected) continue;
             float progress = Mathf.Clamp01((Time.time - hold.startTime) / connectHoldSeconds);
             hold.node.transform.localScale = hold.baseScale * (1f + holdGrow * progress);
@@ -105,7 +109,10 @@ public class XRGraphInput : MonoBehaviour
                 hold.connected = true;
                 hold.node.transform.localScale = hold.baseScale;
                 GraphNode from = selector.SelectedNode;
-                if (from != null && from != hold.node) connectionFinder.Connect(from, hold.node);
+                if (from != null && from != hold.node && connectionFinder.ShowConnection(from, hold.node))
+                {
+                    ControllerHaptics.Pulse(pair.Key as Component, ControllerHaptics.FoundAmplitude, ControllerHaptics.FoundSeconds);
+                }
             }
         }
     }
@@ -132,11 +139,17 @@ public class XRGraphInput : MonoBehaviour
             Transform origin = interactor.curveOrigin;
             if (origin == null) continue;
             var ray = new Ray(origin.position, origin.forward);
-            if (selector.OfferRayClick(ray)) continue; // e.g. an aircraft of the live flights
+            if (selector.OfferRayClick(ray)) // e.g. an aircraft of the live flights (it plays its own click)
+            {
+                ControllerHaptics.Pulse(interactor, ControllerHaptics.TapAmplitude, ControllerHaptics.TapSeconds);
+                continue;
+            }
             GraphEdge edge = selector.PickEdgeAlongRay(ray, edgePickAngle);
             if (edge != null)
             {
                 selector.SelectEdge(edge);
+                UISounds.Play(UISounds.Click, edge.Midpoint);
+                ControllerHaptics.Pulse(interactor, ControllerHaptics.TapAmplitude, ControllerHaptics.TapSeconds);
             }
             else if (clearOnEmptySelect)
             {
@@ -165,6 +178,9 @@ public class XRGraphInput : MonoBehaviour
     private void OnNodeSelectEntered(GraphNode node, IXRSelectInteractor interactor)
     {
         if (GuidedTour.InputLocked) return; // the guided tour drives the selection
+        // The press is acknowledged at once, also when it may turn into a hold-to-connect.
+        UISounds.Play(UISounds.Click, node.transform.position);
+        ControllerHaptics.SelectPulse(interactor as Component);
         GraphNode selected = selector.SelectedNode;
         if (connectionFinder == null || selected == null || selected == node)
         {
