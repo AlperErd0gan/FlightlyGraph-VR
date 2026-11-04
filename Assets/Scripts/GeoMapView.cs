@@ -116,7 +116,10 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Header("Switch")]
     [Tooltip("Controller button that switches 3D layout <-> map (Input System path). Default: B. Empty = no controller button.")]
     public string toggleBinding = "<XRController>{RightHand}/{SecondaryButton}";
-    public float transitionSeconds = 1.2f;
+    [Tooltip("Spring smooth time (s) of the airports flying between the 3D layout, the map and the dome: critically damped, " +
+             "they settle in about four times this, and pressing again mid-way turns them around without stopping. " +
+             "Reduce motion (Comfort): they jump while the routes are faded out.")]
+    public float springSmoothTime = 0.3f;
     public bool startOnMap = false;
 
     /// <summary>True while (or after switching) to the map.</summary>
@@ -124,6 +127,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>The map file is loaded and the graph is ready.</summary>
     public bool Ready { get; private set; }
     public bool Switching => transition != null;
+    /// <summary>True while flat ↔ dome is switching (it can be turned around mid-way; map ↔ 3D waits for it).</summary>
+    public bool ChangingShape { get; private set; }
     /// <summary>True while the map is bent around the viewer (dome) instead of flat in front.</summary>
     public bool IsDome { get; private set; }
     /// <summary>
@@ -202,6 +207,10 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private Transform visual;
     private InputAction toggleAction;
     private Coroutine transition;
+    // Spring state, kept between switches so a second press bends the motion instead of stopping it.
+    private readonly Dictionary<GraphNode, Vector3> nodeVelocity = new Dictionary<GraphNode, Vector3>();
+    private float visualProgress; // the map's grow (0 = 60%, 1 = full size)
+    private float visualVelocity;
     private readonly List<Rect> nameBoxes = new List<Rect>();
     private float placedFloorY;
     private float placedGraphY;
@@ -291,38 +300,24 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         if (!Ready || (onMap == IsMap && transition == null)) return;
         IsMap = onMap;
         if (transition != null) StopCoroutine(transition);
+        ChangingShape = false;
         transition = StartCoroutine(Switch(onMap, instant));
     }
 
     private IEnumerator Switch(bool onMap, bool instant)
     {
-        float fade = instant ? 0f : 0.2f;
-        for (float t = 0f; t < fade; t += Time.deltaTime)
-        {
-            graph.SetEdgeFade(1f - t / fade);
-            yield return null;
-        }
-        graph.SetEdgeFade(0f);
+        // Reversed mid-way the routes are already gone: no wait, so the airports never pause.
+        if (graph.EdgeFade > 0f) yield return FadeRoutesOut(instant ? 0f : 0.2f);
 
         var nodes = new List<GraphNode>(graph.Nodes.Values);
-        var from = new Vector3[nodes.Count];
-        for (int i = 0; i < nodes.Count; i++) from[i] = nodes[i].transform.localPosition;
         if (onMap) ScaleCodes();
         graph.SetLayout(onMap ? this : null);
         var to = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) to[i] = cities != null ? cities.RestingPosition(nodes[i]) : graph.HomePosition(nodes[i]);
 
         if (onMap) visual.gameObject.SetActive(true);
-        float seconds = instant ? 0f : transitionSeconds;
-        for (float t = 0f; t < seconds; t += Time.deltaTime)
-        {
-            float s = Mathf.SmoothStep(0f, 1f, t / seconds);
-            for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = Vector3.LerpUnclamped(from[i], to[i], s);
-            // The map grows in as the airports arrive, and shrinks away as they leave.
-            visual.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, onMap ? s : 1f - s);
-            yield return null;
-        }
-        for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = to[i];
+        // The map grows in as the airports arrive, and shrinks away as they leave.
+        yield return SpringTo(nodes, to, onMap ? 1f : 0f, instant);
         visual.localScale = Vector3.one;
         if (!onMap) visual.gameObject.SetActive(false);
         // B / the dashboard / the tour always bring the flat map next time.
@@ -450,12 +445,15 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>Switches between the flat map and the dome (map shown: the airports fly over; else only the shape changes).</summary>
     public void SetDome(bool dome)
     {
-        if (!Ready || dome == IsDome || Switching) return;
+        if (!Ready || dome == IsDome) return;
+        if (Switching && !ChangingShape) return; // map <-> 3D under way: the dome waits for it
+        if (transition != null) StopCoroutine(transition); // flat <-> dome turned around mid-way
         transition = StartCoroutine(ChangeShape(dome));
     }
 
     private IEnumerator ChangeShape(bool dome)
     {
+        ChangingShape = true;
         if (dome)
         {
             // The dome is centred on the graph centre: stand there first. Recentring may move the
@@ -482,6 +480,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         }
         SetDomeShape(dome);
         if (IsMap) yield return MoveToShape();
+        ChangingShape = false;
         transition = null;
     }
 
@@ -570,20 +569,12 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     /// <summary>Map shown: the airports fly to their places on the new shape, routes fade out and in.</summary>
     private IEnumerator MoveToShape()
     {
-        graph.SetEdgeFade(0f);
+        if (graph.EdgeFade > 0f) yield return FadeRoutesOut(0.15f);
         var nodes = new List<GraphNode>(graph.Nodes.Values);
-        var from = new Vector3[nodes.Count];
-        for (int i = 0; i < nodes.Count; i++) from[i] = nodes[i].transform.localPosition;
         graph.SetLayout(this);
         var to = new Vector3[nodes.Count];
         for (int i = 0; i < nodes.Count; i++) to[i] = cities != null ? cities.RestingPosition(nodes[i]) : graph.HomePosition(nodes[i]);
-        for (float t = 0f; t < transitionSeconds; t += Time.deltaTime)
-        {
-            float s = Mathf.SmoothStep(0f, 1f, t / transitionSeconds);
-            for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = Vector3.LerpUnclamped(from[i], to[i], s);
-            yield return null;
-        }
-        for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = to[i];
+        yield return SpringTo(nodes, to, 1f, false);
         graph.RebuildEdges(graph.Edges);
         for (float t = 0f; t < 0.35f; t += Time.deltaTime)
         {
@@ -592,6 +583,56 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         }
         graph.SetEdgeFade(1f);
         Moved?.Invoke();
+    }
+
+    /// <summary>Fades the routes out from however visible they are now (a switch may interrupt another one).</summary>
+    private IEnumerator FadeRoutesOut(float seconds)
+    {
+        float start = graph.EdgeFade;
+        for (float t = 0f; t < seconds && start > 0f; t += Time.deltaTime)
+        {
+            graph.SetEdgeFade(start * (1f - t / seconds));
+            yield return null;
+        }
+        graph.SetEdgeFade(0f);
+    }
+
+    /// <summary>
+    /// Moves the airports to `to` on critically damped springs (Vector3.SmoothDamp) and the map's
+    /// grow to `visualTarget` the same way. Each airport keeps its velocity between calls, so a
+    /// second press turns it around smoothly instead of stopping it dead. Instant, or Reduce motion
+    /// (the routes are faded out meanwhile): they jump.
+    /// </summary>
+    private IEnumerator SpringTo(List<GraphNode> nodes, Vector3[] to, float visualTarget, bool instant)
+    {
+        if (!instant && !Comfort.ReduceMotion)
+        {
+            float giveUp = Time.time + 4f;
+            while (Time.time < giveUp)
+            {
+                float dt = Time.deltaTime;
+                float worstGap = 0f;
+                float worstSpeed = 0f;
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    Transform t = nodes[i].transform;
+                    nodeVelocity.TryGetValue(nodes[i], out Vector3 v);
+                    t.localPosition = Vector3.SmoothDamp(t.localPosition, to[i], ref v, springSmoothTime, Mathf.Infinity, dt);
+                    nodeVelocity[nodes[i]] = v;
+                    worstGap = Mathf.Max(worstGap, (to[i] - t.localPosition).sqrMagnitude);
+                    worstSpeed = Mathf.Max(worstSpeed, v.sqrMagnitude);
+                }
+                visualProgress = Mathf.SmoothDamp(visualProgress, visualTarget, ref visualVelocity, springSmoothTime, Mathf.Infinity, dt);
+                visual.localScale = Vector3.one * Mathf.LerpUnclamped(0.6f, 1f, visualProgress);
+                if (worstGap < 0.002f * 0.002f && worstSpeed < 0.01f * 0.01f && Mathf.Abs(visualProgress - visualTarget) < 0.002f) break;
+                yield return null;
+            }
+        }
+        for (int i = 0; i < nodes.Count; i++) nodes[i].transform.localPosition = to[i];
+        nodeVelocity.Clear();
+        visualProgress = visualTarget;
+        visualVelocity = 0f;
+        visual.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, visualProgress);
     }
 
     private float BandMiddle => map.radiusDeg + MetersToDegrees((bandGap + bandWidth * 0.5f) * ViewScale);

@@ -59,7 +59,8 @@ public class DomeToggle : MonoBehaviour
 
     private void Toggle()
     {
-        if (map != null && map.Ready && map.IsMap && !map.Switching) map.SetDome(!map.IsDome);
+        // Also mid-way through flat <-> dome: it turns around; map <-> 3D has to finish first.
+        if (map != null && map.Ready && map.IsMap && (!map.Switching || map.ChangingShape)) map.SetDome(!map.IsDome);
     }
 
     private void LateUpdate()
