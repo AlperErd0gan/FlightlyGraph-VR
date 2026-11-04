@@ -730,11 +730,23 @@ public class StartPanel : MonoBehaviour
 
     private void BuildWrist()
     {
+        // Home + Menu (the dashboard). Menu also works with hands and when the system takes the
+        // left menu button (some Link / headset setups open their own menu on it).
         const float size = 120f; // canvas units; scaled to wristButtonSize below
-        wrist = UIKit.WorldCanvas("Start Panel Wrist Home", new Vector2(size, size));
+        const float gap = 12f;
+        wrist = UIKit.WorldCanvas("Start Panel Wrist Home", new Vector2(size * 2f + gap, size));
         wrist.transform.localScale = Vector3.one * (wristButtonSize / size);
         UIKit.Button(wrist.transform, "Home", Open, 0f, 0f, size, size, UIKit.ButtonStyle.Primary, 26f);
+        UIKit.Button(wrist.transform, "Menu", ToggleDashboard, size + gap, 0f, size, size, UIKit.ButtonStyle.Secondary, 26f);
         wrist.gameObject.SetActive(false);
+    }
+
+    private void ToggleDashboard()
+    {
+        if (dashboard == null) dashboard = FindFirstObjectByType<DataDashboard>();
+        if (dashboard == null) return;
+        if (dashboard.IsOpen) dashboard.Close();
+        else dashboard.Open();
     }
 
     private void UpdateWrist()

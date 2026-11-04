@@ -24,7 +24,7 @@ public static class ControlsHelp
         R("Clear the selection", "trigger on empty space", "pinch on empty space", "Esc"),
         R("Teleport", "hold trigger on floor, release", "hold pinch on floor", "-"),
         Section("Views"),
-        R("Dashboard", "left menu button", "-", "F1"),
+        R("Dashboard", "left menu button / wrist Menu", "wrist Menu", "F1"),
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),

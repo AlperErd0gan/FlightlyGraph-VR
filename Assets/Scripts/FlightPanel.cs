@@ -11,7 +11,7 @@ using UnityEngine.UI;
 /// the timeline. Play / pause, ±15 minutes, the simulated UTC time and date with the
 /// aircraft in the air, playback speed and close; below, the aircraft in the air over
 /// the whole window with a time slider on top. While it is open the aircraft are drawn,
-/// the routes are dimmed behind them and the graph shows the simulated day's month
+/// the route arcs are hidden (routeDimming 0; only real paths show) and the graph shows the simulated day's month
 /// (sizes and routes of that month); closing restores both.
 /// A legend under the chart gives the aircraft colours (climbing / cruising / descending)
 /// with how many are in each phase now; pointing at an aircraft and pulling the trigger
@@ -26,8 +26,8 @@ public class FlightPanel : MonoBehaviour
     [Tooltip("Closed when the flight panel opens (both sit below eye level). Found in the scene if unset.")]
     public TimelinePanel timeline;
 
-    [Tooltip("Route brightness while the panel is open (0 = hidden, 1 = normal), so the aircraft stand out.")]
-    [Range(0f, 1f)] public float routeDimming = 0.35f;
+    [Tooltip("Route brightness while the panel is open (0 = hidden, 1 = normal). 0: only the aircraft and their real paths show, no route arcs behind them.")]
+    [Range(0f, 1f)] public float routeDimming = 0f;
     [Tooltip("Seconds jumped by the previous / next buttons.")]
     public float stepSeconds = 900f;
 
