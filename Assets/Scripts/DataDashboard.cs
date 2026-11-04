@@ -516,6 +516,16 @@ public class DataDashboard : MonoBehaviour
             UIKit.Button(content, "Go to graph centre", recenter.Recenter, 0f, y, 250f, 44f,
                          UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Recenter);
         }
+        if (!controlsVoice)
+        {
+            // Comfort: jumps and fades instead of large movement (map / dome switches, intro, route light, panels).
+            bool reduce = Comfort.ReduceMotion;
+            float bw = Mathf.Min(220f, W - 280f - 262f - 12f);
+            UIKit.Button(content, reduce ? "Reduce motion: On" : "Reduce motion: Off",
+                         () => { Comfort.ReduceMotion = !Comfort.ReduceMotion; Show(Tab.Controls); }, 262f, y, bw, 44f,
+                         reduce ? UIKit.ButtonStyle.Primary : UIKit.ButtonStyle.Secondary, UIKit.SmallSize,
+                         reduce ? UIIcon.Shape.Check : UIIcon.Shape.None);
+        }
         Toggles(new List<string> { "Buttons", "Voice" }, W - 280f, y, 280f, 44f,
                 i => (controlsVoice == (i == 1), () => { controlsVoice = i == 1; Show(Tab.Controls); }));
     }

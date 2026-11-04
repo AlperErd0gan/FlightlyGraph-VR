@@ -41,6 +41,7 @@ public static class ControlsHelp
         R("Graph search (BFS / DFS)", "bar under an airport's card", "same", "click"),
         R("Aircraft details (live flights)", "point + trigger on it", "point + pinch", "click"),
         R("Real connection (live flights)", "route to a 2nd airport", "same", "Shift + click"),
+        R("Reduce motion (comfort)", "Controls page button", "same", "click"),
     };
 
     /// <summary>Voice assistant: hold Y (N in the Editor), say it, release. Shown on the Controls page's Voice tab.</summary>
