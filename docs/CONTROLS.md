@@ -60,7 +60,11 @@ controllers, panel buttons and picked aircraft / routes also vibrate briefly,
 and a found connection vibrates more firmly (`ControllerHaptics`); airports
 vibrate through the XR rig's own `SimpleHapticFeedback` on hover and select.
 Mistakes are said on the caption below your view: A / X with nothing selected,
-A / X pointing at nothing, no route between two airports.
+A / X pointing at nothing, no route between two airports. Panels (dashboard,
+Live flights, timeline, info card) grow in and fade in from where they were
+called (the button pressed, the left hand, the selected airport) and leave the
+same way (`PanelTransition`); a panel counts as closed as soon as it starts to
+fade.
 
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
@@ -168,6 +172,7 @@ All buttons: point + trigger (or pinch / poke with hands), click in the Editor.
 | Filters: segment, country, minimum flights, **Reset filters** | show part of the network |
 | Controls: **Go to graph centre** | teleport to the graph's centre, facing its front (biggest hub); `matchEyeHeight` also sets your eyes to its height (seated) |
 | Controls: **Buttons** / **Voice** | the button table, or what to say to the voice assistant |
+| Controls: **Reduce motion** | comfort switch, remembered between sessions: the map / dome switches jump while the routes are faded out instead of flying the airports, the intro shows the graph without unfolding, the route animation skips its travelling light, city groups open at once, panels fade without growing (`Comfort`) |
 
 ## Timeline (time slider)
 
@@ -206,6 +211,10 @@ you in front of the map. Starting the guided tour switches back to 3D.
 | Map ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Flat map ↔ dome | **Dome** / **Flat map** button, low on the left of the view (EUROCONTROL data only) | same | G |
 | Closer look | walk / teleport to the map | same | fly camera |
+
+Switching (B, Dome) can be reversed mid-way: the airports fly on springs and
+keep their speed, so pressing again bends them back instead of stopping them
+(`GeoMapView.springSmoothTime`).
 
 **Dome** (`DomeToggle` + `GeoMapView.SetDome`): you at the centre of the Earth.
 The whole globe is around you, `domeRadius` 6 m away, at true scale: every

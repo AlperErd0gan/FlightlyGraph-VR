@@ -115,6 +115,18 @@ No scene change: the dashboard adds `GeoMapView` like the timeline. It needs
 Without them the map view is unavailable and nothing else changes (Console:
 "GeoMapView: 'geomap.json' not found").
 
+Switching (map ↔ 3D, flat ↔ dome) moves the airports on critically damped springs:
+`springSmoothTime` (0.3 s, they settle in about 1.2 s) replaced the old fixed
+`transitionSeconds`; a value saved in a scene under the old name is ignored.
+Pressing again mid-way turns them around; the dome switch takes a reversal too.
+
+Panels (dashboard, Live flights, timeline, info card) add a `PanelTransition`
+to their canvas at runtime: they grow from 96% and fade in from where they were
+called, and leave the same way (`smoothTime` 0.06 s, `startScale`,
+`maxSourceOffset` 8 cm). Their children are moved under a "Body" rect on first
+use. `Comfort.ReduceMotion` (dashboard → Controls → Reduce motion) is kept in
+PlayerPrefs (`FlightlyVR.ReduceMotion`).
+
 - Rebuild the map (only if the airports change): `python scripts/build_geomap.py`
   (downloads Natural Earth once).
 - `GeoMapView` fields to tune in the headset: `distance` (1.8 m), `height`
