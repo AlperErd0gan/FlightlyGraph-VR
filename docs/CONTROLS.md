@@ -20,9 +20,9 @@ tour, **Controls** shows the controller controls (Back returns). Above it a
 small hologram of the network (all airports, the 300 busiest routes) turns
 slowly and now and then morphs onto a small map of Europe and back. Only one panel at a time: opening the dashboard or the timeline
 closes the start panel and the other way round. Point and
-pull the trigger (pinch with hands) to choose. Later, a small **Home** button
-on the left wrist (shown when the inside of the wrist faces you) brings the
-panel back; the graph stays where it is. While the panel is open the assistants' caption ("… is listening",
+pull the trigger (pinch with hands) to choose. Later, small **Home** and **Menu** buttons
+on the left wrist (shown when the inside of the wrist faces you): Home brings the
+panel back, Menu opens / closes the dashboard (also when the headset / Link takes the ≡ button); the graph stays where it is. While the panel is open the assistants' caption ("… is listening",
 answers) is hidden. The Gemini voice assistant stays off (not connected,
 Y ignored, no orb; the Wit assistant waits too) until Start exploring / Guided
 tour and the graph's opening animation after it have ended (`StartPanel.geminiAfterStart`), only once: Home later leaves it on. StartPanel is
@@ -40,7 +40,7 @@ it before Play.
 | Clear the selection | short trigger on empty space (no arc nearby) | short pinch on empty space | Esc, or click empty space |
 | Teleport | hold the trigger on the floor, aim the ring, release (and the rig's thumbstick teleport) | hold pinch on the floor, release | — |
 | Top routes ↔ regional clusters | L3 (left stick click) | left palm up + pinch | V |
-| Open / close the dashboard | left menu button (≡) | — | F1 |
+| Open / close the dashboard | left menu button (≡), or **Menu** on the left wrist (turn it to you) | **Menu** on the left wrist | F1 |
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
 | Map of Europe ↔ 3D layout | B | dashboard → Map view / 3D view | M |
