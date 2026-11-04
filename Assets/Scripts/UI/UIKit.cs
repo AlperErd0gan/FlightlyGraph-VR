@@ -191,7 +191,6 @@ public static class UIKit
         button.targetGraphic = image;
         SetButtonColor(button, StyleColor(style), false);
         if (onClick != null) button.onClick.AddListener(onClick);
-        button.onClick.AddListener(() => UISounds.Play(UISounds.Click, image.transform.position));
 
         // Hover blip when an XR ray / finger / mouse enters the button.
         EventTrigger trigger = image.gameObject.AddComponent<EventTrigger>();
@@ -201,6 +200,17 @@ public static class UIKit
             if (button.interactable) UISounds.Play(UISounds.Hover, image.transform.position);
         });
         trigger.triggers.Add(enter);
+        // Click and a short controller pulse on the press, in the same frame as the pressed colour;
+        // the action itself still runs on release (onClick), so moving off the button cancels it.
+        var down = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        down.callback.AddListener(data =>
+        {
+            if (!button.IsInteractable()) return;
+            if (data is PointerEventData pointer && pointer.button != PointerEventData.InputButton.Left) return;
+            UISounds.Play(UISounds.Click, image.transform.position);
+            ControllerHaptics.Pulse(data, ControllerHaptics.TapAmplitude, ControllerHaptics.TapSeconds);
+        });
+        trigger.triggers.Add(down);
 
         Color textColor = style == ButtonStyle.Primary ? new Color(0.03f, 0.08f, 0.13f, 1f) : TextColor;
         if (icon != UIIcon.Shape.None)
