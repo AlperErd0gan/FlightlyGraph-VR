@@ -316,7 +316,7 @@ public class CityClusters : MonoBehaviour
 
     private void Animate()
     {
-        float step = animationSeconds > 0f ? Time.deltaTime / animationSeconds : 1f;
+        float step = animationSeconds > 0f && !Comfort.ReduceMotion ? Time.deltaTime / animationSeconds : 1f;
         var moving = new List<GraphEdge>();
         foreach (City city in cities)
         {
