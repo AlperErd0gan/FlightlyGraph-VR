@@ -41,6 +41,17 @@ intentionally not created by this repo until a Unity project exists there.
    `nodes.json` / `edges.json`.
 3. Press Play. Console should log `GraphLoader: loaded N nodes, M edges`.
 
+Controller vibration (`ControllerHaptics`, in code) goes through each
+controller's `HapticImpulsePlayer`, which the XRI Starter Assets rig
+(XR Origin (XR Rig)) already has. That rig's Near-Far interactors also carry
+`SimpleHapticFeedback`, which pulses on hover (0.25 for 0.1 s) and select
+(0.5 for 0.1 s) of XR interactables, so the airports vibrate without our code;
+our code adds the pulses it does not cover (UI buttons, aircraft, routes, a
+found connection) and fills in the airport select pulse only when the rig has
+none. Hand tracking has no vibration. Error messages of the route gestures use
+`VoiceAssistant.ShowCaption`: without a `VoiceAssistant` in the scene they only
+reach the Console.
+
 ## 4. Not yet wired
 
 `GraphLoader.SetEdgeWeightThreshold(float)` exists but has no UI (future task).

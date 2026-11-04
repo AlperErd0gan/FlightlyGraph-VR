@@ -54,6 +54,14 @@ on top of it (its code hides meanwhile; on the map the name lies on the map like
 the country names), without selecting it (`HoverLabel`, adds itself to the scene; untick
 `showOnHover` to turn it off).
 
+**Feedback.** Pressing a button or an airport clicks at once; the action itself
+runs on release, so moving off a button before releasing cancels it. With
+controllers, panel buttons and picked aircraft / routes also vibrate briefly,
+and a found connection vibrates more firmly (`ControllerHaptics`); airports
+vibrate through the XR rig's own `SimpleHapticFeedback` on hover and select.
+Mistakes are said on the caption below your view: A / X with nothing selected,
+A / X pointing at nothing, no route between two airports.
+
 The short trigger / long trigger split on empty space: shorter than 0.35 s is a
 tap (route pick or clear), longer starts the hand teleport.
 

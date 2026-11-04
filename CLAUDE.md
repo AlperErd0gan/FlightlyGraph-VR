@@ -88,7 +88,9 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   eggs, public `RunCommand` / `FindAirport` / `ShowCaption`), `NodeNarrator`,
   `GuidedTour`, `GeminiLiveAssistant` (realtime voice, tools call
   `VoiceAssistant.RunCommand`; `commandsOnly`, `englishOnly`). `MicTest` is a debug tool.
-- UI: `UI/UIKit` (shared look), `UIIcon`, `UISounds`, `ControlsHelp`, `UIChart`.
+- UI: `UI/UIKit` (shared look; buttons click and pulse on press, act on release), `UIIcon`,
+  `UISounds`, `ControllerHaptics` (controller pulses the rig's `SimpleHapticFeedback` does not
+  cover), `ControlsHelp`, `UIChart`.
 
 ## Docs
 
