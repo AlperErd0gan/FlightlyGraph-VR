@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>FlightlyVR — Guide des commandes</title>
+<style>
+  @page { size: A4; margin: 13mm 14mm 14mm 14mm; }
+  :root {
+    --ink: #13202f; --muted: #5a6878; --accent: #1677b8; --accent-soft: #e6f2fa;
+    --line: #d8e0e8; --zebra: #f5f8fb; --warm-soft: #fdf1e4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font: 9.6pt/1.42 "Avenir Next", "Helvetica Neue", Arial, sans-serif; }
+  h1 { font-size: 22pt; margin: 0 0 1mm; letter-spacing: -0.3pt; }
+  h2 { font-size: 12.5pt; margin: 5.5mm 0 2mm; color: var(--accent); border-bottom: 1.2pt solid var(--accent-soft); padding-bottom: 1mm; }
+  h3 { font-size: 10.3pt; margin: 3.5mm 0 1.2mm; }
+  p { margin: 1mm 0 2mm; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+  .subtitle { color: var(--muted); font-size: 10pt; margin-bottom: 4mm; }
+  .tag { display: inline-block; font-size: 7.5pt; letter-spacing: 1.2pt; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 2mm; font-size: 9pt; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 8pt; text-transform: uppercase; letter-spacing: .6pt;
+       border-bottom: 1pt solid var(--line); padding: 1.2mm 2mm; }
+  td { padding: 1.3mm 2mm; vertical-align: top; border-bottom: .5pt solid var(--line); }
+  tr:nth-child(even) td { background: var(--zebra); }
+  td:first-child { font-weight: 600; width: 31%; }
+  .two td:first-child { width: 38%; }
+  .key { display: inline-block; min-width: 4.2mm; padding: 0 1.3mm; border: .8pt solid #9fb0c2; border-bottom-width: 1.6pt;
+         border-radius: 1.4mm; background: #fff; font-weight: 700; font-size: 8.3pt; text-align: center; line-height: 1.35; }
+  .ui { font-weight: 600; color: var(--accent); }
+  .say { font-family: "Menlo", "SF Mono", monospace; font-size: 8.3pt; background: var(--accent-soft); padding: 0 1mm; border-radius: 1mm; }
+  .box { border: .8pt solid var(--line); border-radius: 2.5mm; padding: 2.5mm 3.5mm; margin: 2mm 0 3mm; background: #fbfdff; }
+  .box.warm { border-color: #f0cfa8; background: var(--warm-soft); }
+  .box h3 { margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  ul { margin: 1mm 0 2mm; padding-left: 5mm; }
+  li { margin: .6mm 0; }
+  .small { font-size: 8.4pt; color: var(--muted); }
+  .dot { display: inline-block; width: 2.6mm; height: 2.6mm; border-radius: 50%; vertical-align: -.3mm; margin-right: 1mm; }
+  svg text { font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 7mm; margin: 1.2mm 0; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: .2mm; width: 4.6mm; height: 4.6mm; border-radius: 50%;
+                      background: var(--accent); color: #fff; font-weight: 700; font-size: 7.8pt; text-align: center; line-height: 4.6mm; }
+</style>
+</head>
+<body>
+
+<!-- ============================== PAGE 1 ============================== -->
+<section class="page">
+  <span class="tag">Guide des commandes</span>
+  <h1>FlightlyVR</h1>
+  <div class="subtitle">Exploration immersive du trafic aérien européen (données EUROCONTROL, 2020–2025) · Meta Quest 3 / 3S<br>
+    Projet 5A SAGI « Data Exploration » · Polytech Angers · 2026</div>
+
+  <div class="box">
+    <h3>Comment lire ce guide</h3>
+    <ul>
+      <li><b>Manettes</b> (recommandé) : on <b>pointe</b> avec le rayon qui sort de la manette et on appuie sur la <b>gâchette</b> (index) pour choisir. Les boutons sont décrits sur le schéma ci-dessous.</li>
+      <li><b>Mains</b> (suivi des mains, sans manettes) : on pointe avec la main et on <b>pince</b> (pouce contre index) au lieu d'appuyer sur la gâchette.</li>
+      <li>Les libellés de l'application sont en anglais ; ils sont écrits <span class="ui">ainsi</span> dans ce guide, avec leur sens en français.</li>
+      <li>Les touches clavier (utilisation sans casque, dans l'éditeur Unity) sont regroupées en dernière page.</li>
+    </ul>
+  </div>
+
+  <h2>Les manettes</h2>
+  <svg viewBox="0 0 860 300" width="100%" role="img" aria-label="Schéma des manettes Quest et de leurs fonctions">
+    <defs>
+      <marker id="dotEnd" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5"><circle cx="3" cy="3" r="2.6" fill="#1677b8"/></marker>
+      <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f6"/><stop offset="1" stop-color="#d7dee6"/></linearGradient>
+    </defs>
+    <style>
+      .lbl { font-size: 13.5px; fill: #13202f; font-weight: 700; }
+      .ttl { font-size: 14.5px; font-weight: 700; fill: #13202f; }
+      .sub { font-size: 12px; fill: #5a6878; }
+      .lead { stroke: #1677b8; stroke-width: 1.1; fill: none; marker-end: url(#dotEnd); }
+      .btn { fill: #fff; stroke: #4a5b6d; stroke-width: 1.4; }
+      .btntxt { font-size: 11px; font-weight: 700; fill: #13202f; text-anchor: middle; dominant-baseline: central; }
+    </style>
+
+    <text x="345" y="18" class="ttl" text-anchor="middle">Manette gauche</text>
+    <text x="515" y="18" class="ttl" text-anchor="middle">Manette droite</text>
+
+    <!-- left controller, seen from above -->
+    <g transform="translate(45 0)">
+    <path d="M258 60 q42 -22 84 0 q22 14 18 52 l-8 120 q-6 46 -50 46 q-44 0 -50 -46 l-8 -120 q-4 -38 14 -52 z" fill="url(#body)" stroke="#8a99aa" stroke-width="1.6"/>
+    <circle cx="282" cy="104" r="17" class="btn"/><circle cx="282" cy="104" r="10" fill="#c9d3dd" stroke="#4a5b6d" stroke-width="1"/>
+    <circle cx="326" cy="96" r="11" class="btn"/><text x="326" y="96" class="btntxt">Y</text>
+    <circle cx="318" cy="130" r="11" class="btn"/><text x="318" y="130" class="btntxt">X</text>
+    <rect x="268" y="140" width="16" height="11" rx="3" class="btn"/><text x="276" y="145.5" class="btntxt" font-size="9">≡</text>
+    <path d="M290 56 q10 -6 20 0" stroke="#4a5b6d" stroke-width="5" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- right controller, seen from above -->
+    <g transform="translate(-45 0)">
+    <path d="M518 60 q42 -22 84 0 q18 14 14 52 l-8 120 q-6 46 -50 46 q-44 0 -50 -46 l-8 -120 q-4 -38 18 -52 z" fill="url(#body)" stroke="#8a99aa" stroke-width="1.6"/>
+    <circle cx="578" cy="104" r="17" class="btn"/><circle cx="578" cy="104" r="10" fill="#c9d3dd" stroke="#4a5b6d" stroke-width="1"/>
+    <circle cx="534" cy="96" r="11" class="btn"/><text x="534" y="96" class="btntxt">B</text>
+    <circle cx="542" cy="130" r="11" class="btn"/><text x="542" y="130" class="btntxt">A</text>
+    <path d="M550 56 q10 -6 20 0" stroke="#4a5b6d" stroke-width="5" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- left labels (right-aligned at x 271), leader lines from x 279 -->
+    <text x="271" y="42" class="lbl" text-anchor="end">Gâchette (index)</text>
+    <text x="271" y="56" class="sub" text-anchor="end">choisir · vers le sol : se téléporter</text>
+    <path class="lead" d="M279 47 L339 47 L344 53"/>
+
+    <text x="271" y="84" class="lbl" text-anchor="end">Joystick enfoncé (L3)</text>
+    <text x="271" y="98" class="sub" text-anchor="end">vue « grandes routes » ↔ « régions »</text>
+    <path class="lead" d="M279 89 L303 89 L313 97"/>
+
+    <text x="271" y="126" class="lbl" text-anchor="end">Y — assistant vocal</text>
+    <text x="271" y="140" class="sub" text-anchor="end">maintenir, parler anglais, relâcher</text>
+    <path class="lead" d="M279 131 L291 131 L345 116 L363 102"/>
+
+    <text x="271" y="168" class="lbl" text-anchor="end">X — trajet</text>
+    <text x="271" y="182" class="sub" text-anchor="end">aéroport choisi : pointer un 2e, appuyer</text>
+    <path class="lead" d="M279 173 L295 173 L345 146 L355 138"/>
+
+    <text x="271" y="210" class="lbl" text-anchor="end">≡ Menu — tableau de bord</text>
+    <text x="271" y="224" class="sub" text-anchor="end">ouvrir / fermer le menu principal</text>
+    <path class="lead" d="M279 215 L307 215 L318 154"/>
+
+    <!-- right labels (left-aligned at x 589), leader lines from x 581 -->
+    <text x="589" y="42" class="lbl">Gâchette (index)</text>
+    <text x="589" y="56" class="sub">choisir · vers le sol : se téléporter</text>
+    <path class="lead" d="M581 47 L521 47 L516 53"/>
+
+    <text x="589" y="84" class="lbl">Joystick enfoncé (R3)</text>
+    <text x="589" y="98" class="sub">aller au centre du graphe</text>
+    <path class="lead" d="M581 89 L559 89 L549 97"/>
+
+    <text x="589" y="126" class="lbl">B — carte</text>
+    <text x="589" y="140" class="sub">carte de l'Europe ↔ graphe 3D</text>
+    <path class="lead" d="M581 131 L567 131 L515 112 L499 101"/>
+
+    <text x="589" y="168" class="lbl">A — trajet</text>
+    <text x="589" y="182" class="sub">aéroport choisi : pointer un 2e, appuyer</text>
+    <path class="lead" d="M581 173 L565 173 L517 146 L506 138"/>
+
+    <!-- wrist -->
+    <rect x="236" y="256" width="388" height="38" rx="8" fill="#e6f2fa" stroke="#bcd8ec"/>
+    <text x="430" y="272" class="sub" text-anchor="middle" style="fill:#13202f;font-size:13px"><tspan font-weight="700">Poignet gauche</tspan> tourné vers soi : petit bouton <tspan font-weight="700">Home</tspan></text>
+    <text x="430" y="287" class="sub" text-anchor="middle">retour à l'écran d'accueil (le graphe reste en place)</text>
+  </svg>
+
+  <h2>Démarrer</h2>
+  <ol class="steps">
+    <li>À l'ouverture, le graphe est caché et un panneau d'accueil flotte devant vous (avec un petit hologramme du réseau).</li>
+    <li>Pointez et appuyez sur la gâchette : <span class="ui">Start exploring</span> (afficher le graphe), <span class="ui">Guided tour</span> (visite guidée commentée, conseillée la première fois) ou <span class="ui">Controls</span> (rappel des commandes).</li>
+    <li>Le graphe apparaît autour de vous : chaque sphère est un aéroport (taille = nombre de vols), chaque arc une liaison aérienne.</li>
+    <li>À tout moment : <span class="key">≡</span> ouvre le tableau de bord, <span class="key">R3</span> vous replace au centre, le bouton <span class="ui">Home</span> du poignet gauche ramène l'accueil.</li>
+  </ol>
+</section>
+
+<!-- ============================== PAGE 2 ============================== -->
+<section class="page">
+  <h2 style="margin-top:0">Explorer le graphe</h2>
+  <table>
+    <tr><th>Action</th><th>Manettes</th><th>Mains</th></tr>
+    <tr><td>Choisir un aéroport</td><td>le pointer, gâchette</td><td>le pointer, pincer</td></tr>
+    <tr><td>Voir le nom d'un aéroport</td><td>le pointer simplement (sans appuyer)</td><td>idem</td></tr>
+    <tr><td>Choisir une liaison (arc)</td><td>pointer l'arc, appui bref sur la gâchette</td><td>pincement bref</td></tr>
+    <tr><td>Trajet entre deux aéroports</td><td>un aéroport étant choisi : <b>maintenir</b> la gâchette sur un second (il grossit ; relâcher quand le trajet s'affiche), ou le pointer et appuyer sur <span class="key">A</span> / <span class="key">X</span></td><td>maintenir le pincement sur le second aéroport</td></tr>
+    <tr><td>Tout désélectionner</td><td>appui bref sur la gâchette dans le vide</td><td>pincement bref dans le vide</td></tr>
+    <tr><td>Se déplacer</td><td>maintenir la gâchette vers le sol, viser l'anneau, relâcher (ou téléportation au joystick)</td><td>maintenir le pincement vers le sol, relâcher</td></tr>
+    <tr><td>Aller au centre du graphe</td><td><span class="key">R3</span> (joystick droit enfoncé) : face aux aéroports principaux, yeux à la hauteur du centre (utile assis)</td><td>tableau de bord → <span class="ui">Controls</span> → <span class="ui">Go to graph centre</span></td></tr>
+    <tr><td>Retour à l'accueil</td><td>intérieur du poignet gauche vers soi, bouton <span class="ui">Home</span></td><td>idem</td></tr>
+  </table>
+  <p class="small">Appui bref = moins d'un tiers de seconde (choix, désélection) ; plus long, la gâchette dans le vide lance la téléportation. Des murs en grille apparaissent quand on approche des limites de la pièce virtuelle.</p>
+
+  <h2>Changer de vue</h2>
+  <table>
+    <tr><th>Vue</th><th>Manettes</th><th>Mains</th></tr>
+    <tr><td>Tableau de bord (menu principal)</td><td>bouton <span class="key">≡</span> de la manette gauche</td><td>—</td></tr>
+    <tr><td>Grandes routes ↔ régions</td><td><span class="key">L3</span> (joystick gauche enfoncé) : couleurs par communauté d'aéroports</td><td>paume gauche vers le haut + pincer</td></tr>
+    <tr><td>Carte de l'Europe ↔ graphe 3D</td><td><span class="key">B</span> : les aéroports rejoignent leur position géographique</td><td>tableau de bord → <span class="ui">Map view</span> / <span class="ui">3D view</span></td></tr>
+    <tr><td>Carte plate ↔ dôme</td><td>sur la carte : bouton <span class="ui">Dome</span> / <span class="ui">Flat map</span>, en bas à gauche du champ de vision</td><td>idem</td></tr>
+    <tr><td>Frise temporelle (mois par mois)</td><td>tableau de bord → <span class="ui">Timeline</span></td><td>idem</td></tr>
+    <tr><td>Vols en direct (une journée réelle)</td><td>tableau de bord → <span class="ui">Live flights</span></td><td>idem</td></tr>
+    <tr><td>Regrouper les aéroports d'une ville</td><td>tableau de bord → <span class="ui">Clusters</span> → <span class="ui">Group cities</span></td><td>idem</td></tr>
+    <tr><td>Visite guidée</td><td>tableau de bord → <span class="ui">Tour</span> (en haut), ou depuis l'accueil</td><td>idem</td></tr>
+  </table>
+
+  <div class="box warm">
+    <h3>Ce que l'on voit</h3>
+    <ul>
+      <li><b>Graphe 3D</b> : 200 aéroports et environ 6 200 liaisons autour de vous ; les plus grands aéroports portent leur code (IST, LHR, FRA…).</li>
+      <li><b>Carte</b> : une grande carte de l'Europe légèrement bombée devant vous ; les 22 aéroports hors d'Europe (New York, Dubaï…) sont sur l'anneau extérieur, dans leur direction réelle.</li>
+      <li><b>Dôme</b> : vous êtes au centre de la Terre, le globe entier autour de vous à l'échelle ; l'Europe devant, en hauteur.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================== PAGE 3 ============================== -->
+<section class="page">
+  <h2 style="margin-top:0">Les panneaux</h2>
+  <p>Tous les boutons des panneaux s'utilisent de la même façon : <b>pointer + gâchette</b> (ou pincer, ou toucher du doigt avec les mains).</p>
+
+  <h3>Fiche d'information (aéroport, liaison ou trajet choisi)</h3>
+  <table class="two">
+    <tr><td>Où</td><td>en bas à droite du regard, reliée à la sélection par un trait ; elle suit la période choisie</td></tr>
+    <tr><td>Fermer</td><td>son <span class="key">✕</span> (désélectionne aussi) ; elle se ferme seule si l'on s'éloigne de plus de 5 m</td></tr>
+  </table>
+
+  <h3>Recherche dans le graphe (barre sous la fiche d'un aéroport)</h3>
+  <table class="two">
+    <tr><td><span class="ui">BFS</span></td><td>parcours en largeur : s'allument d'abord les aéroports en vol direct, puis ceux à 1 correspondance, puis 2… (une couleur par niveau)</td></tr>
+    <tr><td><span class="ui">DFS</span></td><td>parcours en profondeur : suit une branche jusqu'au bout puis revient en arrière</td></tr>
+    <tr><td><span class="ui">1 transfer</span> / <span class="ui">2 transfers</span></td><td>aéroports accessibles avec au plus 1 / 2 changements d'avion, avec leur nombre</td></tr>
+    <tr><td><span class="ui">Pause</span> · <span class="ui">Slower</span> · <span class="ui">Faster</span> · <span class="ui">Stop</span> · <span class="ui">Again</span></td><td>contrôle de l'animation</td></tr>
+  </table>
+
+  <h3>Tableau de bord (bouton <span class="key">≡</span>)</h3>
+  <table class="two">
+    <tr><td>Colonne de gauche</td><td>pages <span class="ui">Overview</span> (vue d'ensemble), <span class="ui">Insights</span> (faits marquants), <span class="ui">Airports</span>, <span class="ui">Routes</span>, <span class="ui">Traffic mix</span> (types de vols), <span class="ui">Clusters</span> (régions, villes), <span class="ui">Selected airport</span>, <span class="ui">Find airport</span> (recherche), <span class="ui">Filters</span>, <span class="ui">Controls</span> (aide)</td></tr>
+    <tr><td>Boutons du bas</td><td><span class="ui">Map view</span> (carte), <span class="ui">Live flights</span> (vols en direct), <span class="ui">Timeline</span> (frise)</td></tr>
+    <tr><td>Une ligne d'un tableau</td><td>choisit l'aéroport ou la liaison et vous tourne vers lui</td></tr>
+    <tr><td>Comparer deux aéroports</td><td>page <span class="ui">Selected airport</span> → <span class="ui">Pin to compare</span>, puis choisir le second</td></tr>
+    <tr><td>Filtrer</td><td>page <span class="ui">Filters</span> : type de vols (cargo, low cost…), pays, nombre minimal de vols ; <span class="ui">Reset filters</span></td></tr>
+    <tr><td>En haut</td><td><span class="ui">Tour</span> (visite guidée) et <span class="key">✕</span> (fermer)</td></tr>
+  </table>
+
+  <h3>Frise temporelle (janvier 2020 → août 2025)</h3>
+  <table class="two">
+    <tr><td>Lecture / pause</td><td>bouton <span class="key">▶</span> ; vitesse : 1, 2 ou 4 mois par seconde</td></tr>
+    <tr><td>Choisir un mois</td><td>faire glisser le curseur sur la courbe, ou <span class="key">◀</span> / <span class="key">▶</span> un mois</td></tr>
+    <tr><td>Tous les mois ensemble</td><td><span class="ui">All months</span> ; <span class="key">✕</span> ferme la frise</td></tr>
+    <tr><td>Effet</td><td>tailles des aéroports, liaisons visibles, fiche et listes suivent le mois (la chute d'avril 2020 est très visible)</td></tr>
+  </table>
+
+  <h3>Groupes de villes (plusieurs aéroports d'une même ville)</h3>
+  <table class="two">
+    <tr><td>Ouvrir une ville</td><td>choisir sa sphère entourée d'un anneau : ses aéroports s'écartent</td></tr>
+    <tr><td>La refermer</td><td>choisir son étiquette (« London · group »)</td></tr>
+  </table>
+</section>
+
+<!-- ============================== PAGE 4 ============================== -->
+<section class="page">
+  <h2 style="margin-top:0">Vols en direct (tableau de bord → <span class="ui">Live flights</span>)</h2>
+  <p>Tous les vols d'une journée réelle (vendredi 29 août 2025, environ 25 000) se déplacent en temps accéléré. Sur la carte, chaque avion suit sa trajectoire enregistrée. Heures en UTC.</p>
+  <table class="two">
+    <tr><td>Panneau</td><td><span class="key">▶</span> lecture / pause · <span class="key">◀</span> <span class="key">▶</span> ±15 min · curseur sur la courbe pour choisir l'heure · bouton de vitesse (15 s à 30 min par seconde) · <span class="key">✕</span> fermer</td></tr>
+    <tr><td>Couleurs</td><td><span class="dot" style="background:#5fcf8f"></span>en montée · <span class="dot" style="background:#c7d6ef;border:.5pt solid #9fb0c2"></span>en croisière · <span class="dot" style="background:#b79cf5"></span>en descente</td></tr>
+    <tr><td>Détails d'un avion</td><td>le pointer, gâchette : il devient jaune, sa trajectoire s'affiche et une fiche donne départ, arrivée, altitude, vitesse, compagnie, type d'avion</td></tr>
+    <tr><td>Correspondance réelle</td><td>le panneau des vols en direct étant ouvert, demander un trajet entre deux aéroports (geste habituel ou voix) : les <b>vrais vols du jour</b> s'affichent, avec 45 min à 6 h à chaque escale</td></tr>
+    <tr><td>Fiche de correspondance</td><td><span class="ui">Earlier</span> / <span class="ui">Later</span> : option précédente / suivante de la journée · <span class="ui">Watch</span> : la regarder se dérouler · case <span class="ui">Same airline only</span> : une seule compagnie</td></tr>
+  </table>
+
+  <div class="grid2">
+    <div>
+      <h2>Visite guidée</h2>
+      <p>Une voix commente le réseau en huit étapes. Pendant la visite, les autres commandes sont bloquées.</p>
+      <table class="two">
+        <tr><td><span class="ui">Next</span></td><td>étape suivante</td></tr>
+        <tr><td><span class="ui">Stop</span></td><td>terminer la visite</td></tr>
+      </table>
+    </div>
+    <div>
+      <h2>Assistant vocal</h2>
+      <p><b>Maintenir <span class="key">Y</span></b> (manette gauche), parler <b>en anglais</b>, relâcher. Nécessite Internet. Exemples :</p>
+      <ul class="small" style="color:var(--ink)">
+        <li><span class="say">help</span> — liste des commandes</li>
+        <li><span class="say">show Istanbul</span> — choisir un aéroport</li>
+        <li><span class="say">route from London to Antalya</span></li>
+        <li><span class="say">map view</span> · <span class="say">regional view</span></li>
+        <li><span class="say">show April 2020</span> · <span class="say">live flights</span></li>
+        <li><span class="say">open dashboard</span> · <span class="say">start tour</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Sans casque (éditeur Unity, souris et clavier)</h2>
+  <p class="small">Touches données pour un clavier français AZERTY (Unity lit la position des touches : sur QWERTY, <span class="key">,</span> est <span class="key">M</span>, <span class="key">^</span> <span class="key">$</span> sont <span class="key">[</span> <span class="key">]</span>, ZQSD est WASD et <span class="key">A</span> est <span class="key">Q</span>).</p>
+  <table>
+    <tr><th>Action</th><th>Touche / souris</th><th>Action</th><th>Touche / souris</th></tr>
+    <tr><td>Choisir</td><td>clic ; nom au survol</td><td>Tableau de bord</td><td><span class="key">F1</span></td></tr>
+    <tr><td>Trajet vers un 2e aéroport</td><td><span class="key">Maj</span> + clic</td><td>Frise temporelle</td><td><span class="key">T</span></td></tr>
+    <tr><td>Désélectionner</td><td><span class="key">Échap</span></td><td>Vols en direct</td><td><span class="key">P</span> ; vitesse <span class="key">^</span> <span class="key">$</span></td></tr>
+    <tr><td>Grandes routes ↔ régions</td><td><span class="key">V</span></td><td>Groupes de villes</td><td><span class="key">C</span></td></tr>
+    <tr><td>Carte ↔ 3D · plate ↔ dôme</td><td><span class="key">,</span> (à côté de N) · <span class="key">G</span></td><td>Centre du graphe · accueil</td><td><span class="key">H</span> · <span class="key">Origine</span></td></tr>
+    <tr><td>Se déplacer</td><td><span class="key">Z</span><span class="key">Q</span><span class="key">S</span><span class="key">D</span> ; <span class="key">A</span> / <span class="key">E</span> descendre / monter ; <span class="key">Maj</span> rapide</td><td>Regarder · zoom</td><td>clic droit glissé ou flèches · molette</td></tr>
+    <tr><td>Assistant vocal</td><td>maintenir <span class="key">N</span></td><td>Réinitialiser la caméra</td><td><span class="key">R</span></td></tr>
+  </table>
+  <p class="small">Le rappel complet des commandes est aussi dans l'application : tableau de bord → <span class="ui">Controls</span> (onglets <span class="ui">Buttons</span> et <span class="ui">Voice</span>).</p>
+</section>
+
+</body>
+</html>
