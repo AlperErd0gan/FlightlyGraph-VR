@@ -116,7 +116,11 @@ public class GraphInfoPanel : MonoBehaviour
     private System.Action pending;
     private float y; // layout cursor while building
 
-    public bool IsShowing => canvas != null && canvas.gameObject.activeSelf;
+    /// <summary>Showing as far as the user is concerned: false as soon as the card starts fading out.</summary>
+    public bool IsShowing => canvas != null && canvas.gameObject.activeSelf && (panelTransition == null || panelTransition.Shown);
+
+    private PanelTransition panelTransition;
+    private PanelTransition Transition => panelTransition != null ? panelTransition : panelTransition = PanelTransition.On(canvas);
 
     private void Awake()
     {
@@ -320,7 +324,7 @@ public class GraphInfoPanel : MonoBehaviour
     public void SetSuppressed(bool value)
     {
         suppressed = value;
-        if (suppressed) canvas.gameObject.SetActive(false);
+        if (suppressed) HideCard();
         else if (currentKey != null) Render();
     }
 
@@ -331,7 +335,14 @@ public class GraphInfoPanel : MonoBehaviour
         anchor = null;
         refreshEvery = 0f;
         hasSelectionPosition = false;
-        canvas.gameObject.SetActive(false);
+        HideCard();
+    }
+
+    /// <summary>The card fades back toward the selection it came from; its leader line goes at once.</summary>
+    private void HideCard()
+    {
+        if (leaderLine != null) leaderLine.enabled = false;
+        if (canvas.gameObject.activeSelf) Transition.Hide();
     }
 
     /// <summary>Shows a selection: a new one (other key) restarts the walk-away check.</summary>
@@ -355,9 +366,11 @@ public class GraphInfoPanel : MonoBehaviour
         bool wasHidden = !canvas.gameObject.activeSelf;
         // Active before building: TextMeshPro gets its font in Awake, which only runs on an
         // active object, and measuring the text needs it.
+        PanelTransition transition = Transition; // made while the card is still hidden, so it fades in
         canvas.gameObject.SetActive(true);
         for (int i = content.childCount - 1; i >= 0; i--) DestroyImmediate(content.GetChild(i).gameObject);
         liveLine = null;
+        if (!transition.Shown) transition.Show(anchor != null ? anchor() : (Vector3?)null); // grows from its airport
         liveSource = null;
         y = Pad;
         build(Width - 2f * Pad);

@@ -9,6 +9,7 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 /// <summary>
 /// A world-space dashboard that explains the loaded dataset with tables and charts,
@@ -236,7 +237,11 @@ public class DataDashboard : MonoBehaviour
         canvas.transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
     }
 
-    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
+    /// <summary>Open as far as the user is concerned: false as soon as it starts fading out.</summary>
+    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf && (panelTransition == null || panelTransition.Shown);
+
+    private PanelTransition panelTransition;
+    private PanelTransition Transition => panelTransition != null ? panelTransition : panelTransition = PanelTransition.On(canvas);
 
     /// <summary>The dashboard panel (world-space canvas), or null before it is built; other panels place themselves beside it.</summary>
     public RectTransform Panel => canvas != null ? (RectTransform)canvas.transform : null;
@@ -251,7 +256,8 @@ public class DataDashboard : MonoBehaviour
             canvas.worldCamera = cam;
         }
         following = false;
-        canvas.gameObject.SetActive(true);
+        // Grows from the button that opened it (the wrist Menu), else from the left hand (≡ button).
+        Transition.Show(PanelTransition.CalledFrom(PanelTransition.HandPosition(InteractorHandedness.Left)));
         if (infoPanel != null) infoPanel.SetSuppressed(true);
         UISounds.Play(UISounds.Open, canvas.transform.position);
         UpdateDatasetText();
@@ -264,7 +270,7 @@ public class DataDashboard : MonoBehaviour
     {
         if (canvas == null) return;
         UISounds.Play(UISounds.Close, canvas.transform.position);
-        canvas.gameObject.SetActive(false);
+        Transition.Hide();
         if (infoPanel != null) infoPanel.SetSuppressed(false);
     }
 

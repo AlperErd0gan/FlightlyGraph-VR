@@ -61,7 +61,11 @@ public class FlightPanel : MonoBehaviour
     private InputAction fasterKey;
     private InputAction slowerKey;
 
-    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf;
+    /// <summary>Open as far as the user is concerned: false as soon as it starts fading out.</summary>
+    public bool IsOpen => canvas != null && canvas.gameObject.activeSelf && (panelTransition == null || panelTransition.Shown);
+
+    private PanelTransition panelTransition;
+    private PanelTransition Transition => panelTransition != null ? panelTransition : panelTransition = PanelTransition.On(canvas);
     /// <summary>Flights loaded and the panel built (one frame after the simulator is ready), so Open works.</summary>
     public bool Available => canvas != null && simulator != null && simulator.IsReady && simulator.FlightCount > 0;
 
@@ -186,7 +190,7 @@ public class FlightPanel : MonoBehaviour
             Place(cam.transform);
         }
         following = false;
-        canvas.gameObject.SetActive(true);
+        Transition.Show(PanelTransition.CalledFrom()); // from the dashboard button that opened it
         UISounds.Play(UISounds.Open, canvas.transform.position);
 
         periodBefore = graph.HasPeriod ? graph.Period : -1;
@@ -207,7 +211,7 @@ public class FlightPanel : MonoBehaviour
         graph.SetEdgeDimming(1f);
         if (graph.HasTimeAxis) graph.SetPeriod(periodBefore);
         UISounds.Play(UISounds.Close, canvas.transform.position);
-        canvas.gameObject.SetActive(false);
+        Transition.Hide();
     }
 
     public void SetPlaying(bool value)

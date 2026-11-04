@@ -209,6 +209,7 @@ public static class UIKit
             if (data is PointerEventData pointer && pointer.button != PointerEventData.InputButton.Left) return;
             UISounds.Play(UISounds.Click, image.transform.position);
             ControllerHaptics.Pulse(data, ControllerHaptics.TapAmplitude, ControllerHaptics.TapSeconds);
+            PanelTransition.NotePress(image.transform.position); // a panel this opens grows from here
         });
         trigger.triggers.Add(down);
 
