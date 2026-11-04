@@ -220,8 +220,9 @@ Fri 29 Aug: ~25,000), each a small aircraft moving in accelerated time. On the
 map they fly at their real positions (EUROCONTROL tracks where present, else
 the great circle with the real times) and appear / disappear where they cross
 the map's rim; in the 3D layout they fly along the route arcs. Only aircraft in
-the air are drawn. While the panel is open the routes are dimmed and the graph
-shows that month (sizes, routes); closing restores both.
+the air are drawn. While the panel is open the route arcs are hidden (only the
+aircraft and their real paths show) and the graph shows that month (sizes);
+closing restores both.
 
 Colours give the flight phase, from the recorded flight levels: **green**
 climbing, **pale blue** cruising, **lavender** descending (more than 300 ft/min

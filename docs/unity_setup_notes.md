@@ -167,7 +167,7 @@ button is disabled (Console: a warning, not an error).
   `FlightSimulator.aircraftMaterial` so the shader is included (in the Editor over
   Link the shader is found by name).
 - Tune: `mapAircraftSize` (3.8 cm), `aircraftSize` (3D, 11 cm), `mapCruiseHeight`
-  (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0.35).
+  (FL400 = 4 cm above the map), `speedSteps`, `FlightPanel.routeDimming` (0: route arcs hidden while live flights show; raise it to see them dimmed).
 - Real connections (TASKS B7, `ConnectionFinder` + `ConnectionSearch`): while the
   Live flights panel is open, the route gesture shows actual flights of that
   day. Fields on `ConnectionFinder`: `minConnectionMinutes` (45),
