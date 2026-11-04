@@ -304,12 +304,12 @@ public class FlightPanel : MonoBehaviour
         {
             Image chip = UIKit.Box(root, "Legend " + (FlightSimulator.Phase)p, simulator.PhaseColor((FlightSimulator.Phase)p), 4f);
             UIKit.Place(chip.rectTransform, lx, ly + 5f, 14f, 14f);
-            legendTexts[p] = UIKit.Text(root, "", 15f, UIKit.MutedTextColor, lx + 20f, ly, 180f, 24f, TextAlignmentOptions.Left);
+            legendTexts[p] = UIKit.Text(root, "", 16f, UIKit.MutedTextColor, lx + 20f, ly, 180f, 24f, TextAlignmentOptions.Left);
             legendItems[2 * p] = chip.gameObject;
             legendItems[2 * p + 1] = legendTexts[p].gameObject;
             lx += 196f;
         }
-        UIKit.Text(root, "Trigger on an aircraft: its details", 15f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
+        UIKit.Text(root, "Trigger on an aircraft: its details", 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
                    TextAlignmentOptions.Right);
         Refresh();
     }

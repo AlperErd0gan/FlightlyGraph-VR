@@ -83,6 +83,8 @@ public class GraphInfoPanel : MonoBehaviour
 
     private const float Width = 480f;
     private const float Pad = 22f;
+    /// <summary>Smallest text on the cards (canvas units = mm): 13 read from 0.8 m was too small.</summary>
+    private const float MinText = 16f;
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     private Canvas canvas;
@@ -364,13 +366,13 @@ public class GraphInfoPanel : MonoBehaviour
     private void Render()
     {
         bool wasHidden = !canvas.gameObject.activeSelf;
+        PanelTransition transition = Transition; // made while the card is still hidden, so it fades in
         // Active before building: TextMeshPro gets its font in Awake, which only runs on an
         // active object, and measuring the text needs it.
-        PanelTransition transition = Transition; // made while the card is still hidden, so it fades in
         canvas.gameObject.SetActive(true);
+        if (!transition.Shown) transition.Show(anchor != null ? anchor() : (Vector3?)null); // grows from its airport
         for (int i = content.childCount - 1; i >= 0; i--) DestroyImmediate(content.GetChild(i).gameObject);
         liveLine = null;
-        if (!transition.Shown) transition.Show(anchor != null ? anchor() : (Vector3?)null); // grows from its airport
         liveSource = null;
         y = Pad;
         build(Width - 2f * Pad);
@@ -720,15 +722,15 @@ public class GraphInfoPanel : MonoBehaviour
 
     private void Header(string kind, string title, string subtitle, float w)
     {
-        TextMeshProUGUI tag = UIKit.Text(content, kind, 13f, UIKit.AccentColor, Pad, y, w - 60f, 20f);
+        TextMeshProUGUI tag = UIKit.Text(content, kind, MinText, UIKit.AccentColor, Pad, y, w - 60f, 22f);
         tag.characterSpacing = 10f;
         tag.fontStyle = FontStyles.Bold;
         Button close = UIKit.Button(content, "", () => { if (selector != null) selector.ClearSelection(); },
                                     Pad + w - 40f, y - 6f, 40f, 40f, UIKit.ButtonStyle.Ghost, 18f, UIIcon.Shape.Close);
         close.name = "Close";
-        y += 22f;
+        y += 24f;
         y = Measured(title, 26f, UIKit.TextColor, w - 44f, FontStyles.Bold) + 2f;
-        if (!string.IsNullOrEmpty(subtitle)) y = Measured(subtitle, 15f, UIKit.MutedTextColor, w, FontStyles.Normal) + 14f;
+        if (!string.IsNullOrEmpty(subtitle)) y = Measured(subtitle, MinText, UIKit.MutedTextColor, w, FontStyles.Normal) + 14f;
         else y += 12f;
     }
 
@@ -736,7 +738,7 @@ public class GraphInfoPanel : MonoBehaviour
     {
         if (tiles.Count == 0) return;
         const float gap = 10f;
-        const float h = 74f;
+        const float h = 86f; // room for a two-line label at MinText
         float tw = (w - gap * (tiles.Count - 1)) / tiles.Count;
         for (int i = 0; i < tiles.Count; i++)
         {
@@ -748,7 +750,7 @@ public class GraphInfoPanel : MonoBehaviour
             v.fontSizeMin = 14f;
             v.fontSizeMax = 22f;
             v.textWrappingMode = TextWrappingModes.NoWrap;
-            TextMeshProUGUI l = UIKit.Text(content, tiles[i].label, 13f, UIKit.MutedTextColor, x + 12f, y + 42f, tw - 20f, 30f);
+            TextMeshProUGUI l = UIKit.Text(content, tiles[i].label, MinText, UIKit.MutedTextColor, x + 12f, y + 42f, tw - 20f, 40f);
             l.overflowMode = TextOverflowModes.Ellipsis;
         }
         y += h + 14f;
@@ -764,9 +766,9 @@ public class GraphInfoPanel : MonoBehaviour
     {
         UIKit.Divider(content, Pad, y, w);
         y += 10f;
-        TextMeshProUGUI t = UIKit.Text(content, title, 13f, UIKit.MutedTextColor, Pad, y, w, 20f);
+        TextMeshProUGUI t = UIKit.Text(content, title, MinText, UIKit.MutedTextColor, Pad, y, w, 22f);
         t.characterSpacing = 4f;
-        y += 24f;
+        y += 26f;
         foreach ((string left, string right) in rows)
         {
             TextMeshProUGUI l = UIKit.Text(content, left, 16f, UIKit.TextColor, Pad, y, w - 110f, 24f);
@@ -820,17 +822,17 @@ public class GraphInfoPanel : MonoBehaviour
     private void LiveLine(System.Func<string> source, float w)
     {
         liveSource = source;
-        liveLine = UIKit.Text(content, source(), 15f, UIKit.HighlightColor, Pad, y, w, 22f);
+        liveLine = UIKit.Text(content, source(), MinText, UIKit.HighlightColor, Pad, y, w, 24f);
         liveLine.textWrappingMode = TextWrappingModes.NoWrap;
         liveLine.overflowMode = TextOverflowModes.Ellipsis;
         nextLive = Time.unscaledTime + 0.5f;
-        y += 30f;
+        y += 32f;
     }
 
     private void Hint(string text, float w)
     {
         if (!showHints) return;
-        y = Measured(text, 13f, UIKit.MutedTextColor, w, FontStyles.Italic) + 4f;
+        y = Measured(text, MinText, UIKit.MutedTextColor, w, FontStyles.Normal) + 4f; // upright: italic grey reads worst
     }
 
     /// <summary>Text at the cursor with its height measured (wrapping inside w); returns the y below it.</summary>
