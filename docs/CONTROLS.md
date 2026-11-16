@@ -222,12 +222,14 @@ above the left end of the timeline / Live flights bar while one is open. A timel
 Live flights bar opened together with the dashboard docks just under the dashboard.
 The whole globe is around you, `domeRadius` 6 m away, at true scale: every
 airport and route is in its real direction from the Earth's centre (New York
-58° from the map centre, Singapore 93°). The sharp map of Europe is in front of
-you, its centre 40° up (`domeElevation`), north up, east right; the North Pole
-is about overhead, the Americas on your left, Asia on your right, Africa below
-in front. The rest of the world is a world map in the same dark style
-(`globe_dark.png`, `scripts/build_globe.py`, loaded the first time the dome
-opens). Airports beyond Europe sit at their true places with their names, routes
+58° from the map centre, Singapore 93°). Europe is in front of you, its centre
+40° up (`domeElevation`), north up, east right; the North Pole is about overhead,
+the Americas on your left, Asia on your right, Africa below in front. The dome
+shows one world map in the dark style (`globe_dark.png`) with the country names of
+the whole world (`globe_labels.json`; both from `scripts/build_globe.py`, loaded
+the first time the dome opens). The flat map of Europe is not drawn over it any
+more (it looked like a patch); without `globe_dark.png` the dome falls back to it.
+Airports beyond Europe sit at their true places with their names, routes
 follow great circles. At 40° only São Paulo is under the floor (logged).
 Everything on it is scaled by domeRadius / the flat map's distance (×3.3) so it
 looks as big as on the flat map. You are first put at the graph centre. Leaving
