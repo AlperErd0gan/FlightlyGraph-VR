@@ -354,15 +354,22 @@ public class GuidedTour : MonoBehaviour
         if (dashboard == null) return null;
         selector.ClearSelection();
         dashboard.OpenTab(DataDashboard.Tab.Controls);
-        return "Here are all the controls. Point and press the trigger to select; hold it on a second airport for the route. " +
-               "Seated? Click the right stick to bring the graph to your eyes. This page is in the dashboard, under Controls.";
+        return StudyCondition.Text(
+            "Here are all the controls. Point and press the trigger to select; hold it on a second airport for the route. " +
+            "Seated? Click the right stick to bring the graph to your eyes. This page is in the dashboard, under Controls.",
+            "Here are all the controls. Click an airport to select it; Shift + click a second airport for the route. " +
+            "Hold the right mouse button and drag to look around, move with W A S D or the scroll wheel, and double-click " +
+            "an airport to go to it. This page is in the dashboard, under Controls.");
     }
 
     private string Outro()
     {
         ClearScene();
-        return "Your turn: point at an airport and press the trigger. The left menu button opens the dashboard; " +
-               "its Timeline button plays the months.";
+        return StudyCondition.Text(
+            "Your turn: point at an airport and press the trigger. The left menu button opens the dashboard; " +
+            "its Timeline button plays the months.",
+            "Your turn: click an airport. The Menu button in the lower left corner opens the dashboard; " +
+            "its Timeline button plays the months.");
     }
 
     // ---- Helpers ---------------------------------------------------------

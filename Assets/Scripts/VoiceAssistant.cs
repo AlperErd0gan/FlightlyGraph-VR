@@ -160,7 +160,7 @@ public class VoiceAssistant : MonoBehaviour
         voiceReady = HookVoice();
         Listening = voiceReady && mode == ListenMode.AlwaysListening;
         Show(!voiceReady ? "Voice input unavailable: no AppVoiceExperience in the scene."
-             : mode == ListenMode.PushToTalk ? "Hold <b>Y</b> and speak. Say <b>\"help\"</b> to hear what I can do."
+             : mode == ListenMode.PushToTalk ? $"Hold <b>{StudyCondition.Text("Y", "N")}</b> and speak. Say <b>\"help\"</b> to hear what I can do."
              : $"Say <b>\"{assistantName}, help\"</b> to hear what I can do.", voiceReady ? 6f : 10f);
     }
 
@@ -208,7 +208,7 @@ public class VoiceAssistant : MonoBehaviour
         holding = true;
         if (narrator != null) narrator.Stop(); // do not record the narration
         if (!InvokeVoice("ActivateImmediately")) Activate();
-        Show("Listening... release <b>Y</b> when done.", 30f);
+        Show(StudyCondition.Text("Listening... release <b>Y</b> when done.", "Listening... release <b>N</b> when done."), 30f);
         PlaySound(UISounds.Open);
     }
 
@@ -432,7 +432,7 @@ public class VoiceAssistant : MonoBehaviour
 
     /// <summary>How to say a command in the current mode: hold Y and say "help" / say "Rebecca, help".</summary>
     private string Hint(string command) =>
-        mode == ListenMode.PushToTalk ? $"hold Y and say \"{command}\"" : $"say \"{assistantName}, {command}\"";
+        mode == ListenMode.PushToTalk ? $"hold {StudyCondition.Text("Y", "N")} and say \"{command}\"" : $"say \"{assistantName}, {command}\"";
 
     private static string Capitalise(string text) => text.Length > 0 ? char.ToUpperInvariant(text[0]) + text.Substring(1) : text;
 

@@ -83,6 +83,11 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   `GraphInfoPanel.ShowConnection`, flights marked by `FlightSimulator.ShowItinerary`.
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
+- Immersion study: `StudyCondition` (Immersive / Desktop: `-desktop` launch argument or the
+  component's field; participant texts pick their wording with `StudyCondition.Text`),
+  `DesktopMode` (Desktop: stops XR, keeps the rig's camera, Menu / Home buttons),
+  `DesktopLook` (look around from inside the graph, W A S D / scroll, double-click to go).
+  `UIKit.PointerOverUI` keeps mouse clicks on panels away from the graph.
 - XR: `XRGraphInput`, `HandTeleport`, `GraphRecenter` (teleports the user to the graph,
   `matchEyeHeight`), `FlyCamera` (Editor).
 - Voice: `VoiceAssistant` (Wit, push-to-talk on left Y / N key, regex commands, easter

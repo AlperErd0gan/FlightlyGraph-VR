@@ -224,6 +224,28 @@ button is disabled (Console: a warning, not an error).
   of the bars (−19…−32°, ±27°) and on the dashboard's bottom-left corner (−21…+12°, ±25°),
   and the bars covered ~2.5° of the dashboard's bottom row.
 
+## 9c. Desktop condition of the immersion study (TASKS B36)
+
+The same scene runs in either condition; nothing is duplicated.
+
+- **Choose it:** a build started with `-desktop` (or `-immersive`), else a
+  `StudyCondition` component anywhere in the scene (Inspector: `condition`), else
+  Immersive. The Console logs `StudyCondition: Desktop (launch argument)` or similar.
+  Participants never choose.
+- **What happens** (`DesktopMode`, added at scene load): XR is stopped if "Initialize
+  XR on Startup" started it (XR Plug-in Management, called by reflection); the XR
+  rig's own camera is kept (same rendering settings) with its head tracking off and
+  the rig's controllers, hands and locomotion switched off; the eyes start 1.6 m above
+  the rig, facing its forward; `DesktopLook` drives the camera; `GraphSelector` gets
+  mouse input; `XRGraphInput`, `HandTeleport` and `FlyCamera` are switched off; Menu
+  and Home buttons appear in the lower left corner. Panels, voice (N), map, timeline,
+  live flights, tour and the room's walls (`MovementBounds`) work unchanged.
+- **Fields:** `DesktopMode.fieldOfView` (60°), `eyeHeight` (1.6 m); `DesktopLook`
+  speeds, `flyStopDistance` (1 m), eye height between 0.3 m and 2.9 m above the floor.
+- **Run it** in the Editor with the headset unplugged (or Link off) and the Game view
+  at the monitor's resolution; for a build, a Windows build of the same scene started
+  with `-desktop`.
+
 ## 10. Performance monitor (debug tool, TASKS B22)
 
 No scene change: `PerfMonitor` adds itself when the scene has a `GraphLoader`.

@@ -638,7 +638,8 @@ public class GraphInfoPanel : MonoBehaviour
             }
             List("Busiest routes" + (graph.HasPeriod ? " in " + MonthLabel(graph.PeriodName(graph.Period)) : ""), rows, w);
         }
-        Hint("Hold select on another airport (or point at it and press A / X) to see the route between them.", w);
+        Hint(StudyCondition.Text("Hold select on another airport (or point at it and press A / X) to see the route between them.",
+                                "Shift + click another airport to see the route between them."), w);
     }
 
     private void BuildEdge(GraphEdge edge, float w)
