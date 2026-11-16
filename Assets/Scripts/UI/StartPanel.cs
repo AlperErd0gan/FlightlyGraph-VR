@@ -363,7 +363,7 @@ public class StartPanel : MonoBehaviour
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Globe);
         UIKit.Button(homePage, "Controls", () => ShowPage(true), bx, 482f, bw, 92f,
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Grid);
-        UIKit.Text(homePage, "Point and pull the trigger to choose", UIKit.SmallSize, UIKit.MutedTextColor,
+        UIKit.Text(homePage, StudyCondition.Text("Point and pull the trigger to choose", "Click to choose"), UIKit.SmallSize, UIKit.MutedTextColor,
                    Pad, 640f, w, 30f, TextAlignmentOptions.Center);
 
         controlsPage = UIKit.NewRect("Controls", root);
@@ -383,11 +383,20 @@ public class StartPanel : MonoBehaviour
         const float voiceLine = 8f + 27f;
         float backTop = Size.y - Pad - 56f - 10f;
         int sections = 0;
-        foreach (ControlsHelp.Row row in ControlsHelp.Rows) if (row.IsSection) sections++;
-        float rowHeight = Mathf.Min(27f, (backTop - y - voiceLine - sections * sectionGap) / Mathf.Max(1, ControlsHelp.Rows.Length));
+        // Desktop condition (StudyCondition): the mouse / keyboard column, without rows that have none.
+        bool desktop = StudyCondition.IsDesktop;
+        int count = 0;
+        foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+        {
+            if (desktop && !row.OnDesktop) continue;
+            count++;
+            if (row.IsSection) sections++;
+        }
+        float rowHeight = Mathf.Min(27f, (backTop - y - voiceLine - sections * sectionGap) / Mathf.Max(1, count));
         float fontSize = Mathf.Min(UIKit.SmallSize, rowHeight * 0.68f);
         foreach (ControlsHelp.Row row in ControlsHelp.Rows)
         {
+            if (desktop && !row.OnDesktop) continue;
             if (row.IsSection)
             {
                 y += sectionGap;
@@ -396,11 +405,12 @@ public class StartPanel : MonoBehaviour
             else
             {
                 UIKit.Text(page, row.action, fontSize, UIKit.TextColor, Pad, y, w * 0.48f, rowHeight);
-                UIKit.Text(page, row.controller, fontSize, UIKit.MutedTextColor, Pad + w * 0.5f, y, w * 0.5f, rowHeight);
+                UIKit.Text(page, desktop ? row.editor : row.controller, fontSize, UIKit.MutedTextColor, Pad + w * 0.5f, y, w * 0.5f, rowHeight);
             }
             y += rowHeight;
         }
-        UIKit.Text(page, "Voice: hold Y, speak, release. Say \"help\" for the list.", fontSize,
+        UIKit.Text(page, StudyCondition.Text("Voice: hold Y, speak, release. Say \"help\" for the list.",
+                                       "Voice: hold N, speak, release. Say \"help\" for the list."), fontSize,
                    UIKit.MutedTextColor, Pad, y + 8f, w, 27f);
         UIKit.Button(page, "Back", () => ShowPage(false), Pad, Size.y - Pad - 56f, 200f, 56f,
                      UIKit.ButtonStyle.Secondary, UIKit.BodySize, UIIcon.Shape.Previous);

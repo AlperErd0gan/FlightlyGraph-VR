@@ -342,7 +342,7 @@ public class FlightPanel : MonoBehaviour
             legendItems[2 * p + 1] = legendTexts[p].gameObject;
             lx += 196f;
         }
-        UIKit.Text(root, "Trigger on an aircraft: its details", 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
+        UIKit.Text(root, StudyCondition.Text("Trigger on an aircraft: its details", "Click an aircraft: its details"), 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
                    TextAlignmentOptions.Right);
         Refresh();
     }

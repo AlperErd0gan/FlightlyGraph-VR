@@ -444,7 +444,8 @@ public class DataDashboard : MonoBehaviour
             case Tab.Selected: return pinned != null ? "Two airports side by side" : "Charts of the airport you selected";
             case Tab.Find: return "Pick an airport to select it and turn towards it";
             case Tab.Filters: return "Show part of the network; airports outside it are dimmed";
-            case Tab.Controls: return "Every control in the headset and in the Editor (also in docs/CONTROLS.md)";
+            case Tab.Controls: return StudyCondition.Text("Every control in the headset and in the Editor (also in docs/CONTROLS.md)",
+                                                       "Every control with the mouse and the keyboard");
             default: return "";
         }
     }
@@ -494,8 +495,23 @@ public class DataDashboard : MonoBehaviour
         {
             foreach ((string say, string does) in ControlsHelp.Voice) rows.Add(new[] { say, does });
             FitRows(rows.Count, out float voiceRow, out float voiceFont);
-            y = Table(0f, 0f, W, new[] { "Hold Y (N in the Editor), say, release", "Does" }, new[] { 0f, 0.58f }, rows, null,
+            y = Table(0f, 0f, W, new[] { StudyCondition.Text("Hold Y (N in the Editor), say, release", "Hold N, say, release"), "Does" }, new[] { 0f, 0.58f }, rows, null,
                       voiceRow, voiceFont);
+        }
+        else if (StudyCondition.IsDesktop)
+        {
+            // Desktop condition: only the mouse / keyboard way of each control.
+            string accent = ColorUtility.ToHtmlStringRGB(UIKit.AccentColor);
+            foreach (ControlsHelp.Row row in ControlsHelp.Rows)
+            {
+                if (!row.OnDesktop) continue;
+                rows.Add(row.IsSection
+                    ? new[] { "<color=#" + accent + "><b>" + row.action.ToUpperInvariant() + "</b></color>", "" }
+                    : new[] { row.action, row.editor });
+            }
+            FitRows(rows.Count, out float rowHeight, out float fontSize);
+            y = Table(0f, 0f, W, new[] { "Action", ControlsHelp.DesktopColumn }, new[] { 0f, 0.4f }, rows, null,
+                      rowHeight, fontSize);
         }
         else
         {
@@ -841,7 +857,8 @@ public class DataDashboard : MonoBehaviour
         {
             Body(pinned != null
                 ? "<b>" + pinned.label + "</b> is pinned. Select another airport to compare them."
-                : "Select an airport (trigger / pinch, or a row in Airports / Find) to see its charts here.", 0f, 0f, W - 260f, 70f);
+                : StudyCondition.Text("Select an airport (trigger / pinch, or a row in Airports / Find) to see its charts here.",
+                                     "Select an airport (click it, or a row in Airports / Find) to see its charts here."), 0f, 0f, W - 260f, 70f);
             if (pinned != null)
             {
                 UIKit.Button(content, "Unpin", () => { pinned = null; Show(Tab.Selected); }, W - 220f, 0f, 220f, 46f);

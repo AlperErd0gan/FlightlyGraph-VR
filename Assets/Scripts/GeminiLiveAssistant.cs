@@ -346,7 +346,7 @@ public class GeminiLiveAssistant : MonoBehaviour
         setupDeadline = -1f;
         StartMic(); // kept open while connected: opening it per press stalls a frame and loses the first second
         Debug.Log("GeminiLiveAssistant: ready");
-        Caption($"{assistantName} is listening: hold <b>Y</b> and talk.", 5f);
+        Caption($"{assistantName} is listening: hold <b>{StudyCondition.Text("Y", "N")}</b> and talk.", 5f);
     }
 
     private void OnClosed(Connection conn, string reason)
@@ -608,7 +608,7 @@ public class GeminiLiveAssistant : MonoBehaviour
         int position = Microphone.GetPosition(micDevice);
         micReadPos = ((position - Mathf.RoundToInt(preRollSeconds * micClip.frequency)) % length + length) % length;
         Send("{\"realtimeInput\":{\"activityStart\":{}}}");
-        Caption("Listening... release <b>Y</b> when done.", 30f);
+        Caption(StudyCondition.Text("Listening... release <b>Y</b> when done.", "Listening... release <b>N</b> when done."), 30f);
         PlayUISound(UISounds.Open);
     }
 
