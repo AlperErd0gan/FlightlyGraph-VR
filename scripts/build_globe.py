@@ -14,6 +14,8 @@ image.
 
 Output (public domain map data, safe to commit; no EUROCONTROL figures):
   data/processed/globe_dark.png
+  data/processed/globe_labels.json   country names for the dome: [{name, lat, lon, rank}]
+                                     (Natural Earth label points; no dependencies or small countries)
 
 Usage: python scripts/build_globe.py [--width 8192] [--out PATH]
 """
@@ -27,7 +29,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_geomap import (  # noqa: E402  (same folder; shares the palette and the Natural Earth data)
     BORDER, COAST, COASTLINE, COUNTRIES, GRATICULE, LAKES, LAND, PROCESSED, SEA, SPLIT_LINES,
-    download, latitude_line, rings,
+    area_km2, download, latitude_line, rings,
 )
 import json  # noqa: E402
 
@@ -122,10 +124,31 @@ def render(countries, coastline, lakes, width, scale=2):
     return canvas.result()
 
 
+def world_labels(countries, max_min_label=5.0, min_area_km2=15000.0):
+    """
+    Country names for the whole globe (the dome shows the world texture only): Natural Earth's
+    label point, rank (LABELRANK, lower = more important) and name. Same filter as the flat map's
+    names (build_geomap.country_labels): no dependencies, no small or minor countries.
+    """
+    labels = []
+    for f in countries["features"]:
+        p = f["properties"]
+        lx, ly = p.get("LABEL_X"), p.get("LABEL_Y")
+        if lx is None or ly is None or p.get("TYPE") == "Dependency":
+            continue
+        if p.get("MIN_LABEL", 10) > max_min_label or area_km2(f["geometry"]) < min_area_km2:
+            continue
+        labels.append({"name": p["NAME"], "lat": round(float(ly), 3), "lon": round(float(lx), 3),
+                       "rank": int(p.get("LABELRANK", 10))})
+    labels.sort(key=lambda l: (l["rank"], l["name"]))
+    return labels
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--width", type=int, default=8192, help="image width (px); the height is half of it")
     p.add_argument("--out", type=Path, default=PROCESSED / "globe_dark.png")
+    p.add_argument("--labels-out", type=Path, default=PROCESSED / "globe_labels.json")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -136,6 +159,9 @@ def main(argv=None):
     args.out.parent.mkdir(parents=True, exist_ok=True)
     image.save(args.out, optimize=True)
     log.info("wrote %s (%d x %d, %.1f MB)", args.out, image.width, image.height, args.out.stat().st_size / 1e6)
+    labels = world_labels(countries)
+    args.labels_out.write_text(json.dumps({"labels": labels}, ensure_ascii=False, indent=1), encoding="utf-8")
+    log.info("wrote %s (%d country names)", args.labels_out, len(labels))
     return 0
 
 
