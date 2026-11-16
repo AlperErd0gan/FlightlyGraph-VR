@@ -216,7 +216,10 @@ Switching (B, Dome) can be reversed mid-way: the airports fly on springs and
 keep their speed, so pressing again bends them back instead of stopping them
 (`GeoMapView.springSmoothTime`).
 
-**Dome** (`DomeToggle` + `GeoMapView.SetDome`): you at the centre of the Earth.
+**Dome** (`DomeToggle` + `GeoMapView.SetDome`): you at the centre of the Earth. The Dome / Flat map
+button never covers another panel: it hides while the dashboard is open and sits just
+above the left end of the timeline / Live flights bar while one is open. A timeline or
+Live flights bar opened together with the dashboard docks just under the dashboard.
 The whole globe is around you, `domeRadius` 6 m away, at true scale: every
 airport and route is in its real direction from the Earth's centre (New York
 58° from the map centre, Singapore 93°). The sharp map of Europe is in front of

@@ -206,6 +206,24 @@ button is disabled (Console: a warning, not an error).
 - The route mesh renders before the other transparent objects (it used to be
   drawn over the dashboard and the info card).
 
+## 9b. Panels that never overlap (TASKS B34)
+
+- `TimelinePanel` / `FlightPanel`: while the dashboard is open they dock just under it
+  (`dockGap` 0.02 m, same angle; `UIKit.DockBelow`). They also glide back when the eyes
+  moved up or down more than `followHeight` (0.15 m), e.g. after R3 / entering the dome
+  raised them (before, only a 50° head turn made them follow).
+- `DomeToggle`: hidden while the dashboard is open; docked above the left end of the open
+  timeline / Live flights bar (`dockGap` 0.015 m); else its head offset as before. Shown
+  also mid-way through flat ↔ dome, so the switch can be turned around.
+- Execution order: dashboard (0) → bars (100) → Dome button (110), so each docks to
+  this frame's position. No scene change needed.
+- After the dashboard closes, a docked bar glides back to its usual spot. The Dome button
+  jumps (`snapDistance` 0.5 m) instead of streaking across the room after a teleport or
+  when entering the dome (which recentres you).
+- Why: in angle from the eyes the Dome button (−20…−24°, 15–25° left) sat on the left end
+  of the bars (−19…−32°, ±27°) and on the dashboard's bottom-left corner (−21…+12°, ±25°),
+  and the bars covered ~2.5° of the dashboard's bottom row.
+
 ## 10. Performance monitor (debug tool, TASKS B22)
 
 No scene change: `PerfMonitor` adds itself when the scene has a `GraphLoader`.

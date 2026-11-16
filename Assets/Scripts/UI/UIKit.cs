@@ -315,6 +315,19 @@ public static class UIKit
         return canvas;
     }
 
+    /// <summary>
+    /// Puts `panel` just under `above` (same rotation, `gap` m between their edges). Both are
+    /// world-space canvases with the default centre pivot (WorldCanvas). Used so the timeline /
+    /// Live flights bars sit under the open dashboard instead of covering its bottom row.
+    /// </summary>
+    public static void DockBelow(RectTransform panel, RectTransform above, float gap)
+    {
+        float aboveHalf = above.rect.height * 0.5f * above.lossyScale.y;
+        float half = panel.rect.height * 0.5f * panel.lossyScale.y;
+        panel.rotation = above.rotation;
+        panel.position = above.position - above.up * (aboveHalf + gap + half);
+    }
+
     /// <summary>World-space UI in XR needs an EventSystem with the XR UI Input Module.</summary>
     public static void EnsureXREventSystem()
     {
