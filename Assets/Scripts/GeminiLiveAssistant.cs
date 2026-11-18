@@ -99,10 +99,20 @@ public class GeminiLiveAssistant : MonoBehaviour
         {
             if (standby == value) return;
             standby = value;
-            if (!standby && ready) Caption($"{assistantName} is listening: hold <b>Y</b> and talk.", 5f);
+            if (!standby && ready) AnnounceListening();
         }
     }
     private bool standby;
+    // "... is listening" is said once; later reconnects (Gemini closes idle sessions) are silent.
+    private bool announced;
+    private float readyAt;
+
+    private void AnnounceListening()
+    {
+        if (announced) return;
+        announced = true;
+        Caption($"{assistantName} is listening: hold <b>Y</b> and talk.", 5f);
+    }
     /// <summary>The assistant's voice is playing.</summary>
     public bool IsSpeaking { get { lock (audioLock) return audioCount > 0; } }
 
@@ -340,7 +350,7 @@ public class GeminiLiveAssistant : MonoBehaviour
         });
         setupDeadline = Time.time + 10f;
         Debug.Log($"GeminiLiveAssistant: connecting ({model}, voice {voice})");
-        if (!standby) Caption("Connecting to Gemini...", 10f);
+        if (!standby && !announced) Caption("Connecting to Gemini...", 10f);
     }
 
     private void Disconnect()
@@ -366,11 +376,12 @@ public class GeminiLiveAssistant : MonoBehaviour
         if (conn != connection) return;
         connecting = false;
         ready = true;
+        readyAt = Time.time;
         failures = 0;
         setupDeadline = -1f;
         StartMic(); // kept open while connected: opening it per press stalls a frame and loses the first second
         Debug.Log("GeminiLiveAssistant: ready");
-        if (!standby) Caption($"{assistantName} is listening: hold <b>Y</b> and talk.", 5f);
+        if (!standby) AnnounceListening();
     }
 
     private void OnClosed(Connection conn, string reason)
@@ -378,16 +389,18 @@ public class GeminiLiveAssistant : MonoBehaviour
         if (conn != connection) return; // an old connection
         bool wasReady = ready;
         Disconnect();
-        StopMic();
+        // A session that was working and ended (idle timeout, time limit) keeps the microphone open: reopening it is
+        // what stalls the game for 1-3 s. It is only closed when Gemini could not be reached at all.
+        if (!wasReady) StopMic();
         if (narrator != null) narrator.AutoNarration = true;
-        failures++;
+        if (!wasReady || Time.time - readyAt < 5f) failures++; // closing right after setup counts: no endless loop
         setupDeadline = -1f;
         Debug.LogWarning($"GeminiLiveAssistant: connection closed: {reason}");
         if (!wasReady) Caption($"Gemini connection failed: {Escape(Truncate(reason, 120))}", 8f);
         // Sessions end after a while (goAway / time limit): reconnect quietly; stop after repeated failures.
         if (failures <= 3)
         {
-            reconnectAt = Time.time + (wasReady ? 0.5f : 3f * failures);
+            reconnectAt = Time.time + (wasReady ? (Time.time - readyAt < 5f ? 5f : 0.5f) : 3f * failures);
         }
         else
         {

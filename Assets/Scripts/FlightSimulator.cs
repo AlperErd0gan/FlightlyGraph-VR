@@ -688,7 +688,7 @@ public class FlightSimulator : MonoBehaviour
     /// thickness, two engines under the wings, a fin. Flat-shaded: every triangle has its own
     /// vertices and an outward normal, so a lit material shows its shape.
     /// </summary>
-    private static Mesh BuildAircraftMesh()
+    public static Mesh BuildAircraftMesh(int fuselageSides = 10)
     {
         var vertices = new List<Vector3>();
         var normals = new List<Vector3>();
@@ -761,7 +761,7 @@ public class FlightSimulator : MonoBehaviour
         }
 
         // Fuselage: nose cone, cabin, tail cone (slightly raised, as on airliners).
-        Tube(0f, 0f, new[] { (0.5f, 0f), (0.46f, 0.03f), (0.4f, 0.05f), (0.3f, 0.058f), (-0.25f, 0.058f), (-0.4f, 0.04f), (-0.5f, 0f) }, 10);
+        Tube(0f, 0f, new[] { (0.5f, 0f), (0.46f, 0.03f), (0.4f, 0.05f), (0.3f, 0.058f), (-0.25f, 0.058f), (-0.4f, 0.04f), (-0.5f, 0f) }, fuselageSides);
         // Wings (low, swept back) and tailplane.
         Plate(new[] { new Vector2(0.04f, 0.14f), new Vector2(0.5f, -0.1f), new Vector2(0.5f, -0.16f), new Vector2(0.04f, -0.08f) }, -0.025f, 0.016f, true);
         Plate(new[] { new Vector2(-0.04f, 0.14f), new Vector2(-0.04f, -0.08f), new Vector2(-0.5f, -0.16f), new Vector2(-0.5f, -0.1f) }, -0.025f, 0.016f, true);
@@ -771,8 +771,8 @@ public class FlightSimulator : MonoBehaviour
         Plate(new[] { new Vector2(0.03f, -0.26f), new Vector2(0.21f, -0.43f), new Vector2(0.21f, -0.49f), new Vector2(0.03f, -0.48f) }, 0f, 0.01f, false);
         // Engines under the wings.
         var engine = new[] { (0.13f, 0.022f), (0.12f, 0.03f), (-0.02f, 0.03f), (-0.05f, 0.02f) };
-        Tube(0.19f, -0.065f, engine, 8);
-        Tube(-0.19f, -0.065f, engine, 8);
+        Tube(0.19f, -0.065f, engine, Mathf.Max(6, fuselageSides * 4 / 5));
+        Tube(-0.19f, -0.065f, engine, Mathf.Max(6, fuselageSides * 4 / 5));
 
         var mesh = new Mesh { name = "Flight Sim Aircraft" };
         mesh.SetVertices(vertices);
