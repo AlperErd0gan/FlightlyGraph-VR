@@ -315,6 +315,9 @@ note. Possible, not necessarily bookable (no tickets, alliances, terminals).
 
 While the tour runs, everything else (selection, dashboard, view mode, timeline,
 city groups, teleport) is locked so the demo cannot be derailed.
+Looking around and moving stay free: your head and your steps in the headset;
+in the Desktop condition the mouse look, W A S D and the scroll wheel (only the
+double-click glide, like teleporting, waits for the tour to end).
 
 ## Buttons left free
 
