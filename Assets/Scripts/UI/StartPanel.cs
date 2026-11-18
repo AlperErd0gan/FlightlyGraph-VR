@@ -37,7 +37,7 @@ public class StartPanel : MonoBehaviour
     public bool showOnStart = true;
     [Tooltip("Key that opens the panel (Input System path), e.g. for testing in the Editor. Empty = none.")]
     public string homeKey = "<Keyboard>/home";
-    [Tooltip("Keep the Gemini voice assistant off (not connected, push-to-talk ignored, no orb; the Wit assistant waits too) until Start exploring / Guided tour and the intro after it have ended.")]
+    [Tooltip("Keep the Gemini voice assistant on standby (connected and warmed up, but push-to-talk ignored, no orb, no captions; the Wit assistant waits too) until Start exploring / Guided tour and the intro after it have ended.")]
     public bool geminiAfterStart = true;
 
     [Header("Panel")]
@@ -94,6 +94,33 @@ public class StartPanel : MonoBehaviour
     private readonly List<GeminiLiveAssistant> heldGemini = new List<GeminiLiveAssistant>();
     private readonly List<VoiceAssistant> heldVoices = new List<VoiceAssistant>();
     private bool geminiPending;
+    [Tooltip("Surround the user with the turning network (StartAmbience) while this screen is open; it doubles as the loading screen for the voice assistant.")]
+    public bool ambience = true;
+    private StartAmbience ambient;
+    [Tooltip("Intro: the network builds up around the user while a short welcome is spoken (Wit.ai text to speech through NodeNarrator); the start menu then appears out of it. Needs 'ambience'.")]
+    public bool intro3D = true;
+    [TextArea(2, 5)]
+    [Tooltip("The welcome text, spoken in the intro (kept short: about 12 s).")]
+    public string introText = "Welcome to FlightlyVR. You are inside Europe's air traffic network. Every glowing point is an airport, and every arc is a route. Look around, then choose how to begin.";
+    [Tooltip("The intro ends at the latest after this many seconds, whatever the voice or the loading does.")]
+    public float introMaxSeconds = 20f;
+    [Tooltip("Size of the title in the intro (TextMeshPro world units; tune in the headset).")]
+    public float introTitleSize = 3f;
+    private bool introPlaying;
+    private bool introSpoke;
+    private float introSpokeAt;
+    private float introEndedAt = -1f;
+    private float introStartedAt = -1f;
+    private TextMeshPro introTitle;
+    private NodeNarrator introNarrator;
+    private float loadedAt = -1f;
+    // Start pressed while Gemini is still connecting: the panel shows "waking up" and goes on when it is ready.
+    private int beginWaiting; // 0 none, 1 start, 2 tour
+    private float beginWaitStart;
+    private bool waitOver;
+    private TextMeshProUGUI statusText;
+    [Tooltip("Longest wait (s) for the Gemini assistant after Start before going on without it.")]
+    public float geminiWaitSeconds = 10f;
     private GameObject voiceCaption; // the assistants' caption (VoiceAssistant), hidden while the panel is open
     private Transform holo;
     private Material holoMaterial;
@@ -140,20 +167,26 @@ public class StartPanel : MonoBehaviour
         BuildWrist();
         started = !showOnStart;
         if (showOnStart) Open();
+        if (showOnStart && ambience && intro3D)
+        {
+            // The menu waits: the network builds up around the user first (see UpdateIntro).
+            canvas.gameObject.SetActive(false);
+            introPlaying = true;
+        }
         else canvas.gameObject.SetActive(false);
         if (showOnStart && geminiAfterStart) HoldGemini();
     }
 
     /// <summary>
-    /// Switches the Gemini assistant off until the first start (this runs before its Start, so it
-    /// also connects only then). Only the ones switched off here are switched on again.
+    /// Puts the Gemini assistant on standby until the first start: it connects and opens the microphone
+    /// meanwhile (no stall after Start), but stays silent. Only the ones switched off here are switched on again.
     /// </summary>
     private void HoldGemini()
     {
         foreach (GeminiLiveAssistant g in FindObjectsByType<GeminiLiveAssistant>(FindObjectsSortMode.None))
         {
-            if (!g.enabled) continue;
-            g.enabled = false;
+            if (!g.enabled || g.Standby) continue;
+            g.Standby = true; // connects and opens the microphone now, silently; wakes on Start
             heldGemini.Add(g);
         }
         if (heldGemini.Count == 0) return;
@@ -170,7 +203,7 @@ public class StartPanel : MonoBehaviour
     {
         foreach (VoiceAssistant v in heldVoices) if (v != null) v.Suspended = false; // Gemini suspends it again once connected
         heldVoices.Clear();
-        foreach (GeminiLiveAssistant g in heldGemini) if (g != null) g.enabled = true;
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null) g.Standby = false;
         heldGemini.Clear();
     }
 
@@ -181,6 +214,7 @@ public class StartPanel : MonoBehaviour
     private void OnDestroy()
     {
         homeAction?.Dispose();
+        if (introTitle != null) Destroy(introTitle.gameObject);
         if (canvas != null) Destroy(canvas.gameObject);
         if (wrist != null) Destroy(wrist.gameObject);
         if (holo != null) Destroy(holo.gameObject);
@@ -192,7 +226,7 @@ public class StartPanel : MonoBehaviour
     // After the assistants' Update: a caption they show while the panel is open is never drawn.
     private void LateUpdate()
     {
-        if (!IsOpen) return;
+        if (!IsOpen && !introPlaying) return; // also over the intro: nothing is written over the animation
         if (voiceCaption == null) voiceCaption = GameObject.Find("Voice Assistant Caption");
         if (voiceCaption != null && voiceCaption.activeSelf) voiceCaption.SetActive(false);
     }
@@ -202,6 +236,9 @@ public class StartPanel : MonoBehaviour
         if (graph == null) return;
         if (hologram && !holoBuilding && graph.IsLoaded) StartCoroutine(BuildHologram());
         if (!started) KeepGraphHidden();
+        UpdateGeminiStatus();
+        UpdateAmbience();
+        UpdateIntro();
 
         if (geminiPending && graph.IsLoaded && (intro == null || !intro.Playing))
         {
@@ -270,15 +307,142 @@ public class StartPanel : MonoBehaviour
         if (flights == null) flights = FindFirstObjectByType<FlightPanel>();
     }
 
+    /// <summary>
+    /// The shell around the user is the loading screen: it fades in once the graph is there and its pulses
+    /// follow how far the start-up is (graph loaded, Gemini connecting, ready).
+    /// </summary>
+    private void UpdateAmbience()
+    {
+        if (!ambience) return;
+        if (ambient == null) ambient = gameObject.AddComponent<StartAmbience>();
+        ambient.Wanted = !started && (IsOpen || introPlaying);
+        if (!graph.IsLoaded) { ambient.Progress = 0f; return; }
+        if (loadedAt < 0f) loadedAt = Time.unscaledTime;
+        float p;
+        if (heldGemini.Count == 0) p = 1f;
+        else if (!GeminiWarming()) p = 1f;
+        else p = Mathf.Lerp(0.2f, 0.75f, Mathf.Clamp01((Time.unscaledTime - loadedAt) / 8f)); // creeps while connecting
+        ambient.Progress = p;
+    }
+
+    /// <summary>
+    /// Intro: the network rises around the user, the title fades in, a short welcome is spoken
+    /// (NodeNarrator, Wit.ai); then the start menu opens out of it. Space / Home skips.
+    /// </summary>
+    private void UpdateIntro()
+    {
+        if (!introPlaying && introTitle != null)
+        {
+            // The menu is open: the title fades away and goes.
+            if (introEndedAt < 0f) introEndedAt = Time.unscaledTime;
+            float k = 1f - (Time.unscaledTime - introEndedAt) / 0.8f;
+            if (k <= 0f) { Destroy(introTitle.gameObject); introTitle = null; }
+            else introTitle.color = new Color(1f, 1f, 1f, k);
+            return;
+        }
+        if (!introPlaying || ambient == null) return;
+        if (!graph.IsLoaded || ambient.IntroLength <= 0f) return; // still loading: the shell is not there yet
+        if (introStartedAt < 0f) introStartedAt = Time.unscaledTime;
+        float t = ambient.IntroClock;
+        float sinceStart = Time.unscaledTime - introStartedAt;
+
+        if (introNarrator == null) introNarrator = FindFirstObjectByType<NodeNarrator>();
+        if (!introSpoke && t >= 1.2f && introNarrator != null && !string.IsNullOrWhiteSpace(introText) && Camera.main != null)
+        {
+            introSpoke = true;
+            introSpokeAt = Time.unscaledTime;
+            introNarrator.SpeakText(introText, Camera.main.transform.position);
+        }
+
+        UpdateIntroTitle(t);
+
+        bool speechDone = !introSpoke;
+        if (introSpoke)
+        {
+            float since = Time.unscaledTime - introSpokeAt;
+            bool? speaking = introNarrator != null ? introNarrator.IsSpeaking : null;
+            speechDone = since > NodeNarrator.EstimateSeconds(introText) + 2f || (speaking == false && since > 2f);
+        }
+        bool skip = (homeAction != null && homeAction.WasPressedThisFrame()) ||
+                    (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame);
+        if (skip || sinceStart > introMaxSeconds || (ambient.IntroDone && speechDone))
+        {
+            if (skip && introNarrator != null) introNarrator.Stop();
+            introPlaying = false;
+            Open(); // the menu grows in out of the shell
+        }
+    }
+
+    private void UpdateIntroTitle(float t)
+    {
+        if (Camera.main == null) return;
+        if (introTitle == null)
+        {
+            introTitle = new GameObject("Start Intro Title").AddComponent<TextMeshPro>();
+            introTitle.alignment = TextAlignmentOptions.Center;
+            introTitle.textWrappingMode = TextWrappingModes.NoWrap;
+            introTitle.fontSize = introTitleSize;
+            introTitle.richText = true;
+            introTitle.text = "<b>FlightlyVR</b>\n<size=28%><color=#9AA6BA>Explore Europe's air traffic network</color></size>";
+            Transform head = Camera.main.transform;
+            Vector3 flat = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+            if (flat.sqrMagnitude < 1e-4f) flat = Vector3.forward;
+            Vector3 at = head.position + flat.normalized * 2.6f + Vector3.up * 0.35f;
+            introTitle.transform.position = at;
+            introTitle.transform.rotation = Quaternion.LookRotation(at - head.position, Vector3.up);
+        }
+        // Fades in after the first airports have risen, out as the menu comes.
+        float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((t - 2.2f) / 1.2f));
+        float fadeOut = introPlaying ? 1f : 0f;
+        Color c = Color.white;
+        c.a = fadeIn * fadeOut;
+        introTitle.color = c;
+    }
+
+    private bool GeminiWarming()
+    {
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null && !g.WarmupDone) return true;
+        return false;
+    }
+
+    private void UpdateGeminiStatus()
+    {
+        if (started || statusText == null || heldGemini.Count == 0) return;
+        bool warming = GeminiWarming();
+        if (beginWaiting != 0 && (!warming || Time.unscaledTime - beginWaitStart > geminiWaitSeconds))
+        {
+            bool tourToo = beginWaiting == 2;
+            beginWaiting = 0;
+            waitOver = true;
+            Begin(tourToo);
+            return;
+        }
+        if (warming)
+        {
+            statusText.text = "Rebecca is waking up" + new string('.', 1 + (int)(Time.unscaledTime * 2f) % 3);
+            return;
+        }
+        bool connected = false;
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null && g.Connected) connected = true;
+        statusText.text = connected ? "Rebecca is ready" : "Voice assistant offline: built-in commands";
+    }
+
     private void Begin(bool withTour)
     {
+        if (!started && !waitOver && beginWaiting == 0 && GeminiWarming())
+        {
+            // Let Gemini finish connecting and opening the microphone here, not as a stall inside the scene.
+            beginWaiting = withTour ? 2 : 1;
+            beginWaitStart = Time.unscaledTime;
+            return;
+        }
         canvas.gameObject.SetActive(false);
         if (!started)
         {
             started = true;
             ShowGraph();
-            // Gemini comes on (connects, says it is listening) once the intro has ended, see Update.
-            geminiPending = heldGemini.Count > 0;
+            // Gemini wakes up now (it is already connected): only here does it say it is listening.
+            ReleaseGemini();
         }
         if (withTour)
         {
@@ -363,6 +527,7 @@ public class StartPanel : MonoBehaviour
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Globe);
         UIKit.Button(homePage, "Controls", () => ShowPage(true), bx, 482f, bw, 92f,
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Grid);
+        statusText = UIKit.Text(homePage, "", UIKit.SmallSize, UIKit.AccentColor, Pad, 600f, w, 30f, TextAlignmentOptions.Center);
         UIKit.Text(homePage, StudyCondition.Text("Point and pull the trigger to choose", "Click to choose"), UIKit.SmallSize, UIKit.MutedTextColor,
                    Pad, 640f, w, 30f, TextAlignmentOptions.Center);
 

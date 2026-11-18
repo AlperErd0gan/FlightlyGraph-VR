@@ -81,7 +81,38 @@ public class GeminiLiveAssistant : MonoBehaviour
     [Range(0f, 1f)] public float volume = 1f;
 
     /// <summary>Connected and set up: push to talk goes to Gemini.</summary>
-    public bool IsReady => ready;
+    public bool IsReady => ready && !standby;
+    /// <summary>Connected and set up, also on standby.</summary>
+    public bool Connected => ready;
+    /// <summary>The start-up is over: connected, or given up (no key, licence, repeated failures).</summary>
+    public bool WarmupDone => ready || disabled || failures > 3;
+
+    /// <summary>
+    /// Standby: connected and microphone open, but silent (no push to talk, no captions, the Wit assistant is left alone).
+    /// The start screen holds it here so the connection, the first microphone start and the network set-up happen
+    /// before the user is in the scene, not as a stall of 1-3 s after Start exploring.
+    /// </summary>
+    public bool Standby
+    {
+        get => standby;
+        set
+        {
+            if (standby == value) return;
+            standby = value;
+            if (!standby && ready) AnnounceListening();
+        }
+    }
+    private bool standby;
+    // "... is listening" is said once; later reconnects (Gemini closes idle sessions) are silent.
+    private bool announced;
+    private float readyAt;
+
+    private void AnnounceListening()
+    {
+        if (announced) return;
+        announced = true;
+        Caption($"{assistantName} is listening: hold <b>{StudyCondition.Text("Y", "N")}</b> and talk.", 5f);
+    }
     /// <summary>The assistant's voice is playing.</summary>
     public bool IsSpeaking { get { lock (audioLock) return audioCount > 0; } }
 
@@ -225,10 +256,10 @@ public class GeminiLiveAssistant : MonoBehaviour
             catch (Exception ex) { Debug.LogError($"GeminiLiveAssistant: {ex}"); }
         }
 
-        if (commands != null) commands.Suspended = ready;
+        if (commands != null && !standby) commands.Suspended = ready;
         // Gemini describes hand-made selections itself only when it may give information; otherwise the Wit narrator keeps
         // reading them (commands Gemini runs are kept silent in RunTool).
-        if (narrator != null && ready && describeSelections && !commandsOnly && (tour == null || !tour.IsRunning)) narrator.AutoNarration = false;
+        if (narrator != null && ready && !standby && describeSelections && !commandsOnly && (tour == null || !tour.IsRunning)) narrator.AutoNarration = false;
         if (audioSource != null) audioSource.volume = volume;
 
         if (!disabled && !ready && !connecting && reconnectAt >= 0f && Time.time >= reconnectAt && graph != null && graph.IsLoaded)
@@ -252,6 +283,7 @@ public class GeminiLiveAssistant : MonoBehaviour
 
         if (!ready) return;
         if (!talking) WatchMic();
+        if (standby) return;
         if (talkAction.WasPressedThisFrame()) StartTalking();
         if (talking) SendMicAudio(flush: false);
         if (talking && talkAction.WasReleasedThisFrame()) StopTalking();
@@ -297,13 +329,15 @@ public class GeminiLiveAssistant : MonoBehaviour
         connecting = true;
         connectedVoice = voice;
         string setup = BuildSetupMessage();
-        var conn = new Connection { socket = new ClientWebSocket(), cts = new CancellationTokenSource() };
+        var conn = new Connection { cts = new CancellationTokenSource() };
         connection = conn;
         string uri = $"{Endpoint}?key={Uri.EscapeDataString(apiKey)}";
         Task.Run(async () =>
         {
             try
             {
+                // Created here, off the main thread: the first ClientWebSocket loads the networking / TLS code.
+                conn.socket = new ClientWebSocket();
                 await conn.socket.ConnectAsync(new Uri(uri), conn.cts.Token).ConfigureAwait(false);
                 Send(conn, setup);
                 _ = Task.Run(() => SendLoop(conn));
@@ -316,7 +350,7 @@ public class GeminiLiveAssistant : MonoBehaviour
         });
         setupDeadline = Time.time + 10f;
         Debug.Log($"GeminiLiveAssistant: connecting ({model}, voice {voice})");
-        Caption("Connecting to Gemini...", 10f);
+        if (!standby && !announced) Caption("Connecting to Gemini...", 10f);
     }
 
     private void Disconnect()
@@ -331,8 +365,8 @@ public class GeminiLiveAssistant : MonoBehaviour
         try
         {
             conn.cts.Cancel();
-            conn.socket.Abort();
-            conn.socket.Dispose();
+            conn.socket?.Abort();
+            conn.socket?.Dispose();
         }
         catch (Exception) { /* already closed */ }
     }
@@ -342,11 +376,12 @@ public class GeminiLiveAssistant : MonoBehaviour
         if (conn != connection) return;
         connecting = false;
         ready = true;
+        readyAt = Time.time;
         failures = 0;
         setupDeadline = -1f;
         StartMic(); // kept open while connected: opening it per press stalls a frame and loses the first second
         Debug.Log("GeminiLiveAssistant: ready");
-        Caption($"{assistantName} is listening: hold <b>{StudyCondition.Text("Y", "N")}</b> and talk.", 5f);
+        if (!standby) AnnounceListening();
     }
 
     private void OnClosed(Connection conn, string reason)
@@ -354,16 +389,18 @@ public class GeminiLiveAssistant : MonoBehaviour
         if (conn != connection) return; // an old connection
         bool wasReady = ready;
         Disconnect();
-        StopMic();
+        // A session that was working and ended (idle timeout, time limit) keeps the microphone open: reopening it is
+        // what stalls the game for 1-3 s. It is only closed when Gemini could not be reached at all.
+        if (!wasReady) StopMic();
         if (narrator != null) narrator.AutoNarration = true;
-        failures++;
+        if (!wasReady || Time.time - readyAt < 5f) failures++; // closing right after setup counts: no endless loop
         setupDeadline = -1f;
         Debug.LogWarning($"GeminiLiveAssistant: connection closed: {reason}");
         if (!wasReady) Caption($"Gemini connection failed: {Escape(Truncate(reason, 120))}", 8f);
         // Sessions end after a while (goAway / time limit): reconnect quietly; stop after repeated failures.
         if (failures <= 3)
         {
-            reconnectAt = Time.time + (wasReady ? 0.5f : 3f * failures);
+            reconnectAt = Time.time + (wasReady ? (Time.time - readyAt < 5f ? 5f : 0.5f) : 3f * failures);
         }
         else
         {
