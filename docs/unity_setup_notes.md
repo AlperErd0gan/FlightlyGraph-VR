@@ -206,6 +206,46 @@ button is disabled (Console: a warning, not an error).
 - The route mesh renders before the other transparent objects (it used to be
   drawn over the dashboard and the info card).
 
+## 9b. Panels that never overlap (TASKS B34)
+
+- `TimelinePanel` / `FlightPanel`: while the dashboard is open they dock just under it
+  (`dockGap` 0.02 m, same angle; `UIKit.DockBelow`). They also glide back when the eyes
+  moved up or down more than `followHeight` (0.15 m), e.g. after R3 / entering the dome
+  raised them (before, only a 50° head turn made them follow).
+- `DomeToggle`: hidden while the dashboard is open; docked above the left end of the open
+  timeline / Live flights bar (`dockGap` 0.015 m); else its head offset as before. Shown
+  also mid-way through flat ↔ dome, so the switch can be turned around.
+- Execution order: dashboard (0) → bars (100) → Dome button (110), so each docks to
+  this frame's position. No scene change needed.
+- After the dashboard closes, a docked bar glides back to its usual spot. The Dome button
+  jumps (`snapDistance` 0.5 m) instead of streaking across the room after a teleport or
+  when entering the dome (which recentres you).
+- Why: in angle from the eyes the Dome button (−20…−24°, 15–25° left) sat on the left end
+  of the bars (−19…−32°, ±27°) and on the dashboard's bottom-left corner (−21…+12°, ±25°),
+  and the bars covered ~2.5° of the dashboard's bottom row.
+
+## 9c. Desktop condition of the immersion study (TASKS B36)
+
+The same scene runs in either condition; nothing is duplicated.
+
+- **Choose it:** a build started with `-desktop` (or `-immersive`), else a
+  `StudyCondition` component anywhere in the scene (Inspector: `condition`), else
+  Immersive. The Console logs `StudyCondition: Desktop (launch argument)` or similar.
+  Participants never choose.
+- **What happens** (`DesktopMode`, added at scene load): XR is stopped if "Initialize
+  XR on Startup" started it (XR Plug-in Management, called by reflection); the XR
+  rig's own camera is kept (same rendering settings) with its head tracking off and
+  the rig's controllers, hands and locomotion switched off; the eyes start 1.6 m above
+  the rig, facing its forward; `DesktopLook` drives the camera; `GraphSelector` gets
+  mouse input; `XRGraphInput`, `HandTeleport` and `FlyCamera` are switched off; Menu
+  and Home buttons appear in the lower left corner. Panels, voice (N), map, timeline,
+  live flights, tour and the room's walls (`MovementBounds`) work unchanged.
+- **Fields:** `DesktopMode.fieldOfView` (60°), `eyeHeight` (1.6 m); `DesktopLook`
+  speeds, `flyStopDistance` (1 m), eye height between 0.3 m and 2.9 m above the floor.
+- **Run it** in the Editor with the headset unplugged (or Link off) and the Game view
+  at the monitor's resolution; for a build, a Windows build of the same scene started
+  with `-desktop`.
+
 ## 10. Performance monitor (debug tool, TASKS B22)
 
 No scene change: `PerfMonitor` adds itself when the scene has a `GraphLoader`.

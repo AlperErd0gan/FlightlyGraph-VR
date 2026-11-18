@@ -40,7 +40,7 @@ python scripts/build_graph_ectrl.py      # EUROCONTROL (licensed, local only)
 python scripts/build_ectrl_extras.py
 python scripts/layout_3d.py              # nodes_3d*.json (force-directed shell)
 python scripts/build_geomap.py           # geomap.json + geomap_dark.png for the map view
-python scripts/build_globe.py            # globe_dark.png: world texture for the dome (globe) view
+python scripts/build_globe.py            # globe_dark.png + globe_labels.json: world texture and country names for the dome
 python scripts/build_flight_sim.py       # flights_ectrl.json: live flights, busiest day of --month
                                          # (real tracks from Flight_Points_Actual_* under data/raw/eurocontrol/)
 scripts/sync_streaming_assets.sh [UNITY_PROJECT_DIR]   # copy outputs into StreamingAssets
@@ -83,6 +83,11 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   `GraphInfoPanel.ShowConnection`, flights marked by `FlightSimulator.ShowItinerary`.
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
+- Immersion study: `StudyCondition` (Immersive / Desktop: `-desktop` launch argument or the
+  component's field; participant texts pick their wording with `StudyCondition.Text`),
+  `DesktopMode` (Desktop: stops XR, keeps the rig's camera, Menu / Home buttons),
+  `DesktopLook` (look around from inside the graph, W A S D / scroll, double-click to go).
+  `UIKit.PointerOverUI` keeps mouse clicks on panels away from the graph.
 - XR: `XRGraphInput`, `HandTeleport`, `GraphRecenter` (teleports the user to the graph,
   `matchEyeHeight`), `FlyCamera` (Editor).
 - Voice: `VoiceAssistant` (Wit, push-to-talk on left Y / N key, regex commands, easter

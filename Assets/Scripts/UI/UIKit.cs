@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -315,7 +316,56 @@ public static class UIKit
         return canvas;
     }
 
+    /// <summary>
+    /// Puts `panel` just under `above` (same rotation, `gap` m between their edges). Both are
+    /// world-space canvases with the default centre pivot (WorldCanvas). Used so the timeline /
+    /// Live flights bars sit under the open dashboard instead of covering its bottom row.
+    /// </summary>
+    public static void DockBelow(RectTransform panel, RectTransform above, float gap)
+    {
+        float aboveHalf = above.rect.height * 0.5f * above.lossyScale.y;
+        float half = panel.rect.height * 0.5f * panel.lossyScale.y;
+        panel.rotation = above.rotation;
+        panel.position = above.position - above.up * (aboveHalf + gap + half);
+    }
+
     /// <summary>World-space UI in XR needs an EventSystem with the XR UI Input Module.</summary>
+    private static readonly List<RaycastResult> uiHits = new List<RaycastResult>();
+
+    /// <summary>
+    /// True when the mouse at `screenPosition` is over a panel: a click there belongs to the UI,
+    /// not to the graph behind it. Counts a canvas graphic under the mouse, and anywhere on a
+    /// world-space panel that takes clicks (its background is not a raycast target, but a click
+    /// on it must not reach the graph either). Physics raycasters (airports) do not count.
+    /// </summary>
+    public static bool PointerOverUI(Vector2 screenPosition)
+    {
+        EventSystem eventSystem = EventSystem.current;
+        if (eventSystem != null)
+        {
+            uiHits.Clear();
+            eventSystem.RaycastAll(new PointerEventData(eventSystem) { position = screenPosition }, uiHits);
+            foreach (RaycastResult hit in uiHits)
+            {
+                if (hit.module is GraphicRaycaster) return true;
+            }
+        }
+        foreach (GraphicRaycaster raycaster in Object.FindObjectsByType<GraphicRaycaster>(FindObjectsSortMode.None))
+        {
+            if (!raycaster.isActiveAndEnabled) continue; // e.g. the voice caption, which takes no clicks
+            Canvas canvas = raycaster.GetComponent<Canvas>();
+            if (canvas == null || !canvas.isRootCanvas || canvas.renderMode != RenderMode.WorldSpace) continue;
+            CanvasGroup group = canvas.GetComponent<CanvasGroup>();
+            if (group != null && !group.blocksRaycasts) continue; // fading out (PanelTransition)
+            Camera eventCamera = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+            if (eventCamera != null && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)canvas.transform, screenPosition, eventCamera))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void EnsureXREventSystem()
     {
         EventSystem eventSystem = Object.FindFirstObjectByType<EventSystem>();

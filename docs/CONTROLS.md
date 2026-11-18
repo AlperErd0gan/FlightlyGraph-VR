@@ -11,6 +11,19 @@ the in-app table is `Assets/Scripts/UI/ControlsHelp.cs`.
 - **Editor**: Unity Play mode on the PC with the XR Device Simulator / mouse and
   keyboard. With the headset on Link, the controller column applies.
 
+## Desktop condition (immersion study)
+
+The study compares the headset with the same app on a monitor. In the Desktop
+condition (`StudyCondition`: launch argument `-desktop`, or the component's field
+in the scene) the scene, data, features and look stay the same; only the input
+and the display change: no headset, the mouse and keyboard column of every table
+below applies, and the Controls pages show only that column. You stay inside the
+graph as in the headset: hold the right mouse button and drag to look around,
+W A S D / the scroll wheel to move, double-click an airport to go to it. **Menu**
+and **Home** buttons in the lower left corner stand in for the wrist buttons
+(hidden on the start screen and during the tour). Voice works the same: hold
+**N** instead of Y. There is no vibration.
+
 ## Start screen
 
 When the app opens the graph is hidden and one panel floats in front of you
@@ -35,19 +48,21 @@ it before Play.
 |---|---|---|---|
 | Select an airport | point at it, trigger | point, pinch | click |
 | See an airport's name | point at it, no trigger (`HoverLabel`) | point at it | hover the mouse |
+| Look around | turn your head | same | hold the right mouse button and drag, or the arrow keys (`DesktopLook`) |
 | Select a route (arc) | point at the arc, short trigger on empty space | short pinch | click the arc |
 | Route between two airports | with one selected: hold the trigger on a second airport (it grows; release when shown), or point at it and press A / X | hold pinch on the second airport | Shift + click the second airport |
 | Clear the selection | short trigger on empty space (no arc nearby) | short pinch on empty space | Esc, or click empty space |
-| Teleport | hold the trigger on the floor, aim the ring, release (and the rig's thumbstick teleport) | hold pinch on the floor, release | — |
+| Move / teleport | hold the trigger on the floor, aim the ring, release (and the rig's thumbstick teleport) | hold pinch on the floor, release | W A S D (Shift faster), scroll wheel forward / back, Q / E down / up |
+| Go to an airport | teleport next to it | same | double-click it: a short glide to 1 m in front of it |
 | Top routes ↔ regional clusters | L3 (left stick click) | left palm up + pinch | V |
-| Open / close the dashboard | left menu button (≡), or **Menu** on the left wrist (turn it to you) | **Menu** on the left wrist | F1 |
+| Open / close the dashboard | left menu button (≡), or **Menu** on the left wrist (turn it to you) | **Menu** on the left wrist | **Menu** (lower left corner) or F1 |
 | Timeline on / off | dashboard → Timeline | dashboard → Timeline | T |
 | City groups on / off | dashboard → Clusters → Group cities | same | C |
 | Map of Europe ↔ 3D layout | B | dashboard → Map view / 3D view | M |
 | Live flights (flight simulation) | dashboard → Live flights | same | P |
 | Go to the graph centre (teleport, face the front) | R3 (right stick click) | dashboard → Controls → Go to graph centre | H |
-| Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | Home |
-| Fly around (desktop only) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
+| Back to the start screen | turn the inside of the left wrist to you, press **Home** on it | same | **Home** (lower left corner) or the Home key |
+| Fly around (Editor, Immersive condition without a headset: `FlyCamera`) | — | — | W A S D move, Q / E down / up, Shift fast; arrows or right-drag look; scroll / Z X zoom; Ctrl + scroll or + / − speed; R reset |
 
 Pointing a ray at an airport (or the mouse in the Editor) shows its name right
 on top of it (its code hides meanwhile; on the map the name lies on the map like
@@ -216,15 +231,20 @@ Switching (B, Dome) can be reversed mid-way: the airports fly on springs and
 keep their speed, so pressing again bends them back instead of stopping them
 (`GeoMapView.springSmoothTime`).
 
-**Dome** (`DomeToggle` + `GeoMapView.SetDome`): you at the centre of the Earth.
+**Dome** (`DomeToggle` + `GeoMapView.SetDome`): you at the centre of the Earth. The Dome / Flat map
+button never covers another panel: it hides while the dashboard is open and sits just
+above the left end of the timeline / Live flights bar while one is open. A timeline or
+Live flights bar opened together with the dashboard docks just under the dashboard.
 The whole globe is around you, `domeRadius` 6 m away, at true scale: every
 airport and route is in its real direction from the Earth's centre (New York
-58° from the map centre, Singapore 93°). The sharp map of Europe is in front of
-you, its centre 40° up (`domeElevation`), north up, east right; the North Pole
-is about overhead, the Americas on your left, Asia on your right, Africa below
-in front. The rest of the world is a world map in the same dark style
-(`globe_dark.png`, `scripts/build_globe.py`, loaded the first time the dome
-opens). Airports beyond Europe sit at their true places with their names, routes
+58° from the map centre, Singapore 93°). Europe is in front of you, its centre
+40° up (`domeElevation`), north up, east right; the North Pole is about overhead,
+the Americas on your left, Asia on your right, Africa below in front. The dome
+shows one world map in the dark style (`globe_dark.png`) with the country names of
+the whole world (`globe_labels.json`; both from `scripts/build_globe.py`, loaded
+the first time the dome opens). The flat map of Europe is not drawn over it any
+more (it looked like a patch); without `globe_dark.png` the dome falls back to it.
+Airports beyond Europe sit at their true places with their names, routes
 follow great circles. At 40° only São Paulo is under the floor (logged).
 Everything on it is scaled by domeRadius / the flat map's distance (×3.3) so it
 looks as big as on the flat map. You are first put at the graph centre. Leaving

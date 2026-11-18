@@ -136,6 +136,9 @@ public class GraphSelector : MonoBehaviour
         }
 
         Vector2 screenPos = mouse.position.ReadValue();
+        // A click on a panel (dashboard, card, Desktop buttons) is not a click on the graph behind it:
+        // without this it picked a route behind the panel or cleared the selection.
+        if (UIKit.PointerOverUI(screenPos)) return;
 
         Ray ray = targetCamera.ScreenPointToRay(screenPos);
         if (Physics.Raycast(ray, out RaycastHit hit, maxRayDistance))

@@ -60,8 +60,10 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     [Range(0f, 90f)] public float domeElevation = 40f;
     [Tooltip("World texture for the dome (StreamingAssets, equirectangular; scripts/build_globe.py). Loaded the first time the dome opens.")]
     public string globeTextureFile = "globe_dark.png";
+    [Tooltip("Country names for the whole globe on the dome (StreamingAssets, scripts/build_globe.py). Missing: the flat map's names of Europe.")]
+    public string globeLabelsFile = "globe_labels.json";
     [Tooltip("Airports and routes this far (m, times ViewScale) off the map's surface, towards you: small, so each airport touches its spot " +
-             "(the world texture lies 0.05 m behind the surface). Was 0.12: airports floated off the map (B31).")]
+             "(the world texture lies just behind the surface). Was 0.12: airports floated off the map (B31).")]
     public float domeNodeLift = 0.01f;
     [Tooltip("Airport codes (HubLabels) on the flat map and the dome. Off: codes only in the graph view; names come from the map and HoverLabel (B30).")]
     public bool showAirportCodes = false;
@@ -196,6 +198,20 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         public int rank;
     }
 
+    private class GlobeLabelFile
+    {
+        public List<GlobeLabel> labels;
+    }
+
+    /// <summary>A country name on the dome: Natural Earth's label point (degrees) and rank (lower = more important).</summary>
+    private class GlobeLabel
+    {
+        public string name;
+        public float lat;
+        public float lon;
+        public int rank;
+    }
+
     private readonly GeoMapProjection projection = new GeoMapProjection();
     private readonly Dictionary<GraphNode, Vector2> planar = new Dictionary<GraphNode, Vector2>();
     private readonly HashSet<GraphNode> outside = new HashSet<GraphNode>();
@@ -203,6 +219,7 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
     private Texture2D texture;
     private Texture2D globeTexture;
     private bool globeLoaded;
+    private List<GlobeLabel> globeLabels; // null: none, the flat map's names of Europe are used
     private readonly List<Object> owned = new List<Object>();
     private Transform visual;
     private InputAction toggleAction;
@@ -477,6 +494,19 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
                 globeTexture = LoadTexture(image);
                 if (globeTexture != null) globeTexture.name = "Geo Globe Texture";
             }
+            byte[] labelBytes = null;
+            if (!string.IsNullOrEmpty(globeLabelsFile)) yield return ReadStreamingAsset(globeLabelsFile, bytes => labelBytes = bytes);
+            if (labelBytes != null)
+            {
+                try
+                {
+                    globeLabels = JsonConvert.DeserializeObject<GlobeLabelFile>(System.Text.Encoding.UTF8.GetString(labelBytes))?.labels;
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"GeoMapView: cannot read '{globeLabelsFile}' ({e.Message}); the dome shows the names of Europe only.");
+                }
+            }
         }
         SetDomeShape(dome);
         if (IsMap) yield return MoveToShape();
@@ -725,8 +755,12 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
         float bandFrom = r + MetersToDegrees(bandGap * k);
         float bandTo = bandFrom + MetersToDegrees(bandWidth * k);
         float rim = MetersToDegrees(0.006f * k);
-        AddMesh("Map", Disc(r, 48, 160, map.textureHalfSizeDeg), TextureMaterial());
-        if (!IsDome) AddMesh("Rim", Annulus(r, r + rim, 160, 0.001f), ColorMaterial(rimColor)); // on the dome Europe blends into the world
+        // Dome: the world texture only. The sharp map of Europe drawn over it looked like a patch
+        // (other projection, other detail); at 6 m the 8192 px world is about as sharp as the display.
+        // Without the world texture the dome falls back to the map of Europe.
+        bool worldOnly = IsDome && globeTexture != null;
+        if (!worldOnly) AddMesh("Map", Disc(r, 48, 160, map.textureHalfSizeDeg), TextureMaterial());
+        if (!IsDome) AddMesh("Rim", Annulus(r, r + rim, 160, 0.001f), ColorMaterial(rimColor));
         if (IsDome)
         {
             AddGlobe();
@@ -739,7 +773,20 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
 
         nameBoxes.Clear();
         int hidden = 0;
-        if (showCountryNames && map.labels != null)
+        if (showCountryNames && IsDome && globeLabels != null)
+        {
+            // The dome: names of the whole world at their true places (already sorted by rank).
+            foreach (GlobeLabel label in globeLabels)
+            {
+                Vector2 at = projection.Project(label.lat, label.lon);
+                if (at.magnitude > 170f) continue; // near the antipode the projection folds
+                float size = Mathf.Lerp(0.34f, 0.18f, Mathf.InverseLerp(2f, 6f, label.rank)) * countryNameScale * k;
+                TextMeshPro text = NewText(label.name.ToUpperInvariant(), size, countryNameColor, at, 0.003f);
+                text.characterSpacing = 6f;
+                if (!KeepName(text, at)) hidden++;
+            }
+        }
+        else if (showCountryNames && map.labels != null)
         {
             // Most important countries first, so they keep their names.
             var countries = new List<Label>(map.labels);
@@ -923,7 +970,8 @@ public class GeoMapView : MonoBehaviour, IGraphLayout
             AddMesh("Graticule", StripMesh("Geo Map Graticule", normal), ColorMaterial(graticuleColor));
             AddMesh("Graticule Main", StripMesh("Geo Map Graticule Main", main), ColorMaterial(graticuleMainColor));
         }
-        if (globeTexture != null) AddMesh("Globe", WorldSphere(centre, domeRadius + 0.05f * ViewScale), TextureMaterial(globeTexture));
+        // Just behind the surface: the airports (Lift) and names lie on it, not in front of it.
+        if (globeTexture != null) AddMesh("Globe", WorldSphere(centre, domeRadius + 0.004f * ViewScale), TextureMaterial(globeTexture));
         else AddMesh("Globe Inside", Sphere(centre - projection.center, domeRadius + 0.15f * ViewScale, 48, 96), ColorMaterial(globeInsideColor));
     }
 

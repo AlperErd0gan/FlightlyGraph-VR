@@ -1,7 +1,9 @@
 /// <summary>
 /// Every control of the app in one table: shown on the dashboard's Controls page and in
 /// the guided tour. Keep it in sync with docs/CONTROLS.md (which has the long version).
-/// Rows with only an action are section titles.
+/// Rows with only an action are section titles. The last column is the mouse and keyboard:
+/// the Editor, and the Desktop condition of the immersion study (StudyCondition), where the
+/// Controls pages show only that column ("-" rows have no desktop counterpart and are left out).
 /// </summary>
 public static class ControlsHelp
 {
@@ -12,19 +14,26 @@ public static class ControlsHelp
         public string hands;
         public string editor;
         public bool IsSection => controller == null;
+        /// <summary>Shown in the Desktop condition's tables (sections always; rows with a mouse / keyboard way).</summary>
+        public bool OnDesktop => IsSection || (editor != null && editor != "-");
     }
+
+    /// <summary>Column title of the mouse / keyboard column in the Desktop condition.</summary>
+    public const string DesktopColumn = "Mouse / keyboard";
 
     public static readonly Row[] Rows =
     {
         Section("Graph"),
         R("Select airport / route", "point + trigger", "point + pinch", "click"),
         R("Airport name", "point at it (no trigger)", "point at it", "hover the mouse"),
+        R("Look around", "turn your head", "same", "right mouse + drag, or arrow keys"),
         R("Route to a 2nd airport", "hold trigger on it", "hold pinch on it", "Shift + click"),
         R("  ...or", "point at it, press A / X", "-", "-"),
         R("Clear the selection", "trigger on empty space", "pinch on empty space", "Esc"),
-        R("Teleport", "hold trigger on floor, release", "hold pinch on floor", "-"),
+        R("Move / teleport", "hold trigger on floor, release", "hold pinch on floor", "W A S D, scroll; Q / E down / up"),
+        R("Go to an airport", "teleport next to it", "same", "double-click it"),
         Section("Views"),
-        R("Dashboard", "left menu button / wrist Menu", "wrist Menu", "F1"),
+        R("Dashboard", "left menu button / wrist Menu", "wrist Menu", "Menu (lower left) or F1"),
         R("Top routes / regional", "L3 (left stick click)", "left palm up + pinch", "V"),
         R("Timeline", "Timeline (dashboard)", "same", "T"),
         R("City groups on / off", "Clusters page", "same", "C"),
@@ -32,7 +41,7 @@ public static class ControlsHelp
         R("Map: flat / dome", "Dome button (on the map)", "same", "G"),
         R("Live flights", "dashboard: Live flights", "same", "P, [ / ] speed"),
         R("Go to graph centre", "R3 (right stick click)", "Controls page button", "H"),
-        R("Start screen (Home)", "Home on left wrist (turn it to you)", "same", "Home"),
+        R("Start screen (Home)", "Home on left wrist (turn it to you)", "same", "Home (lower left) or Home key"),
         Section("Panels"),
         R("Press a button / row", "point + trigger", "point + pinch / poke", "click"),
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),

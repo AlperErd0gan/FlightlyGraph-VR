@@ -18,6 +18,8 @@ using UnityEngine.UI;
 /// shows its card (FlightSimulator, TASKS B24).
 /// Opened from the dashboard (Live flights), by voice, or P in the Editor ([ / ] speed).
 /// </summary>
+// After DataDashboard and before DomeToggle (DefaultExecutionOrder), so docking uses this frame's positions.
+[DefaultExecutionOrder(100)]
 public class FlightPanel : MonoBehaviour
 {
     public GraphLoader graph;
@@ -37,6 +39,17 @@ public class FlightPanel : MonoBehaviour
     public float followAngle = 50f;
     public float snapDistance = 2f;
     public float followSpeed = 3f;
+    [Tooltip("Also glides back when the eyes moved up or down this much (m), e.g. after a recentre / the dome raised them.")]
+    public float followHeight = 0.15f;
+    [Tooltip("Gap (m) under the dashboard while it is open: the bar docks there instead of covering the dashboard's bottom row.")]
+    public float dockGap = 0.02f;
+
+    private DataDashboard dashboard;
+    private float nextDashboardLookup;
+    private bool docked; // under the dashboard last frame: glide back to the head spot once it closes
+
+    /// <summary>The bar (world-space canvas), or null before it is built; DomeToggle docks above it.</summary>
+    public RectTransform Panel => canvas != null ? (RectTransform)canvas.transform : null;
 
     private static readonly Vector2 Size = new Vector2(960f, 268f);
     private const float Pad = 24f;
@@ -142,8 +155,28 @@ public class FlightPanel : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null) return;
         Transform head = cam.transform;
-        Vector3 target = TargetPosition(head);
         Transform panel = canvas.transform;
+        // Dashboard open too: dock just under it (same angle), so neither covers the other.
+        if (Time.unscaledTime >= nextDashboardLookup && dashboard == null)
+        {
+            nextDashboardLookup = Time.unscaledTime + 1f;
+            dashboard = FindFirstObjectByType<DataDashboard>();
+        }
+        if (dashboard != null && dashboard.IsOpen && dashboard.Panel != null)
+        {
+            UIKit.DockBelow((RectTransform)panel, dashboard.Panel, dockGap);
+            following = false;
+            docked = true;
+            return;
+        }
+        if (docked)
+        {
+            // Dashboard closed: the docked spot is lower and farther than the head spot but within
+            // both follow triggers, so start the glide back here.
+            docked = false;
+            following = true;
+        }
+        Vector3 target = TargetPosition(head);
         if (Vector3.Distance(panel.position, target) > snapDistance)
         {
             Place(head);
@@ -152,7 +185,7 @@ public class FlightPanel : MonoBehaviour
         }
         Vector3 toPanel = Vector3.ProjectOnPlane(panel.position - head.position, Vector3.up);
         float angle = toPanel.sqrMagnitude > 1e-6f ? Vector3.Angle(UIKit.FlatForward(head), toPanel) : 0f;
-        if (!following && angle > followAngle) following = true;
+        if (!following && (angle > followAngle || Mathf.Abs(panel.position.y - target.y) > followHeight)) following = true;
         if (following)
         {
             panel.position = Vector3.Lerp(panel.position, target, 1f - Mathf.Exp(-followSpeed * Time.deltaTime));
@@ -309,7 +342,7 @@ public class FlightPanel : MonoBehaviour
             legendItems[2 * p + 1] = legendTexts[p].gameObject;
             lx += 196f;
         }
-        UIKit.Text(root, "Trigger on an aircraft: its details", 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
+        UIKit.Text(root, StudyCondition.Text("Trigger on an aircraft: its details", "Click an aircraft: its details"), 16f, UIKit.MutedTextColor, lx, ly, Size.x - Pad - 10f - lx, 24f,
                    TextAlignmentOptions.Right);
         Refresh();
     }
