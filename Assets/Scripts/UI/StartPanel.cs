@@ -37,7 +37,7 @@ public class StartPanel : MonoBehaviour
     public bool showOnStart = true;
     [Tooltip("Key that opens the panel (Input System path), e.g. for testing in the Editor. Empty = none.")]
     public string homeKey = "<Keyboard>/home";
-    [Tooltip("Keep the Gemini voice assistant off (not connected, push-to-talk ignored, no orb; the Wit assistant waits too) until Start exploring / Guided tour and the intro after it have ended.")]
+    [Tooltip("Keep the Gemini voice assistant on standby (connected and warmed up, but push-to-talk ignored, no orb, no captions; the Wit assistant waits too) until Start exploring / Guided tour and the intro after it have ended.")]
     public bool geminiAfterStart = true;
 
     [Header("Panel")]
@@ -94,6 +94,17 @@ public class StartPanel : MonoBehaviour
     private readonly List<GeminiLiveAssistant> heldGemini = new List<GeminiLiveAssistant>();
     private readonly List<VoiceAssistant> heldVoices = new List<VoiceAssistant>();
     private bool geminiPending;
+    [Tooltip("Surround the user with the turning network (StartAmbience) while this screen is open; it doubles as the loading screen for the voice assistant.")]
+    public bool ambience = true;
+    private StartAmbience ambient;
+    private float loadedAt = -1f;
+    // Start pressed while Gemini is still connecting: the panel shows "waking up" and goes on when it is ready.
+    private int beginWaiting; // 0 none, 1 start, 2 tour
+    private float beginWaitStart;
+    private bool waitOver;
+    private TextMeshProUGUI statusText;
+    [Tooltip("Longest wait (s) for the Gemini assistant after Start before going on without it.")]
+    public float geminiWaitSeconds = 10f;
     private GameObject voiceCaption; // the assistants' caption (VoiceAssistant), hidden while the panel is open
     private Transform holo;
     private Material holoMaterial;
@@ -145,15 +156,15 @@ public class StartPanel : MonoBehaviour
     }
 
     /// <summary>
-    /// Switches the Gemini assistant off until the first start (this runs before its Start, so it
-    /// also connects only then). Only the ones switched off here are switched on again.
+    /// Puts the Gemini assistant on standby until the first start: it connects and opens the microphone
+    /// meanwhile (no stall after Start), but stays silent. Only the ones switched off here are switched on again.
     /// </summary>
     private void HoldGemini()
     {
         foreach (GeminiLiveAssistant g in FindObjectsByType<GeminiLiveAssistant>(FindObjectsSortMode.None))
         {
-            if (!g.enabled) continue;
-            g.enabled = false;
+            if (!g.enabled || g.Standby) continue;
+            g.Standby = true; // connects and opens the microphone now, silently; wakes on Start
             heldGemini.Add(g);
         }
         if (heldGemini.Count == 0) return;
@@ -170,7 +181,7 @@ public class StartPanel : MonoBehaviour
     {
         foreach (VoiceAssistant v in heldVoices) if (v != null) v.Suspended = false; // Gemini suspends it again once connected
         heldVoices.Clear();
-        foreach (GeminiLiveAssistant g in heldGemini) if (g != null) g.enabled = true;
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null) g.Standby = false;
         heldGemini.Clear();
     }
 
@@ -202,6 +213,8 @@ public class StartPanel : MonoBehaviour
         if (graph == null) return;
         if (hologram && !holoBuilding && graph.IsLoaded) StartCoroutine(BuildHologram());
         if (!started) KeepGraphHidden();
+        UpdateGeminiStatus();
+        UpdateAmbience();
 
         if (geminiPending && graph.IsLoaded && (intro == null || !intro.Playing))
         {
@@ -270,8 +283,61 @@ public class StartPanel : MonoBehaviour
         if (flights == null) flights = FindFirstObjectByType<FlightPanel>();
     }
 
+    /// <summary>
+    /// The shell around the user is the loading screen: it fades in once the graph is there and its pulses
+    /// follow how far the start-up is (graph loaded, Gemini connecting, ready).
+    /// </summary>
+    private void UpdateAmbience()
+    {
+        if (!ambience) return;
+        if (ambient == null) ambient = gameObject.AddComponent<StartAmbience>();
+        ambient.Wanted = !started && IsOpen;
+        if (!graph.IsLoaded) { ambient.Progress = 0f; return; }
+        if (loadedAt < 0f) loadedAt = Time.unscaledTime;
+        float p;
+        if (heldGemini.Count == 0) p = 1f;
+        else if (!GeminiWarming()) p = 1f;
+        else p = Mathf.Lerp(0.2f, 0.75f, Mathf.Clamp01((Time.unscaledTime - loadedAt) / 8f)); // creeps while connecting
+        ambient.Progress = p;
+    }
+
+    private bool GeminiWarming()
+    {
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null && !g.WarmupDone) return true;
+        return false;
+    }
+
+    private void UpdateGeminiStatus()
+    {
+        if (started || statusText == null || heldGemini.Count == 0) return;
+        bool warming = GeminiWarming();
+        if (beginWaiting != 0 && (!warming || Time.unscaledTime - beginWaitStart > geminiWaitSeconds))
+        {
+            bool tourToo = beginWaiting == 2;
+            beginWaiting = 0;
+            waitOver = true;
+            Begin(tourToo);
+            return;
+        }
+        if (warming)
+        {
+            statusText.text = "Rebecca is waking up" + new string('.', 1 + (int)(Time.unscaledTime * 2f) % 3);
+            return;
+        }
+        bool connected = false;
+        foreach (GeminiLiveAssistant g in heldGemini) if (g != null && g.Connected) connected = true;
+        statusText.text = connected ? "Rebecca is ready" : "Voice assistant offline: built-in commands";
+    }
+
     private void Begin(bool withTour)
     {
+        if (!started && !waitOver && beginWaiting == 0 && GeminiWarming())
+        {
+            // Let Gemini finish connecting and opening the microphone here, not as a stall inside the scene.
+            beginWaiting = withTour ? 2 : 1;
+            beginWaitStart = Time.unscaledTime;
+            return;
+        }
         canvas.gameObject.SetActive(false);
         if (!started)
         {
@@ -363,6 +429,7 @@ public class StartPanel : MonoBehaviour
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Globe);
         UIKit.Button(homePage, "Controls", () => ShowPage(true), bx, 482f, bw, 92f,
                      UIKit.ButtonStyle.Secondary, UIKit.HeadingSize + 4f, UIIcon.Shape.Grid);
+        statusText = UIKit.Text(homePage, "", UIKit.SmallSize, UIKit.AccentColor, Pad, 600f, w, 30f, TextAlignmentOptions.Center);
         UIKit.Text(homePage, "Point and pull the trigger to choose", UIKit.SmallSize, UIKit.MutedTextColor,
                    Pad, 640f, w, 30f, TextAlignmentOptions.Center);
 
