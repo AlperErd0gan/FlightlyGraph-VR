@@ -20,6 +20,10 @@ public class ConnectionSearch
         public int maxWaitSec;
         public int maxLegs;
         public bool sameAirline;
+        /// <summary>Only connections whose first flight leaves in [firstDepartureFrom, firstDepartureBefore) (s); later legs may leave after it.</summary>
+        public bool limitFirstDeparture;
+        public int firstDepartureFrom;
+        public int firstDepartureBefore;
 
         public static Settings Default => new Settings { minConnectionSec = 45 * 60, maxWaitSec = 6 * 3600, maxLegs = 3 };
     }
@@ -101,6 +105,8 @@ public class ConnectionSearch
 
         foreach (FlightData f1 in firsts)
         {
+            // Before the pruning below: a first flight outside the window must not hide one inside it.
+            if (s.limitFirstDeparture && (f1.dep < s.firstDepartureFrom || f1.dep >= s.firstDepartureBefore)) continue;
             if (s.sameAirline && !KnownOperator(f1.op)) continue;
             Itinerary best = null;
             string hub = f1.destination;

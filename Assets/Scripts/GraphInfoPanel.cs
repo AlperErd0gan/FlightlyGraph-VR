@@ -485,7 +485,7 @@ public class GraphInfoPanel : MonoBehaviour
             var codes = new StringBuilder(c.from.ShortCode);
             foreach (FlightData leg in it.legs) codes.Append("  >  ").Append(Code(leg.destination));
             string subtitle = day + "  ·  option " + (c.index + 1) + " of " + c.options.Count;
-            if (c.noneAfterNow) subtitle += "  ·  none left after " + sim.UtcAt(sim.SimTime).ToString("HH:mm", Inv) + ", last shown";
+            if (c.noneAfterNow) subtitle += "  ·  none left after " + TimeLabel(sim, sim.SimTime) + ", last shown";
             Header("REAL CONNECTION", codes.ToString(), subtitle, w);
 
             Tiles(new List<(string, string, Color)>
