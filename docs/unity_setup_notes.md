@@ -169,8 +169,22 @@ stops describing selections; without a connection both work as before.
 3. EUROCONTROL scenes (`*_ectrl` files) stay on the Wit commands unless
    `allowLicensedData` is ticked — only when the data licence allows sending
    figures to Google.
-4. Quest APK: Player Settings → Android → Internet Access = Require; copy the
-   key file with `adb push gemini_key.txt /sdcard/Android/data/<package>/files/`.
+4. Quest APK (standalone, TASKS B38 phase 1; not yet tested on a Quest):
+   - Player Settings → Android → Internet Access = Require (the socket is a
+     `ClientWebSocket`, Unity may not add INTERNET by itself). The microphone
+     permission (RECORD_AUDIO) is asked at runtime.
+   - The key: `GEMINI_API_KEY` does not exist on Android, only the key file does.
+     Build and run once, read the exact path from the Unity log
+     (`adb logcat -s Unity | findstr "API key file"`), then
+     `adb push gemini_key.txt /sdcard/Android/data/<package>/files/` (the folder
+     of that path). Never inside the APK or the project. Use a key with a
+     spending cap: a key on the device can be read off it.
+   - First run: accept the microphone dialog; Gemini opens the microphone only
+     after the permission is granted (during the intro), and again after the
+     headset was off. Denied: allow it in the headset's app permissions.
+   - Wit and Gemini share the microphone: in `AlwaysListening` mode Wit stops
+     listening while Gemini is connected. Check in a Development build that
+     nothing is stripped (`System.Net.WebSockets`); add a `link.xml` only then.
 
 The key is in memory while the app runs: fine for development and demos; a
 shared build needs ephemeral tokens from a small server.
