@@ -20,14 +20,14 @@ using UnityEngine.SceneManagement;
 /// Voice commands: the spoken text is not logged (no script is changed); the push-to-talk
 /// presses and Gemini's speech show when the participant spoke and was answered.
 /// Self-contained: adds itself when the scene has a GraphLoader, changes no other script.
-/// Off for the Editor unless <see cref="logInEditor"/> is ticked.
+/// Every run (exe or Editor Play) is its own session and file; untick <see cref="logInEditor"/> to skip the Editor.
 /// </summary>
 public class StudyLogger : MonoBehaviour
 {
     [Tooltip("Participant code, e.g. P01. A '-participant P01' launch argument overrides it.")]
     public string participant = "P00";
-    [Tooltip("Also write a log in the Editor (off: only builds, so tests do not make files).")]
-    public bool logInEditor = false;
+    [Tooltip("Also write a log when playing in the Editor (on: every run, Editor or exe, gets its own file).")]
+    public bool logInEditor = true;
     [Tooltip("Experimenter key: a task starts (numbered 1, 2, ...).")]
     public string taskStartKey = "<Keyboard>/f5";
     [Tooltip("Experimenter key: the running task ends.")]
