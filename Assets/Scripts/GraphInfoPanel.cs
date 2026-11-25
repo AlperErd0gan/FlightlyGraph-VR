@@ -48,8 +48,8 @@ public class GraphInfoPanel : MonoBehaviour
     public float viewDownOffset = 0.25f;
     [Tooltip("InView: sideways offset of the card's centre from the gaze line (m); positive = right, negative = left, 0 = centred.")]
     public float viewSideOffset = 0.2f;
-    [Tooltip("Aircraft cards (live flights): this far below eye height (m), placed from the level gaze, so they stay " +
-             "above the live flights panel while you look down at the map.")]
+    [Tooltip("Aircraft cards, and every card while the live flights panel is open: this far below eye height (m), placed " +
+             "from the level gaze, so the card and the graph search bar under it stay above the live flights panel.")]
     public float flightCardDownOffset = 0.1f;
     [Tooltip("InView: the panel starts following once it is this many degrees away from where you look.")]
     public float followAngle = 30f;
@@ -110,6 +110,10 @@ public class GraphInfoPanel : MonoBehaviour
     private float nextRefresh;
     // The card shown is an aircraft's (placed level, higher: flightCardDownOffset).
     private bool aircraftCard;
+    // Cards sit higher while the live flights panel is open (their search bar must clear it); glides there when that changes.
+    private FlightPanel liveFlights;
+    private bool raised;
+    private float nextLiveFlightsLookup;
     // One line that changes while shown (a real connection's "Now ..."), updated in place, not rebuilt.
     private TextMeshProUGUI liveLine;
     private System.Func<string> liveSource;
@@ -225,7 +229,7 @@ public class GraphInfoPanel : MonoBehaviour
     private Vector3 ViewTarget()
     {
         Vector3 right = Vector3.ProjectOnPlane(viewer.right, Vector3.up).normalized;
-        if (aircraftCard)
+        if (Raised())
         {
             Vector3 level = Vector3.ProjectOnPlane(viewer.forward, Vector3.up).normalized;
             return viewer.position + level * viewDistance + right * viewSideOffset - Vector3.up * flightCardDownOffset;
@@ -238,9 +242,26 @@ public class GraphInfoPanel : MonoBehaviour
     /// glides back in front once the head turns more than followAngle away or you
     /// walk more than followDistance, and jumps after a teleport.
     /// </summary>
+    private bool Raised()
+    {
+        if (aircraftCard) return true;
+        if (liveFlights == null && Time.unscaledTime >= nextLiveFlightsLookup)
+        {
+            nextLiveFlightsLookup = Time.unscaledTime + 1f; // added by the dashboard; none in some scenes
+            liveFlights = FindFirstObjectByType<FlightPanel>();
+        }
+        return liveFlights != null && liveFlights.IsOpen;
+    }
+
     private void FollowView()
     {
         Transform panel = canvas.transform;
+        bool nowRaised = Raised();
+        if (nowRaised != raised)
+        {
+            raised = nowRaised;
+            following = true; // the live flights panel opened or closed: glide to the new spot
+        }
         Vector3 target = ViewTarget();
         float offset = Vector3.Distance(panel.position, target);
         if (offset > snapDistance)
