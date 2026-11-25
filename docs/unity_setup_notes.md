@@ -283,8 +283,7 @@ second one).
 
 ## 11. Study log (TASKS B21)
 
-`StudyLogger` adds itself when the scene has a `GraphLoader`; no scene setup. In builds only (the
-Editor writes nothing unless `logInEditor` is ticked). One CSV per session in
+`StudyLogger` adds itself when the scene has a `GraphLoader`; no scene setup. Every run (exe, APK and Editor Play; untick `logInEditor` to skip the Editor) starts a new session. One CSV per session in
 `Application.persistentDataPath`: `study_<participant>_<condition>_<date>_<time>.csv` (path in the
 Console; on a Quest: `adb pull /sdcard/Android/data/<package>/files/`).
 
