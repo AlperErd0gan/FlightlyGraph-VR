@@ -70,6 +70,9 @@ public class GeminiLiveAssistant : MonoBehaviour
     [Header("Push to talk")]
     public string pushToTalkBinding = "<XRController>{LeftHand}/{SecondaryButton}";
     public string pushToTalkKey = "<Keyboard>/n";
+    [Tooltip("Part of the microphone's name to use (e.g. 'Pico' or 'Realtek'). Empty: the headset's microphone, else the first one. " +
+             "A silent microphone makes the assistant try the next device once per silent press.")]
+    public string microphoneName = "";
     [Tooltip("Save what was sent to Gemini in the last press as a WAV file in Application.persistentDataPath (the path is logged), to listen to it.")]
     public bool saveLastInput = false;
     [Tooltip("Audio from just before the press that is sent too, so the first syllable is not lost (s).")]
@@ -713,6 +716,8 @@ public class GeminiLiveAssistant : MonoBehaviour
         PlayUISound(UISounds.Open);
     }
 
+    private int silentPresses; // silent key presses in a row
+
     private void StopTalking()
     {
         SendMicAudio(flush: true);
@@ -737,12 +742,27 @@ public class GeminiLiveAssistant : MonoBehaviour
                   $"(mic '{micDevice}' {micRate} Hz){saved}");
         if (peakDb < -50f)
         {
-            Debug.LogWarning($"GeminiLiveAssistant: the microphone delivered (almost) silence; reopening it. Devices: [{string.Join(", ", Microphone.devices)}]");
-            Caption("The microphone sent silence; it was reset, please try again.", 6f);
-            StopMic();
-            StartMic();
+            // Reopening the device blocks the main thread for about 2 s on Windows (Link's virtual microphone), and it
+            // only helps when something took the microphone over. So: once per streak of silent presses, then only a hint.
+            silentPresses++;
+            if (silentPresses <= Microphone.devices.Length)
+            {
+                // Try the next device (the first press: the same kind of reset as before, on the next one when there is one).
+                string was = micDevice;
+                micSkip++;
+                StopMic();
+                StartMic();
+                Debug.LogWarning($"GeminiLiveAssistant: '{was}' delivered (almost) silence; trying '{micDevice}'. Devices: [{string.Join(", ", Microphone.devices)}]");
+                Caption($"No sound from '{was}'; now trying '{micDevice}'. Please try again.", 6f);
+            }
+            else
+            {
+                if (silentPresses == Microphone.devices.Length + 1) Debug.LogWarning("GeminiLiveAssistant: every microphone is silent; not reopening any more (check the input device in Windows sound settings, or the headset's microphone permission).");
+                Caption("The microphones send silence. Check the input device in the system sound settings.", 6f);
+            }
             return;
         }
+        silentPresses = 0;
         Caption(heardText.Length > 0 ? $"<color=#9AA6BA>\"{Escape(heardText.ToString())}\"</color>" : "<color=#9AA6BA>...</color>", 8f);
     }
 
@@ -786,14 +806,25 @@ public class GeminiLiveAssistant : MonoBehaviour
         watchPosition = position;
     }
 
-    private static string PickMicrophone()
+    // Devices are tried in order of preference; after a silent press the next one is used.
+    private int micSkip;
+
+    private string PickMicrophone()
     {
-        foreach (string name in Microphone.devices)
+        var all = new List<string>(Microphone.devices);
+        var ordered = new List<string>();
+        if (!string.IsNullOrEmpty(microphoneName))
+        {
+            string wanted = microphoneName.ToLowerInvariant();
+            foreach (string name in all) if (name.ToLowerInvariant().Contains(wanted)) ordered.Add(name);
+        }
+        foreach (string name in all)
         {
             string lower = name.ToLowerInvariant();
-            if (lower.Contains("oculus") || lower.Contains("quest") || lower.Contains("headset")) return name;
+            if (!ordered.Contains(name) && (lower.Contains("oculus") || lower.Contains("quest") || lower.Contains("headset"))) ordered.Add(name);
         }
-        return Microphone.devices[0];
+        foreach (string name in all) if (!ordered.Contains(name)) ordered.Add(name);
+        return ordered[micSkip % ordered.Count];
     }
 
     /// <summary>Sends the microphone samples recorded since the last call, in chunks of about 100 ms.</summary>
