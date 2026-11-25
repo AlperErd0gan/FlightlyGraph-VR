@@ -9,8 +9,10 @@ using UnityEngine.InputSystem;
 ///   Go to: double-click an airport (the desktop counterpart of teleporting next to it)
 /// H (GraphRecenter) still goes to the graph centre. Moves are applied as steps to the camera,
 /// so the room's walls (MovementBounds) and turns by the tour or the voice assistant keep
-/// working on it. The eyes stay between the floor and the walls' top. Off while the guided
-/// tour runs; Reduce motion makes the double-click a jump.
+/// working on it. The eyes stay between the floor and the walls' top. During the guided tour
+/// you can still look around and move, as in the headset, where the tour locks teleporting
+/// but not your head or your steps; only the double-click glide (the teleport's counterpart)
+/// waits for the tour to end. Reduce motion makes the double-click a jump.
 /// </summary>
 public class DesktopLook : MonoBehaviour
 {
@@ -71,11 +73,9 @@ public class DesktopLook : MonoBehaviour
     {
         // Turned by someone else (tour, voice "show X", GraphRecenter): continue from there.
         if (Quaternion.Angle(transform.rotation, lastSetRotation) > 0.01f) SyncAngles();
-        if (GuidedTour.InputLocked)
-        {
-            flying = false;
-            return;
-        }
+        // The tour locks teleporting, so the glide waits; looking and moving stay (B36 fix).
+        bool touring = GuidedTour.InputLocked;
+        if (touring) flying = false;
 
         float dt = Time.unscaledDeltaTime;
         Mouse mouse = Mouse.current;
@@ -117,7 +117,7 @@ public class DesktopLook : MonoBehaviour
             if ((scrolled || clicked) && !UIKit.PointerOverUI(mouse.position.ReadValue()))
             {
                 if (scrolled) step += transform.forward * notches * scrollStep * (fast ? fastMultiplier : 1f);
-                if (clicked) OnClick(mouse.position.ReadValue());
+                if (clicked && !touring) OnClick(mouse.position.ReadValue());
             }
         }
 
