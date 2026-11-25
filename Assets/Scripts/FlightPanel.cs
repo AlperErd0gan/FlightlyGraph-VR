@@ -326,7 +326,10 @@ public class FlightPanel : MonoBehaviour
         for (int h = 0; h <= hours; h += every)
         {
             float x = chartX + chartW * Mathf.Clamp01(h * 3600f / Mathf.Max(1, simulator.DurationSec));
-            UIKit.Text(root, start.AddHours(h).ToString("HH:mm", Inv), UIKit.SmallSize, UIKit.MutedTextColor, x - 40f,
+            // Midnight of a later day shows the day's name ("Sat"), so the next morning reads as such.
+            DateTime tick = start.AddHours(h);
+            string label = h > 0 && tick.TimeOfDay == TimeSpan.Zero ? tick.ToString("ddd", Inv) : tick.ToString("HH:mm", Inv);
+            UIKit.Text(root, label, UIKit.SmallSize, UIKit.MutedTextColor, x - 40f,
                        chartY + chartH + 12f, 80f, 24f, TextAlignmentOptions.Top);
         }
 

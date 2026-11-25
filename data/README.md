@@ -235,7 +235,7 @@ from EUROCONTROL data), read by Unity's `FlightSimulator` / `FlightPanel`.
 
 ```
 python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD]
-    [--start 00:00] [--hours 24] [--max-flights 0] [--max-points 30] [--tolerance-km 3]
+    [--start 00:00] [--hours 30] [--max-flights 0] [--max-points 30] [--tolerance-km 3]
     [--points PATH | --no-points]
 ```
 
@@ -259,4 +259,8 @@ python scripts/build_flight_sim.py [--month 2025-08] [--day busiest | YYYY-MM-DD
   passenger flights); `type`: ICAO aircraft type; `seg`: STATFOR market segment
   (Mainline, Lowcost, Regional Aircraft, Charter = passenger flights, used by
   the real connections; All-Cargo, Business Aviation, ... are not).
-- A whole day with real tracks (Fri 29 Aug 2025, all with a track): ~18 MB.
+- The window is 30 h by default: the day plus 6 h of the next morning, so a real
+  connection (Unity's ConnectionSearch) that lands late in the evening can still
+  take a flight after midnight. Connections still start on the day itself.
+- Fri 29 Aug 2025 with the next morning: 28,548 flights, ~21 MB (24 h alone:
+  24,848 flights, ~18 MB).

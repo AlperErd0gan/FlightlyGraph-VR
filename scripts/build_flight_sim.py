@@ -388,7 +388,9 @@ def main(argv=None):
     p.add_argument("--month", default="2025-08", help="YYYY-MM, for --day busiest")
     p.add_argument("--day", default="busiest", help="UTC day, YYYY-MM-DD, or 'busiest' (most flights on graph edges in --month)")
     p.add_argument("--start", default="00:00", help="window start, UTC HH:MM")
-    p.add_argument("--hours", type=float, default=24.0, help="window length")
+    p.add_argument("--hours", type=float, default=30.0,
+                   help="window length; the default 30 = the day + 6 h of the next morning, so real connections "
+                        "(TASKS B7) from late arrivals can still take an early flight")
     p.add_argument("--max-flights", type=int, default=0, help="flights kept, spread evenly over departure time (0 = all)")
     p.add_argument("--max-points", type=int, default=30, help="most points kept per actual profile")
     p.add_argument("--tolerance-km", type=float, default=3.0, help="simplification: largest shape error kept out (km)")

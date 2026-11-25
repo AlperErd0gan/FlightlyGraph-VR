@@ -47,7 +47,7 @@ public static class ControlsHelp
         R("Change the month", "drag slider, Prev / Next", "same", "drag / click"),
         R("Open / close a city", "trigger on city / its label", "pinch on it", "click"),
         R("Close the info card", "X on the card", "same", "X / Esc"),
-        R("Graph search (BFS / DFS)", "bar under an airport's card", "same", "click"),
+        R("Graph search (BFS / DFS / by time)", "bar under an airport's card", "same", "click"),
         R("Aircraft details (live flights)", "point + trigger on it", "point + pinch", "click"),
         R("Real connection (live flights)", "route to a 2nd airport", "same", "Shift + click"),
         R("Reduce motion (comfort)", "Controls page button", "same", "click"),

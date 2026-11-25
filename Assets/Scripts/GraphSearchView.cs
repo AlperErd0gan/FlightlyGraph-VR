@@ -52,6 +52,14 @@ public class GraphSearchView : MonoBehaviour
     private RectTransform runRow;
     private TextMeshProUGUI title;
     private Button pauseButton;
+    // "By time" (TASKS B7): a second row while the live flights are shown.
+    private const float TimeRowHeight = 52f;
+    private static readonly float[] BandHours = { 2f, 4f, 8f, 12f };
+    private RectTransform byTimeButton;
+    private ConnectionFinder finder;
+    private bool withTime;
+    private float barHeight = BarHeight;
+    private bool lastByTime;
     private Transform infoCard;
     private float nextInfoLookup;
     private StartPanel startPanel;
@@ -158,8 +166,10 @@ public class GraphSearchView : MonoBehaviour
         running = StartCoroutine(Play(name, start, steps, depthFirst, maxDepth));
     }
 
-    private IEnumerator Play(string name, GraphNode start, List<GraphSearch.Step> steps, bool depthFirst, int maxDepth)
+    private IEnumerator Play(string name, GraphNode start, List<GraphSearch.Step> steps, bool depthFirst, int maxDepth,
+                             System.Func<int, string> layerName = null)
     {
+        System.Func<int, string> layerLabel = layerName ?? Hops;
         overlay = new GameObject("GraphSearch Overlay").transform;
         cursor = MakeSphere("Cursor", Color.white).transform;
         cursor.localScale = Vector3.one * start.transform.lossyScale.x * markerScale * 1.3f;
@@ -189,7 +199,7 @@ public class GraphSearchView : MonoBehaviour
             ShowVisit(step);
             title.text = depthFirst
                 ? $"{name} from {start.ShortCode} · depth {step.depth} · {visited}/{total} airports"
-                : $"{name} from {start.ShortCode} · {Hops(step.depth)} · {visited}/{total} airports";
+                : $"{name} from {start.ShortCode} · {layerLabel(step.depth)} · {visited}/{total} airports";
             // A blip per airport, unless it plays so fast that it would only buzz.
             if (step.depth > 0 && stepsPerSecond * speed <= 8f) UISounds.Play(UISounds.Hover, step.node.transform.position);
             yield return Wait(1f / stepsPerSecond);
@@ -197,7 +207,7 @@ public class GraphSearchView : MonoBehaviour
 
         if (cursor != null) Destroy(cursor.gameObject);
         UISounds.Play(UISounds.Click, start.transform.position);
-        title.text = Summary(name, start, visited, total, perLayer, depthFirst, maxDepth);
+        title.text = Summary(name, start, visited, total, perLayer, depthFirst, maxDepth, layerName);
         running = null;
         UIKit.SetButtonLabel(pauseButton, "Again");
     }
@@ -211,14 +221,19 @@ public class GraphSearchView : MonoBehaviour
         }
     }
 
-    private static string Summary(string name, GraphNode start, int visited, int total, List<int> perLayer, bool depthFirst, int maxDepth)
+    private static string Summary(string name, GraphNode start, int visited, int total, List<int> perLayer, bool depthFirst, int maxDepth,
+                                  System.Func<int, string> layerName = null)
     {
         if (depthFirst)
         {
             return $"{name} from {start.ShortCode}: {visited}/{total} airports, deepest branch {perLayer.Count - 1} legs";
         }
         var sb = new System.Text.StringBuilder();
-        if (maxDepth < int.MaxValue)
+        if (layerName != null)
+        {
+            sb.Append($"{name} from {start.ShortCode}: {visited - 1} airports");
+        }
+        else if (maxDepth < int.MaxValue)
         {
             sb.Append($"With {Hops(maxDepth).Replace("direct", "direct flights only")} at most from {start.ShortCode}: {visited - 1} airports");
         }
@@ -230,7 +245,7 @@ public class GraphSearchView : MonoBehaviour
         for (int d = 1; d < perLayer.Count; d++)
         {
             if (d > 1) sb.Append(" · ");
-            sb.Append(Hops(d)).Append(": ").Append(perLayer[d]);
+            sb.Append((layerName ?? Hops)(d)).Append(": ").Append(perLayer[d]);
         }
         if (visited < total) sb.Append(" · not reached: ").Append(total - visited);
         sb.Append("</size>");
@@ -282,6 +297,7 @@ public class GraphSearchView : MonoBehaviour
 
     private void Begin(string name, int maxDepth, bool depthFirst)
     {
+        lastByTime = false;
         lastName = name;
         lastDepth = maxDepth;
         lastDepthFirst = depthFirst;
@@ -290,7 +306,81 @@ public class GraphSearchView : MonoBehaviour
 
     private void Again()
     {
-        if (lastName != null) Run(lastName, lastDepth, lastDepthFirst);
+        if (lastByTime) RunByTime();
+        else if (lastName != null) Run(lastName, lastDepth, lastDepthFirst);
+    }
+
+    // ---- By time (TASKS B7) ----------------------------------------------------
+
+    /// <summary>
+    /// Where can I get to, and by when: airports light up in the order the earliest real way
+    /// (ConnectionFinder.ReachByTime) lands there, leaving now (the live flights' clock); the
+    /// layers are time bands, and each airport is joined to the one its last flight came from.
+    /// </summary>
+    private void RunByTime()
+    {
+        GraphNode start = selector.SelectedNode;
+        if (start == null || !graph.IsLoaded || !LiveFlights()) return;
+        lastByTime = true;
+        Dictionary<string, ConnectionSearch.Itinerary> reach = finder.ReachByTime(start, out float leaveAt);
+        Stop();
+        DimSelectedRoutes(start);
+        var ways = new List<KeyValuePair<GraphNode, ConnectionSearch.Itinerary>>();
+        foreach (KeyValuePair<string, ConnectionSearch.Itinerary> kv in reach)
+        {
+            if (graph.Nodes.TryGetValue(kv.Key, out GraphNode node)) ways.Add(new KeyValuePair<GraphNode, ConnectionSearch.Itinerary>(node, kv.Value));
+        }
+        ways.Sort((a, b) => a.Value.Arrival.CompareTo(b.Value.Arrival));
+        var steps = new List<GraphSearch.Step> { new GraphSearch.Step { node = start, depth = 0 } };
+        foreach (KeyValuePair<GraphNode, ConnectionSearch.Itinerary> way in ways)
+        {
+            FlightData last = way.Value.legs[way.Value.legs.Count - 1];
+            graph.Nodes.TryGetValue(last.origin, out GraphNode parent);
+            steps.Add(new GraphSearch.Step
+            {
+                node = way.Key,
+                parent = parent,
+                via = parent != null ? EdgeBetween(parent, way.Key) : null,
+                depth = Band(way.Value.Arrival - leaveAt),
+            });
+        }
+        FlightSimulator sim = FindFirstObjectByType<FlightSimulator>();
+        string name = sim != null ? $"Leaving {sim.UtcAt(leaveAt):HH:mm}" : "By time";
+        paused = false;
+        UIKit.SetButtonLabel(pauseButton, "Pause");
+        SetMode(Mode.Running);
+        running = StartCoroutine(Play(name, start, steps, false, int.MaxValue, BandName));
+    }
+
+    // 1 = within the first band (2 h), ... ; one more after the last.
+    private static int Band(float seconds)
+    {
+        float hours = seconds / 3600f;
+        for (int i = 0; i < BandHours.Length; i++) if (hours <= BandHours[i]) return i + 1;
+        return BandHours.Length + 1;
+    }
+
+    private static string BandName(int depth)
+    {
+        if (depth <= 0) return "start";
+        if (depth == 1) return $"within {BandHours[0]:0} h";
+        if (depth <= BandHours.Length) return $"{BandHours[depth - 2]:0}-{BandHours[depth - 1]:0} h";
+        return $"over {BandHours[BandHours.Length - 1]:0} h";
+    }
+
+    private GraphEdge EdgeBetween(GraphNode a, GraphNode b)
+    {
+        foreach (GraphEdge e in graph.EdgesOf(a.id))
+        {
+            if ((e.sourceId == a.id && e.targetId == b.id) || (e.sourceId == b.id && e.targetId == a.id)) return e;
+        }
+        return null;
+    }
+
+    private bool LiveFlights()
+    {
+        if (finder == null) finder = FindFirstObjectByType<ConnectionFinder>();
+        return finder != null && finder.LiveFlightsShown;
     }
 
     private void ChangeSpeed(float factor)
@@ -353,6 +443,19 @@ public class GraphSearchView : MonoBehaviour
     private void LateUpdate()
     {
         if (bar == null) return;
+        // The By time row comes and goes with the live flights; the bar grows down for it.
+        bool time = LiveFlights();
+        if (time != withTime)
+        {
+            withTime = time;
+            byTimeButton.gameObject.SetActive(time);
+        }
+        float height = BarHeight + (withTime && mode == Mode.Idle ? TimeRowHeight : 0f);
+        if (!Mathf.Approximately(height, barHeight))
+        {
+            barHeight = height;
+            ((RectTransform)bar.transform).sizeDelta = new Vector2(BarWidth, barHeight);
+        }
         FindInfoCard();
         // Only with the info card: its hide rules (dashboard open, walked away) apply to the bar too.
         bool show = mode != Mode.Hidden && selector.SelectedNode != null && !GuidedTour.InputLocked &&
@@ -382,7 +485,7 @@ public class GraphSearchView : MonoBehaviour
         Transform t = bar.transform;
         t.rotation = infoCard.rotation;
         t.localScale = infoCard.lossyScale;
-        t.position = infoCard.position - infoCard.up * (0.012f + BarHeight * 0.5f * infoCard.lossyScale.y);
+        t.position = infoCard.position - infoCard.up * (0.012f + barHeight * 0.5f * infoCard.lossyScale.y);
     }
 
     private void BuildBar()
@@ -406,6 +509,10 @@ public class GraphSearchView : MonoBehaviour
         // Depth 2 / 3: a direct flight is depth 1, one transfer (change of plane) depth 2.
         UIKit.Button(idleRow, "1 transfer", () => Begin("Reach", 2, false), 14f + 2f * (w4 + gap), y, w4, h, UIKit.ButtonStyle.Secondary, UIKit.SmallSize);
         UIKit.Button(idleRow, "2 transfers", () => Begin("Reach", 3, false), 14f + 3f * (w4 + gap), y, w4, h, UIKit.ButtonStyle.Secondary, UIKit.SmallSize);
+        // Only while the live flights are shown (they hold the day's real flights).
+        byTimeButton = (RectTransform)UIKit.Button(idleRow, "By time: where can I get to, by when?", RunByTime, 14f, y + h + gap,
+                                                   BarWidth - 28f, h, UIKit.ButtonStyle.Secondary, UIKit.SmallSize, UIIcon.Shape.Timeline).transform;
+        byTimeButton.gameObject.SetActive(false);
 
         runRow = UIKit.NewRect("Running", root);
         UIKit.Stretch(runRow);

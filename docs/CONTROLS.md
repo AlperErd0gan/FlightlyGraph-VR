@@ -134,6 +134,9 @@ press F8 (or the component's context menu → Run Test Phrase).
 ## Info card (an airport, route or connection selected)
 
 Appears below and to the right of your gaze, with a line to the selection.
+While Live flights is open it sits higher (like the aircraft card), so the graph
+search bar under it stays above the Live flights panel; it glides there when the
+panel opens or closes.
 
 | Action | Controller / hands | Editor |
 |---|---|---|
@@ -156,6 +159,7 @@ graph shows (timeline month, filters, city groups).
 | **BFS** | breadth-first: every airport with a direct flight lights up, then those 1 transfer away, then 2, ... (colour per layer) |
 | **DFS** | depth-first: follows one branch as deep as it goes, then goes back up (white cursor) |
 | **1 transfer** / **2 transfers** | airports reachable with at most one / two changes of plane (direct flights included), with the counts |
+| **By time: where can I get to, by when?** | only while Live flights is open (a second row): leaving the selected airport at the panel's time, airports light up in the order the earliest real way lands there (the real connections' rules: passenger flights, 45 min – 6 h at each change, up to 3 flights), coloured by time band — within 2 h, 2–4 h, 4–8 h, 8–12 h, over 12 h — each joined to the airport its last flight came from; the summary counts each band and the airports not reached |
 | **Pause** / **Slower** / **Faster** / **Stop** | while a search plays; **Again** replays it when it has ended |
 
 Each airport is joined to the one it was found from; the selected airport's
@@ -260,6 +264,9 @@ the map's rim; in the 3D layout they fly along the route arcs. Only aircraft in
 the air are drawn. While the panel is open the route arcs are hidden (only the
 aircraft and their real paths show) and the graph shows that month (sizes);
 closing restores both.
+The clock runs on to 06:00 the next morning (the time axis shows the day's name at
+midnight), so a real connection that lands late can still take an early flight;
+times after midnight are marked +1 on the cards.
 
 Colours give the flight phase, from the recorded flight levels: **green**
 climbing, **pale blue** cruising, **lavender** descending (more than 300 ft/min

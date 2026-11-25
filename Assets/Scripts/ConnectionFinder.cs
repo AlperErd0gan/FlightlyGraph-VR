@@ -58,6 +58,8 @@ public class ConnectionFinder : MonoBehaviour
     public RealConnection Current { get; private set; }
 
     private ConnectionSearch search;
+    // Length of "the day" the connections start on; the flights file runs 6 h longer (TASKS B7).
+    private const int DaySeconds = 24 * 3600;
     private VoiceAssistant voice;
     private IReadOnlyList<FlightData> searchedFlights;
 
@@ -212,6 +214,11 @@ public class ConnectionFinder : MonoBehaviour
         maxWaitSec = Mathf.RoundToInt(maxWaitHours * 3600f),
         maxLegs = maxFlights,
         sameAirline = sameAirlineOnly,
+        // The day's connections: the first flight leaves on the day. The file also holds the evening
+        // before and the next morning (6 h, TASKS B7): later legs may use those, so late connections are complete.
+        limitFirstDeparture = true,
+        firstDepartureFrom = 0,
+        firstDepartureBefore = DaySeconds,
     };
 
     private ConnectionSearch Search
@@ -233,6 +240,24 @@ public class ConnectionFinder : MonoBehaviour
     }
 
     /// <summary>The day's real connections from `from` to `to`; shows the first one leaving after the panel's time.</summary>
+    /// <summary>
+    /// "Where can I get to, and by when" (graph search, By time): the earliest real way from `from`
+    /// to every airport for someone there at the live flights' current time, by the same rules as
+    /// the real connections (passenger flights, minConnectionMinutes .. maxWaitHours, maxFlights,
+    /// sameAirlineOnly; the first flight leaves on the day). Empty when live flights are not shown.
+    /// </summary>
+    public Dictionary<string, ConnectionSearch.Itinerary> ReachByTime(GraphNode from, out float leaveAt)
+    {
+        leaveAt = 0f;
+        if (from == null || !LiveFlightsShown) return new Dictionary<string, ConnectionSearch.Itinerary>();
+        leaveAt = Simulator.SimTime;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Dictionary<string, ConnectionSearch.Itinerary> reach = Search.EarliestArrivals(from.id, Mathf.FloorToInt(leaveAt), Settings);
+        Debug.Log($"ConnectionFinder: by time from {from.ShortCode} at {Simulator.UtcAt(leaveAt):HH:mm}: {reach.Count} airports, " +
+                  $"{watch.Elapsed.TotalMilliseconds:F0} ms");
+        return reach;
+    }
+
     public void ShowRealConnection(GraphNode from, GraphNode to)
     {
         var c = new RealConnection { from = from, to = to, sameAirline = sameAirlineOnly };
@@ -249,8 +274,6 @@ public class ConnectionFinder : MonoBehaviour
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
         c.options = Search.Options(c.from.id, c.to.id, Settings);
-        // The day's connections: the first flight leaves on the day (the file also holds the evening before).
-        c.options.RemoveAll(o => o.Departure < 0);
         c.index = c.options.FindIndex(o => o.Departure >= after);
         c.noneAfterNow = c.index < 0 && c.options.Count > 0;
         if (c.noneAfterNow) c.index = c.options.Count - 1;

@@ -20,6 +20,10 @@ public class ConnectionSearch
         public int maxWaitSec;
         public int maxLegs;
         public bool sameAirline;
+        /// <summary>Only connections whose first flight leaves in [firstDepartureFrom, firstDepartureBefore) (s); later legs may leave after it.</summary>
+        public bool limitFirstDeparture;
+        public int firstDepartureFrom;
+        public int firstDepartureBefore;
 
         public static Settings Default => new Settings { minConnectionSec = 45 * 60, maxWaitSec = 6 * 3600, maxLegs = 3 };
     }
@@ -101,6 +105,8 @@ public class ConnectionSearch
 
         foreach (FlightData f1 in firsts)
         {
+            // Before the pruning below: a first flight outside the window must not hide one inside it.
+            if (s.limitFirstDeparture && (f1.dep < s.firstDepartureFrom || f1.dep >= s.firstDepartureBefore)) continue;
             if (s.sameAirline && !KnownOperator(f1.op)) continue;
             Itinerary best = null;
             string hub = f1.destination;
@@ -145,6 +151,76 @@ public class ConnectionSearch
         }
         useful.Reverse();
         return useful;
+    }
+
+    /// <summary>
+    /// The earliest way to every airport reachable from `from` for someone there at `leaveFrom` (s):
+    /// the first flight leaves at or after it (and before firstDepartureBefore with
+    /// limitFirstDeparture), each next one minConnection .. maxWait after landing, at most maxLegs
+    /// flights, one operator with sameAirline. Round by round (1 flight, 2, ...) every flight that
+    /// can still be caught is reached once, by the fewest flights; an airport's value is the way
+    /// that lands there first. Used by the graph search's "By time" (TASKS B7).
+    /// </summary>
+    public Dictionary<string, Itinerary> EarliestArrivals(string from, int leaveFrom, Settings s)
+    {
+        var best = new Dictionary<string, Itinerary>();
+        if (!byFrom.TryGetValue(from, out List<FlightData> firsts)) return best;
+        var reached = new HashSet<FlightData>();
+        var frontier = new List<List<FlightData>>();
+        int start = LowerBound(firsts, leaveFrom);
+        for (int i = start; i < firsts.Count; i++)
+        {
+            FlightData f1 = firsts[i];
+            if (s.limitFirstDeparture && f1.dep >= s.firstDepartureBefore) break;
+            if (s.sameAirline && !KnownOperator(f1.op)) continue;
+            reached.Add(f1);
+            var way = new List<FlightData> { f1 };
+            frontier.Add(way);
+            Offer(best, way);
+        }
+        for (int leg = 2; leg <= s.maxLegs && frontier.Count > 0; leg++)
+        {
+            var next = new List<List<FlightData>>();
+            foreach (List<FlightData> legs in frontier)
+            {
+                FlightData last = legs[legs.Count - 1];
+                if (!byFrom.TryGetValue(last.destination, out List<FlightData> onwards)) continue;
+                foreach (FlightData f in Window(onwards, last.arr, s))
+                {
+                    if (f.destination == from || reached.Contains(f) || !SameAirlineOk(s, legs[0], f)) continue;
+                    bool revisits = false;
+                    foreach (FlightData l in legs) revisits |= l.origin == f.destination;
+                    if (revisits) continue;
+                    reached.Add(f);
+                    var way = new List<FlightData>(legs) { f };
+                    next.Add(way);
+                    Offer(best, way);
+                }
+            }
+            frontier = next;
+        }
+        best.Remove(from);
+        return best;
+    }
+
+    private static void Offer(Dictionary<string, Itinerary> best, List<FlightData> legs)
+    {
+        string to = legs[legs.Count - 1].destination;
+        var it = new Itinerary(legs);
+        if (!best.TryGetValue(to, out Itinerary current) || Compare(it, current) < 0) best[to] = it;
+    }
+
+    // First index of `sorted` (by departure) leaving at or after `time`.
+    private static int LowerBound(List<FlightData> sorted, int time)
+    {
+        int lo = 0, hi = sorted.Count;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) / 2;
+            if (sorted[mid].dep < time) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
     }
 
     private static bool SameAirlineOk(Settings s, FlightData first, FlightData next) => !s.sameAirline || next.op == first.op;
