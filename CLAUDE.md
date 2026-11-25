@@ -41,7 +41,7 @@ python scripts/build_ectrl_extras.py
 python scripts/layout_3d.py              # nodes_3d*.json (force-directed shell)
 python scripts/build_geomap.py           # geomap.json + geomap_dark.png for the map view
 python scripts/build_globe.py            # globe_dark.png + globe_labels.json: world texture and country names for the dome
-python scripts/build_flight_sim.py       # flights_ectrl.json: live flights, busiest day of --month
+python scripts/build_flight_sim.py       # flights_ectrl.json: live flights, busiest day of --month + 6 h of the next morning
                                          # (real tracks from Flight_Points_Actual_* under data/raw/eurocontrol/)
 scripts/sync_streaming_assets.sh [UNITY_PROJECT_DIR]   # copy outputs into StreamingAssets
 
@@ -81,6 +81,8 @@ without it), Gemini Live API over a raw `ClientWebSocket`.
   gesture, voice) searches that day's passenger flights with `ConnectionSearch`
   (≤ 3 flights, 45 min – 6 h at each change, optional same airline): card via
   `GraphInfoPanel.ShowConnection`, flights marked by `FlightSimulator.ShowItinerary`.
+  `ConnectionSearch.EarliestArrivals` (via `ConnectionFinder.ReachByTime`) drives the graph
+  search's "By time" (earliest arrival at every airport, coloured by time band).
 - Selection / info: `GraphSelector`, `GraphInfoPanel`, `ConnectionFinder`,
   `GraphViewMode`, `HubLabels`, `GraphInsights`.
 - Immersion study: `StudyCondition` (Immersive / Desktop: `-desktop` launch argument or the
