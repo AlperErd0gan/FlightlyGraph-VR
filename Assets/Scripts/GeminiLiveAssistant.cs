@@ -103,6 +103,9 @@ public class GeminiLiveAssistant : MonoBehaviour
         }
     }
     private bool standby;
+    // Microphone permission (always true outside Android). Nothing opens the mic before it is true.
+    private bool micAllowed = true;
+    private float permissionCheckAt;
     // "... is listening" is said once; later reconnects (Gemini closes idle sessions) are silent.
     private bool announced;
     private float readyAt;
@@ -197,9 +200,17 @@ public class GeminiLiveAssistant : MonoBehaviour
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
+        // Quest / Android: the microphone is opened only once the permission is granted. The request is asynchronous and
+        // its dialog pauses the app, so asking and opening in one go (as before) left the mic closed and made the first
+        // press do the slow cold start. Granted -> OnMicPermission opens it during the intro.
+        micAllowed = UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone);
+        if (!micAllowed)
         {
-            UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+            var callbacks = new UnityEngine.Android.PermissionCallbacks();
+            callbacks.PermissionGranted += _ => mainThread.Enqueue(() => OnMicPermission(true));
+            callbacks.PermissionDenied += _ => mainThread.Enqueue(() => OnMicPermission(false));
+            callbacks.PermissionDeniedAndDontAskAgain += _ => mainThread.Enqueue(() => OnMicPermission(false));
+            UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone, callbacks);
         }
 #endif
         apiKey = ReadApiKey();
@@ -242,6 +253,35 @@ public class GeminiLiveAssistant : MonoBehaviour
         if (clip != null) Destroy(clip);
     }
 
+    // The headset comes off / the app goes to the background: the socket and the microphone stop. The reconnect is
+    // automatic (the receive loop fails); the microphone is checked again at once instead of after the next watch tick.
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) return;
+        watchTime = 0f;
+        watchPosition = -1;
+    }
+
+    // Wit's always-listening mode keeps its own recorder open; two recorders on one microphone (worst on Android) leave one
+    // of them silent. While Gemini is connected Wit does not listen; it listens again when Gemini is gone.
+    private bool witPaused;
+
+    private void UpdateWitMic()
+    {
+        if (commands == null || commands.mode != VoiceAssistant.ListenMode.AlwaysListening) return;
+        bool geminiHasMic = ready && !standby;
+        if (geminiHasMic && !witPaused && commands.Listening)
+        {
+            witPaused = true;
+            commands.SetListening(false);
+        }
+        else if (!geminiHasMic && witPaused)
+        {
+            witPaused = false;
+            commands.SetListening(true);
+        }
+    }
+
     private void OnValidate()
     {
         // A new voice only applies to a new session.
@@ -256,7 +296,16 @@ public class GeminiLiveAssistant : MonoBehaviour
             catch (Exception ex) { Debug.LogError($"GeminiLiveAssistant: {ex}"); }
         }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // The permission dialog pauses the app and its callback can be missed: look again once a second.
+        if (!micAllowed && Time.unscaledTime >= permissionCheckAt)
+        {
+            permissionCheckAt = Time.unscaledTime + 1f;
+            if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone)) OnMicPermission(true);
+        }
+#endif
         if (commands != null && !standby) commands.Suspended = ready;
+        UpdateWitMic();
         // Gemini describes hand-made selections itself only when it may give information; otherwise the Wit narrator keeps
         // reading them (commands Gemini runs are kept silent in RunTool).
         if (narrator != null && ready && !standby && describeSelections && !commandsOnly && (tour == null || !tour.IsRunning)) narrator.AutoNarration = false;
@@ -369,6 +418,21 @@ public class GeminiLiveAssistant : MonoBehaviour
             conn.socket?.Dispose();
         }
         catch (Exception) { /* already closed */ }
+    }
+
+    private void OnMicPermission(bool granted)
+    {
+        if (micAllowed == granted) return;
+        micAllowed = granted;
+        Debug.Log($"GeminiLiveAssistant: microphone permission {(granted ? "granted" : "denied")}");
+        if (granted)
+        {
+            if (ready && micClip == null) StartMic(); // still during the intro: the cold start is not felt
+        }
+        else if (!standby)
+        {
+            Caption("Microphone permission denied: allow it in the headset's app permissions.", 8f);
+        }
     }
 
     private void OnReady(Connection conn)
@@ -630,7 +694,7 @@ public class GeminiLiveAssistant : MonoBehaviour
         }
         if (micClip == null)
         {
-            Caption("No microphone.", 3f);
+            Caption(micAllowed ? "No microphone." : "Microphone permission is missing: allow it in the headset's app permissions.", 5f);
             return;
         }
         talking = true;
@@ -684,6 +748,7 @@ public class GeminiLiveAssistant : MonoBehaviour
 
     private void StartMic()
     {
+        if (!micAllowed) return;
         if (micClip != null || Microphone.devices.Length == 0) return;
         micDevice = PickMicrophone();
         // The device's own rate (the Quest headset microphone only offers 48 kHz); SendMicAudio converts to 16 kHz.
