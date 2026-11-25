@@ -280,3 +280,26 @@ N FPS on Quest 3" in a paper, measure in a standalone APK build (or with OVR Met
 Tool). The headset has no F3, so for an APK add the `PerfMonitor` component to any
 object in the scene and tick **Show On Start** before building (it then does not add a
 second one).
+
+## 11. Study log (TASKS B21)
+
+`StudyLogger` adds itself when the scene has a `GraphLoader`; no scene setup. In builds only (the
+Editor writes nothing unless `logInEditor` is ticked). One CSV per session in
+`Application.persistentDataPath`: `study_<participant>_<condition>_<date>_<time>.csv` (path in the
+Console; on a Quest: `adb pull /sdcard/Android/data/<package>/files/`).
+
+- Participant code: launch argument `-participant P03`, or the component's `participant` field.
+  Codes only, no names.
+- Columns: `time_s,event,detail,view,period,x,y,z,yaw`.
+- Events: `session_start/end`, `task_start/task_end` (experimenter keys **F5** / **F6**, numbered),
+  `select_airport/route/path/flight`, `select_clear`, `connection_request`, `view` (3d / map),
+  `dome`, `view_mode`, `period`, `filter`, `layout`, `timeline_play/pause`, `flights_play/pause`,
+  `tour_start/end`, `comfort`, `button` (controller button pressed), `talk_start/end` (push-to-talk),
+  `gemini_speaks/silent`, `head` (position + yaw, twice a second, only when it moved), `app_pause/resume`.
+- Not logged: audio, spoken text, names. Voice commands show only as talk / Gemini events.
+
+## 12. Selection pulse (TASKS B16)
+
+`SelectionPulse` adds itself when the scene has a `GraphSelector`. Selecting an airport: a soft halo
+breathes around it (0.5 Hz) and its routes light up nearest first within ~1 s. Reduce motion: still
+halo, routes at once. Tunables on the component (`haloScale`, `haloAlpha`, `waveSeconds`, ...).
